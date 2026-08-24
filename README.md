@@ -59,6 +59,7 @@ lib/
 supabase/
   migrations/0001_init.sql    schema, RLS policies, helper functions
   seed.sql                    catalogue, generated from the workbook
+  verify.sql                  schema smoke test — every row must print `t`
 scripts/generate-seed.mjs     regenerates seed.sql + fallback-data.ts
 ```
 

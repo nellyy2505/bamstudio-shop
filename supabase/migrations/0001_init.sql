@@ -225,6 +225,40 @@ create table if not exists public.order_items (
 
 create index if not exists order_items_order_idx on public.order_items (order_id);
 
+-- ------------------------------------------------------------- upgrades
+-- Every `create table` above is `if not exists`, so on a database that was
+-- created from an earlier version of this file none of the columns added
+-- since would appear — the app would then reference columns that aren't
+-- there. This block brings such a database up to date. It is a no-op on a
+-- fresh one, so the whole file stays safe to re-run.
+
+alter table public.products
+  add column if not exists personalisation_mode text,
+  add column if not exists personalisation_label text;
+
+alter table public.products
+  drop constraint if exists products_personalisation_mode_check;
+alter table public.products
+  add constraint products_personalisation_mode_check
+  check (personalisation_mode in ('builder','text'));
+
+alter table public.orders
+  add column if not exists stock_applied boolean not null default false;
+
+-- Order numbers are issued on payment now, so a staged row has none yet.
+alter table public.orders alter column order_number drop not null;
+
+-- 'pending' joined the status set when checkout began staging orders.
+alter table public.orders drop constraint if exists orders_status_check;
+alter table public.orders
+  add constraint orders_status_check
+  check (status in ('pending','confirmed','printing','packed','shipped','delivered','cancelled'));
+
+-- Kept so "buy again" restores the exact variant that was ordered.
+alter table public.order_items
+  add column if not exists colour text,
+  add column if not exists attachment_id text;
+
 -- ---------------------------------------------------------------- RLS
 alter table public.profiles     enable row level security;
 alter table public.products     enable row level security;

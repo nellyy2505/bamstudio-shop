@@ -45,6 +45,16 @@ Go to **Project Settings → API Keys** (and **Data API** for the URL):
    loads your 44 products and 6 colourway collections. No reviews —
    those only ever come from real customers.
 4. Check **Table Editor → products** — you should see the catalogue.
+5. New query once more. Copy all of `supabase/verify.sql`, paste, **Run**.
+   Every row must say `t`. It checks the things that otherwise fail silently
+   in production — most importantly that the webhook is allowed to allocate
+   order numbers and move stock. Without those grants, customers can pay and
+   no order is ever recorded. The script writes two throwaway rows and rolls
+   them back, so it is safe to re-run any time.
+
+> The schema file is safe to re-run. If you applied an earlier version, run it
+> again — it adds anything missing rather than starting over, and leaves your
+> data alone.
 
 ### 1d. Turn on Google sign-in
 
