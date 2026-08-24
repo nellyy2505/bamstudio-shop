@@ -115,14 +115,25 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
     question: "Can I change or cancel my order after paying?",
     answer: (
       <p>
-        Usually yes, if it has not been printed. Email us at{" "}
-        <a
-          href={SHOP.hasSupportEmail ? `mailto:${SHOP.supportEmail}` : "/contact"}
-                aria-disabled={SHOP.hasSupportEmail ? undefined : true}
-          className="font-bold text-accent underline underline-offset-2"
-        >
-          {SHOP.supportEmail}
-        </a>{" "}
+        Usually yes, if it has not been printed.{" "}
+        {SHOP.hasSupportEmail ? (
+          <>
+            Email us at{" "}
+            <a
+              href={`mailto:${SHOP.supportEmail}`}
+              className="font-bold text-accent underline underline-offset-2"
+            >
+              {SHOP.supportEmail}
+            </a>
+          </>
+        ) : (
+          <Link
+            href="/contact"
+            className="font-bold text-accent underline underline-offset-2"
+          >
+            Send us a message
+          </Link>
+        )}{" "}
         with your order number as soon as you can — colour swaps, address fixes
         and cancellations are all easy before a piece goes on the bed. Once
         printing has started we cannot un-print it, and personalised pieces

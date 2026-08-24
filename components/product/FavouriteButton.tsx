@@ -29,8 +29,21 @@ type BrowserClient = ReturnType<typeof createClient>;
  * module is never re-evaluated, so a promise cached while signed out would go
  * on answering "no user" for the rest of the session and a guest's hearts
  * would never reach the database.
+ *
+ * The entry is installed *synchronously*, before the session is read, and the
+ * id is filled in once it is known. Installing it only after `getSession()`
+ * resolved would let every button that mounted in the same tick past the memo
+ * check while they were all still suspended on that await — two dozen selects
+ * for one page load. The object identity is also the run's ticket: a run only
+ * writes anything while `reconciliation` is still pointing at its own entry.
  */
-let reconciliation: { userId: string; promise: Promise<void> } | null = null;
+type Reconciliation = {
+  /** Null until the session has been read; then the shopper it belongs to. */
+  userId: string | null;
+  promise: Promise<void>;
+};
+
+let reconciliation: Reconciliation | null = null;
 
 /** Set when a guest's local-only ids were pushed up, so a page can re-fetch. */
 let guestListMigrated = false;
@@ -61,51 +74,90 @@ function watchAuthIdentity(supabase: BrowserClient) {
   supabase.auth.onAuthStateChange((_event, session) => {
     const userId = session?.user?.id ?? null;
     // Token refreshes re-fire with the same user; only a real change matters.
+    // An entry keyed null has not read its session yet, so any signed-in
+    // identity counts as a change — and the run it retires notices, because
+    // every write it makes is gated on still owning the memo.
     if (reconciliation && reconciliation.userId !== userId) {
       reconciliation = null;
     }
   });
 }
 
-async function reconcileFavourites(): Promise<void> {
+/**
+ * Deliberately *not* async: everything from the memo check to the assignment
+ * below has to run in one uninterrupted synchronous stretch, so that the
+ * second and twenty-fourth caller in the same tick find the entry already
+ * there. An `await` anywhere in here would reopen the stampede.
+ */
+function reconcileFavourites(): Promise<void> {
   // Signed-out visitors never reach Supabase — the local list is the whole
   // truth for them, exactly as before.
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured()) return Promise.resolve();
 
-  const supabase = createClient();
+  if (reconciliation) return reconciliation.promise;
 
-  // getSession() reads the cookie the SSR client already holds; it costs no
-  // round trip, which keeps a signed-out visitor at zero Supabase calls while
-  // still giving the memo a key that changes the moment the shopper does.
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const userId = session?.user?.id ?? null;
+  const entry: Reconciliation = { userId: null, promise: Promise.resolve() };
+  reconciliation = entry;
+  entry.promise = identifyAndReconcile(entry);
+  return entry.promise;
+}
 
-  if (!userId) {
-    reconciliation = null;
-    return;
+/** Reads the session once for everybody, then reconciles if there is a user. */
+async function identifyAndReconcile(entry: Reconciliation): Promise<void> {
+  try {
+    const supabase = createClient();
+
+    // getSession() reads the cookie the SSR client already holds; it costs no
+    // round trip, which keeps a signed-out visitor at zero Supabase calls while
+    // still giving the memo a key that changes the moment the shopper does.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const userId = session?.user?.id ?? null;
+
+    if (!userId) {
+      // Retire the entry so a sign-in later in this session starts a fresh
+      // one — but only if it is still ours to retire.
+      if (reconciliation === entry) reconciliation = null;
+      return;
+    }
+
+    // Key the entry before subscribing: the listener fires an initial event
+    // for the very session just read, and an unkeyed entry would look like a
+    // stale identity and retire the run it is meant to protect.
+    entry.userId = userId;
+    watchAuthIdentity(supabase);
+
+    if (reconciliation !== entry) return;
+
+    await runReconcile(supabase, entry, userId);
+  } catch {
+    // createClient() or the session read failed; let the next mount retry.
+    if (reconciliation === entry) reconciliation = null;
   }
-
-  watchAuthIdentity(supabase);
-
-  if (reconciliation?.userId === userId) return reconciliation.promise;
-
-  const promise = runReconcile(supabase, userId);
-  reconciliation = { userId, promise };
-  return promise;
 }
 
 async function runReconcile(
   supabase: BrowserClient,
+  entry: Reconciliation,
   userId: string,
 ): Promise<void> {
+  // Sign-out clears the memo, so this goes false the moment this run stops
+  // being the current shopper's. Every write is gated on it.
+  const stillOurs = () => reconciliation === entry;
+
   try {
     const { data, error } = await supabase
       .from("favourites")
       .select("product_id")
       .eq("user_id", userId);
     if (error) throw new Error(error.message);
+
+    // The shopper may have signed out while the select was in flight, in which
+    // case clearFavourites() has already emptied the store and this run holds
+    // nothing but the previous account's ids. Writing them back — locally or
+    // to the rows — is the shared-machine leak, so stop here instead.
+    if (!stillOurs()) return;
 
     const remote = ((data ?? []) as { product_id: string }[]).map(
       (row) => row.product_id,
@@ -125,15 +177,19 @@ async function runReconcile(
       const { error: upsertError } = await supabase
         .from("favourites")
         .upsert(localOnly.map((id) => ({ user_id: userId, product_id: id })));
-      if (!upsertError) guestListMigrated = true;
+      // A sign-out can land while the upsert is in flight too. The flag makes
+      // the next page re-fetch *this* shopper's rows, so a stale one would
+      // spend a signed-out visitor's refresh on nothing.
+      if (!upsertError && stillOurs()) guestListMigrated = true;
     }
 
+    if (!stillOurs()) return;
     if (!sameIds(merged, local)) favouritesStore.set(merged);
   } catch {
     // Offline, or the table is unreachable. The local list still renders, and
     // dropping the memo lets the next mount try again — but only if it is
     // still ours, so a failure here can't retire a newer shopper's reconcile.
-    if (reconciliation?.userId === userId) reconciliation = null;
+    if (stillOurs()) reconciliation = null;
   }
 }
 

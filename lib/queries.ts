@@ -223,7 +223,18 @@ export async function searchProducts(term: string): Promise<Product[]> {
   return (data ?? []) as Product[];
 }
 
-export async function getCollections(): Promise<Collection[]> {
+/**
+ * @param strict when true, a *query error* throws instead of quietly falling
+ *   back to the bundled sample list. Checkout validates colourways against
+ *   this, so it must never accept one that has been deactivated in the
+ *   database — better to fail the checkout than to sell a retired colourway.
+ *
+ *   Running with no database at all is a different thing: it is the intended
+ *   sample-catalogue mode, where the products being validated are themselves
+ *   fallback data. Strict mode allows that, or the builder would be unusable
+ *   in local development.
+ */
+export async function getCollections(strict = false): Promise<Collection[]> {
   if (!isDatabaseConfigured()) return FALLBACK_COLLECTIONS;
 
   const supabase = await createClient();
@@ -235,6 +246,7 @@ export async function getCollections(): Promise<Collection[]> {
 
   if (error) {
     console.error("getCollections failed:", error.message);
+    if (strict) throw new Error("Collections are unavailable.");
     return FALLBACK_COLLECTIONS;
   }
   return (data ?? []) as Collection[];

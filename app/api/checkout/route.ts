@@ -251,11 +251,20 @@ export async function POST(request: Request) {
   // Personalised lines are priced against a real collection, never the
   // colourway name the client claims.
   const needsCollections = body.lines.some((l) => l.custom);
-  const collections = new Map(
-    needsCollections
-      ? (await getCollections()).map((c) => [c.slug, c] as const)
-      : [],
-  );
+  let collections = new Map<string, Awaited<ReturnType<typeof getCollections>>[number]>();
+  if (needsCollections) {
+    try {
+      // strict: a colourway must be checked against the real table, never a
+      // bundled fallback that could still list one we have retired.
+      const rows = await getCollections(true);
+      collections = new Map(rows.map((c) => [c.slug, c] as const));
+    } catch {
+      return NextResponse.json(
+        { error: "Personalised items are briefly unavailable. Please try again." },
+        { status: 503 },
+      );
+    }
+  }
 
   const lineItems: {
     price_data: {
@@ -330,15 +339,21 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      unitPrice = bundle - (line.custom.with_charm ? 0 : BUILDER_NO_CHARM_DISCOUNT);
-      // Taken from the collection we just looked up, never the client's copy.
-      colour = collection.name;
-
       // The cord/keyring/strap choice has to reach the Stripe line, the order
       // detail page and the packing list, or the wrong finding gets shipped.
       const builderAttachment = (product.attachments ?? []).find(
         (a) => a.id === line.attachment_id,
       );
+
+      // Every builder finding is free today, but honour the delta anyway —
+      // otherwise adding a paid one to a builder product would give it away.
+      unitPrice =
+        bundle -
+        (line.custom.with_charm ? 0 : BUILDER_NO_CHARM_DISCOUNT) +
+        (builderAttachment?.price_delta ?? 0);
+
+      // Taken from the collection we just looked up, never the client's copy.
+      colour = collection.name;
       // Use the collection's stored name, not the client's copy of it.
       description = [
         collection.name,

@@ -245,6 +245,17 @@ alter table public.products
 alter table public.orders
   add column if not exists stock_applied boolean not null default false;
 
+-- Backfill: any order confirmed before this column existed already had its
+-- stock moved, but defaults to false and so reads as unclaimed. A Stripe
+-- redelivery — or a manual "Resend" from the dashboard, which has no time
+-- limit — would then decrement those counts a second time.
+--
+-- Run this file during a quiet moment: a webhook mid-flight at exactly this
+-- instant would have its pending claim marked applied. That window is far
+-- narrower than the redelivery risk it removes.
+update public.orders set stock_applied = true
+ where status <> 'pending' and stock_applied = false;
+
 -- Order numbers are issued on payment now, so a staged row has none yet.
 alter table public.orders alter column order_number drop not null;
 

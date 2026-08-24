@@ -44,18 +44,24 @@ insert into public.orders
 values
   ('verify@example.test', 'confirmed', 1200, 0, 1200, '{}'::jsonb, 'cs_verify_claim');
 
-with first_claim as (
-  update public.orders set stock_applied = true
-   where stripe_session_id = 'cs_verify_claim' and stock_applied = false
-  returning id
-), second_claim as (
-  update public.orders set stock_applied = true
-   where stripe_session_id = 'cs_verify_claim' and stock_applied = false
-  returning id
-)
-select 'stock claimed exactly once' as check,
-       (select count(*) from first_claim) = 1
-   and (select count(*) from second_claim) = 0 as pass;
+-- Two UPDATEs in one statement share a snapshot, so putting both claims in a
+-- single WITH would have the second skipped by same-statement semantics
+-- rather than by the `stock_applied = false` predicate — it would print `t`
+-- without testing anything. Run them as separate statements so the second
+-- genuinely re-reads the row the first committed.
+update public.orders set stock_applied = true
+ where stripe_session_id = 'cs_verify_claim' and stock_applied = false;
+
+select 'first claim takes the row' as check, count(*) = 1 as pass
+  from public.orders
+ where stripe_session_id = 'cs_verify_claim' and stock_applied = true;
+
+update public.orders set stock_applied = true
+ where stripe_session_id = 'cs_verify_claim' and stock_applied = false;
+
+select 'second claim moves nothing' as check, count(*) = 0 as pass
+  from public.orders
+ where stripe_session_id = 'cs_verify_claim' and stock_applied = false;
 
 -- An unpaid checkout is not an order, and an order is only findable by
 -- someone who knows both its number and the email it was placed with.

@@ -34,15 +34,23 @@ export default function ContactPage() {
             </span>
             <h2 className="mt-4 text-lg">Email</h2>
             <p className="mt-1.5 text-[14px] text-muted">
-              Prefer your own inbox? Write to{" "}
-              <a
-                href={SHOP.hasSupportEmail ? `mailto:${SHOP.supportEmail}` : "/contact"}
-                aria-disabled={SHOP.hasSupportEmail ? undefined : true}
-                className="font-bold text-accent underline underline-offset-2"
-              >
-                {SHOP.supportEmail}
-              </a>
-              . Include your order number if you have one.
+              {SHOP.hasSupportEmail ? (
+                <>
+                  Prefer your own inbox? Write to{" "}
+                  <a
+                    href={`mailto:${SHOP.supportEmail}`}
+                    className="font-bold text-accent underline underline-offset-2"
+                  >
+                    {SHOP.supportEmail}
+                  </a>
+                  . Include your order number if you have one.
+                </>
+              ) : (
+                <>
+                  The form is the fastest way to reach us. Include your order
+                  number if you have one.
+                </>
+              )}
             </p>
             <p className="mt-2 text-[12.5px] text-faint">
               Replies weekdays. Market weekends run a day or two behind.

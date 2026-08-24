@@ -71,10 +71,17 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
   const rebuildFromStripe = Boolean(staged) && !stagedIsUsable;
   if (staged && rebuildFromStripe) {
     if (staged.status !== "pending") {
+      // Already confirmed but carrying no items: a previous delivery inserted
+      // the order and then died before its items landed. Deleting it would
+      // renumber a sale the customer has been emailed about, and returning
+      // would strand it forever — no order number, nothing to print, and
+      // every later retry taking this same branch. Repair it in place; both
+      // the item fill and finishConfirmation are safe to re-run.
       console.error(
-        `Order ${staged.id} is ${staged.status} but has no items — needs a ` +
-          "manual look; leaving it alone rather than rebuilding.",
+        `Order ${staged.id} is ${staged.status} with no items — repairing.`,
       );
+      await fillItemsFromStripe(supabase, staged.id, session);
+      await finishConfirmation(supabase, staged.id);
       return;
     }
     console.error(
@@ -138,11 +145,6 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
 
   // No staged row — the database was unreachable at checkout. Rebuild what we
   // can from Stripe so the sale is never lost.
-  const lineItems = await getStripe().checkout.sessions.listLineItems(
-    session.id,
-    { limit: 100 },
-  );
-
   const { data: order, error } = await supabase
     .from("orders")
     .insert({
@@ -170,11 +172,36 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
     throw new Error("order insert failed");
   }
 
-  await assignOrderNumber(supabase, order.id);
+  await fillItemsFromStripe(supabase, order.id, session);
+  await finishConfirmation(supabase, order.id);
+}
 
-  // The basket is gone, so recover what we can: Stripe knows the descriptions
-  // and amounts, and checkout left a slug:qty map in metadata that lets us
-  // restore the real product link, artwork and stock movement.
+/**
+ * Rebuilds an order's line items from the Stripe session, for the paths where
+ * the basket we staged is gone. Stripe knows the descriptions and amounts;
+ * the slug:qty map checkout left in metadata restores the product link and
+ * artwork, and drives the stock movement.
+ *
+ * Safe to re-run: it no-ops when the order already has items, so a retry
+ * cannot duplicate them.
+ */
+async function fillItemsFromStripe(
+  supabase: ReturnType<typeof createAdminClient>,
+  orderId: string,
+  session: Stripe.Checkout.Session,
+) {
+  const { data: existing } = await supabase
+    .from("order_items")
+    .select("id")
+    .eq("order_id", orderId)
+    .limit(1);
+  if (existing && existing.length > 0) return;
+
+  const lineItems = await getStripe().checkout.sessions.listLineItems(
+    session.id,
+    { limit: 100 },
+  );
+
   const stockMap = parseStockMap(session.metadata?.stock);
   const slugs = [...stockMap.keys()];
   const { data: productRows } = slugs.length
@@ -191,18 +218,15 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
     art: string;
     tint: string;
   };
-  const bySlug = new Map(
-    ((productRows ?? []) as ProductRow[]).map((row) => [row.slug, row]),
-  );
   const byName = new Map(
     ((productRows ?? []) as ProductRow[]).map((row) => [row.short_name, row]),
   );
 
-  const { error: itemsError } = await supabase.from("order_items").insert(
+  const { error } = await supabase.from("order_items").insert(
     lineItems.data.map((item) => {
       const product = byName.get(item.description ?? "");
       return {
-        order_id: order.id,
+        order_id: orderId,
         product_id: product?.id ?? null,
         product_name: item.description ?? "Item",
         variant_label: "",
@@ -213,22 +237,12 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
       };
     }),
   );
-  if (itemsError) console.error("Could not record items:", itemsError.message);
 
-  // Stock still has to move on this path — it exists precisely because the
-  // database was unreachable at checkout, not because the sale didn't happen.
-  // Claimed through the same compare-and-set as the staged path, so a later
-  // retry taking the other branch cannot decrement these counts again.
-  if (!(await claimStock(supabase, order.id))) return;
-
-  for (const [slug, quantity] of stockMap) {
-    const product = bySlug.get(slug);
-    if (!product) continue;
-    const { error } = await supabase.rpc("decrement_stock", {
-      p_product_id: product.id,
-      p_quantity: quantity,
-    });
-    if (error) console.error("Stock decrement failed:", error.message);
+  if (error) {
+    // Without items there is nothing to print, so make Stripe retry rather
+    // than leaving a paid order that looks complete and isn't.
+    console.error("Could not record items:", error.message);
+    throw new Error("order items rebuild failed");
   }
 }
 
@@ -248,7 +262,7 @@ async function finishConfirmation(
 /**
  * Gives a confirmed order its customer-facing number, once and only once.
  * Scoped to rows that don't have one yet, so a retry cannot renumber an order
- * the customer has already been emailed.
+ * the customer has already been emailed about.
  */
 async function assignOrderNumber(
   supabase: ReturnType<typeof createAdminClient>,
