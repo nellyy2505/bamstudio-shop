@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -22,6 +23,13 @@ const BodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const limit = rateLimit(clientKey(request, "contact"), 5, 60_000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Too many messages. Please wait a minute." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+    );
+  }
   let body: z.infer<typeof BodySchema>;
   try {
     body = BodySchema.parse(await request.json());

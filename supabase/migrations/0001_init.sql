@@ -22,7 +22,7 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  insert into public.profiles (id, first_name, last_name)
+  insert into public.profiles (id, first_name, last_name, marketing_opt_in)
   values (
     new.id,
     coalesce(
@@ -35,7 +35,9 @@ begin
         coalesce(new.raw_user_meta_data ->> 'full_name', ''),
         strpos(coalesce(new.raw_user_meta_data ->> 'full_name', ''), ' ') + 1
       ), '')
-    )
+    ),
+    -- Set from the sign-up form's opt-in checkbox.
+    coalesce((new.raw_user_meta_data ->> 'marketing_opt_in')::boolean, false)
   )
   on conflict (id) do nothing;
   return new;
@@ -151,10 +153,25 @@ create table if not exists public.favourites (
 -- ---------------------------------------------------------------- orders
 create sequence if not exists public.order_number_seq start 1042;
 
+-- Order numbers are allocated on payment, not when a checkout opens, so
+-- abandoned sessions don't burn them. The random suffix stops anyone walking
+-- the sequence to look up other people's orders on the tracking page.
+create or replace function public.next_order_number()
+returns text
+language sql
+volatile
+security definer set search_path = public
+as $$
+  select 'BS-' || nextval('public.order_number_seq')::text || '-' ||
+         upper(substr(encode(gen_random_bytes(3), 'hex'), 1, 4));
+$$;
+
+revoke all on function public.next_order_number() from public, anon, authenticated;
+
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
-  order_number text not null unique
-    default 'BS-' || nextval('public.order_number_seq')::text,
+  -- Null while the checkout is 'pending'; assigned by the webhook on payment.
+  order_number text unique,
   user_id uuid references auth.users(id) on delete set null,
   email text not null,
   -- 'pending' is written when the Stripe session is created; the webhook
@@ -187,6 +204,10 @@ create table if not exists public.order_items (
   tint text not null,
   unit_price integer not null,
   quantity integer not null check (quantity > 0),
+  -- Kept so "buy again" restores the exact variant rather than guessing the
+  -- product's first colour and attachment.
+  colour text,
+  attachment_id text,
   personalisation jsonb
 );
 
@@ -227,6 +248,12 @@ create policy "own profile read" on public.profiles
 drop policy if exists "own profile write" on public.profiles;
 create policy "own profile write" on public.profiles
   for update using (auth.uid() = id) with check (auth.uid() = id);
+
+-- Lets settings use upsert, so an account whose trigger-created row is
+-- missing can still save rather than silently updating zero rows.
+drop policy if exists "own profile insert" on public.profiles;
+create policy "own profile insert" on public.profiles
+  for insert with check (auth.uid() = id);
 
 -- Addresses: owner only, all verbs.
 drop policy if exists "own addresses" on public.addresses;

@@ -15,7 +15,7 @@ import {
   cx,
 } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
-import { PRINT_LEAD_TIME, SHIPPING, shippingCost } from "@/lib/config";
+import { PRINT_LEAD_TIME, SHIPPING, SHOP, shippingCost } from "@/lib/config";
 import { gstComponent, money, pluralise } from "@/lib/format";
 import type { CartLine, Product, Tint } from "@/lib/types";
 
@@ -329,10 +329,12 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                 {shipping === 0 ? "FREE" : money(shipping)}
               </span>
             </div>
-            <div className="flex justify-between text-[12.5px] text-faint">
-              <span>Includes GST</span>
-              <span>{money(gstComponent(total))}</span>
-            </div>
+            {SHOP.gstRegistered ? (
+              <div className="flex justify-between text-[12.5px] text-faint">
+                <span>Includes GST</span>
+                <span>{money(gstComponent(total))}</span>
+              </div>
+            ) : null}
             <div className="flex justify-between border-t border-line pt-3.5 text-lg">
               <b>Total</b>
               <b>{money(total)} AUD</b>

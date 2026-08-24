@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Icon, cx } from "@/components/ui";
 import { SearchBar } from "./SearchBar";
 import { useCart } from "@/components/cart/CartProvider";
@@ -25,8 +25,9 @@ export function Header({ signedIn }: { signedIn: boolean }) {
   const { count, ready } = useCart();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Close the mobile drawer whenever navigation happens.
-  useEffect(() => setMobileOpen(false), [pathname]);
+  // The drawer closes from the links themselves rather than an effect on
+  // `pathname`, so no render is wasted reacting to navigation after the fact.
+  const closeDrawer = () => setMobileOpen(false);
 
   return (
     <>
@@ -130,6 +131,7 @@ export function Header({ signedIn }: { signedIn: boolean }) {
                 <Link
                   key={item.label}
                   href={item.href}
+                  onClick={closeDrawer}
                   className={cx(
                     "flex items-center gap-2 rounded-xl px-2 py-3 text-[15px] font-bold",
                     item.accent ? "text-accent" : "text-ink",
@@ -141,6 +143,7 @@ export function Header({ signedIn }: { signedIn: boolean }) {
               ))}
               <Link
                 href="/track"
+                onClick={closeDrawer}
                 className="flex items-center gap-2 rounded-xl border-t border-line px-2 py-3 text-[15px] font-bold text-muted"
               >
                 <Icon name="truck" size={17} />

@@ -4,40 +4,15 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
 } from "react";
 import type { CartLine } from "@/lib/types";
 import { SHIPPING } from "@/lib/config";
+import { createLocalStore } from "@/lib/local-store";
 
 const STORAGE_KEY = "bamstudio.cart.v1";
-
-type CartContextValue = {
-  lines: CartLine[];
-  /** False until the stored cart has been read, so SSR and first paint agree. */
-  ready: boolean;
-  count: number;
-  subtotal: number;
-  freeShippingRemaining: number;
-  add: (line: Omit<CartLine, "key"> & { key?: string }) => void;
-  setQuantity: (key: string, quantity: number) => void;
-  remove: (key: string) => void;
-  clear: () => void;
-  /** Set by the "added to basket" flow so the header can flash a confirmation. */
-  lastAdded: string | null;
-};
-
-const CartContext = createContext<CartContextValue | null>(null);
-
-function lineKey(line: Omit<CartLine, "key">): string {
-  const custom = line.custom
-    ? `${line.custom.collection_slug}:${line.custom.letters}:${line.custom.with_charm}`
-    : "";
-  return [line.product_id, line.colour ?? "", line.attachment_id ?? "", custom].join(
-    "|",
-  );
-}
 
 function isCartLine(value: unknown): value is CartLine {
   if (!value || typeof value !== "object") return false;
@@ -52,52 +27,72 @@ function isCartLine(value: unknown): value is CartLine {
   );
 }
 
+const EMPTY: CartLine[] = [];
+const SERVER_NOT_READY = () => false;
+
+/** Stored carts are untrusted input — drop anything malformed. */
+const cartStore = createLocalStore<CartLine[]>(STORAGE_KEY, EMPTY, (value) =>
+  Array.isArray(value) ? value.filter(isCartLine) : EMPTY,
+);
+
+type CartContextValue = {
+  lines: CartLine[];
+  /** False until the stored cart has been read, so SSR and first paint agree. */
+  ready: boolean;
+  count: number;
+  subtotal: number;
+  freeShippingRemaining: number;
+  add: (line: Omit<CartLine, "key"> & { key?: string }) => void;
+  setQuantity: (key: string, quantity: number) => void;
+  remove: (key: string) => void;
+  clear: () => void;
+  lastAdded: string | null;
+};
+
+const CartContext = createContext<CartContextValue | null>(null);
+
+function lineKey(line: Omit<CartLine, "key">): string {
+  const custom = line.custom
+    ? `${line.custom.collection_slug}:${line.custom.letters}:${line.custom.with_charm}`
+    : "";
+  return [line.product_id, line.colour ?? "", line.attachment_id ?? "", custom].join(
+    "|",
+  );
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [lines, setLines] = useState<CartLine[]>([]);
-  const [ready, setReady] = useState(false);
+  const lines = useSyncExternalStore(
+    cartStore.subscribe,
+    cartStore.getSnapshot,
+    cartStore.getServerSnapshot,
+  );
+
+  // Both reads share one subscription; `hydrated` flips during subscribe, and
+  // React's post-subscribe consistency check picks the change up.
+  const ready = useSyncExternalStore(
+    cartStore.subscribe,
+    cartStore.isHydrated,
+    SERVER_NOT_READY,
+  );
+
   const [lastAdded, setLastAdded] = useState<string | null>(null);
-
-  // Load once on mount. Stored data is untrusted — validate every line.
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-        if (Array.isArray(parsed)) setLines(parsed.filter(isCartLine));
-      }
-    } catch {
-      // Corrupt or unavailable storage: start empty rather than crash.
-    }
-    setReady(true);
-  }, []);
-
-  // Persist after every change (but not before the initial read).
-  useEffect(() => {
-    if (!ready) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(lines));
-    } catch {
-      // Private mode / quota — the cart still works for this page view.
-    }
-  }, [lines, ready]);
 
   const add = useCallback((incoming: Omit<CartLine, "key"> & { key?: string }) => {
     const key = incoming.key ?? lineKey(incoming);
     const line: CartLine = { ...incoming, key };
-    setLines((current) => {
+    cartStore.set((current) => {
       const existing = current.find((l) => l.key === key);
-      if (existing) {
-        return current.map((l) =>
-          l.key === key ? { ...l, quantity: l.quantity + line.quantity } : l,
-        );
-      }
-      return [...current, line];
+      return existing
+        ? current.map((l) =>
+            l.key === key ? { ...l, quantity: l.quantity + line.quantity } : l,
+          )
+        : [...current, line];
     });
     setLastAdded(key);
   }, []);
 
   const setQuantity = useCallback((key: string, quantity: number) => {
-    setLines((current) =>
+    cartStore.set((current) =>
       quantity <= 0
         ? current.filter((l) => l.key !== key)
         : current.map((l) => (l.key === key ? { ...l, quantity } : l)),
@@ -105,10 +100,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const remove = useCallback((key: string) => {
-    setLines((current) => current.filter((l) => l.key !== key));
+    cartStore.set((current) => current.filter((l) => l.key !== key));
   }, []);
 
-  const clear = useCallback(() => setLines([]), []);
+  const clear = useCallback(() => cartStore.set(EMPTY), []);
 
   const value = useMemo<CartContextValue>(() => {
     const subtotal = lines.reduce(

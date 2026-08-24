@@ -155,6 +155,9 @@ export type OrderItem = {
   variant_label: string;
   art: ArtKey;
   tint: Tint;
+  /** Stored so "buy again" restores the exact variant that was ordered. */
+  colour: string | null;
+  attachment_id: string | null;
   unit_price: number;
   quantity: number;
 };

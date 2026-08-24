@@ -62,17 +62,26 @@ function one(value: string | string[] | undefined): string | undefined {
 }
 
 /**
- * Re-orderable lines are rebuilt from the product as it is priced *today*,
- * with its default colour and attachment — the shopper reviews the basket
- * before paying. Personalised lines are skipped: the letters have to be
- * chosen again on the builder.
+ * Re-orderable lines keep the colour and attachment that were actually
+ * ordered (stored on the order item), but are priced at *today's* price —
+ * the shopper reviews the basket before paying. Personalised lines are
+ * skipped: the letters have to be chosen again in the builder.
  */
 function reorderLines(items: OrderItemRow[]): Omit<CartLine, "key">[] {
   return items.flatMap((item) => {
     const product = firstOf(item.products);
     if (!product || product.is_personalised) return [];
 
-    const attachment = product.attachments?.[0] ?? null;
+    const attachments = product.attachments ?? [];
+    const attachment =
+      attachments.find((a) => a.id === item.attachment_id) ??
+      attachments[0] ??
+      null;
+    const colour =
+      product.colours?.find((c) => c.name === item.colour)?.name ??
+      product.colours?.[0]?.name ??
+      null;
+
     return [
       {
         product_id: product.id,
@@ -80,7 +89,7 @@ function reorderLines(items: OrderItemRow[]): Omit<CartLine, "key">[] {
         name: product.short_name,
         art: product.art,
         tint: product.tint,
-        colour: product.colours?.[0]?.name ?? null,
+        colour,
         attachment_id: attachment?.id ?? null,
         attachment_label: attachment?.label ?? null,
         unit_price: product.price + (attachment?.price_delta ?? 0),

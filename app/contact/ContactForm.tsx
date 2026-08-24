@@ -138,14 +138,14 @@ export function ContactForm() {
           <Field
             label="Order number"
             htmlFor="contact-order"
-            hint="Optional — it looks like BAM-1042."
+            hint="Optional — it looks like BS-1042-9F3A."
           >
             <input
               id="contact-order"
               name="orderNumber"
               type="text"
               maxLength={40}
-              placeholder="BAM-1042"
+              placeholder="BS-1042-9F3A"
               className={inputClass}
             />
           </Field>

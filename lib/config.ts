@@ -12,6 +12,13 @@ export const SHOP = {
   currency: "AUD",
   /** TODO: replace once the ABN application clears. */
   abn: process.env.NEXT_PUBLIC_ABN ?? null,
+  /**
+   * GST registration is only required above $75,000 turnover, and the shop is
+   * below it. While this is false, prices must NOT claim to include GST and
+   * no GST component may be shown — that would misrepresent a tax that is not
+   * being collected. Flip it (and set the ABN) on the day you register.
+   */
+  gstRegistered: process.env.NEXT_PUBLIC_GST_REGISTERED === "true",
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "hello@example.com",
   socials: {
     instagram: process.env.NEXT_PUBLIC_INSTAGRAM_URL ?? "#",

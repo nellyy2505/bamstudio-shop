@@ -2,14 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getStripe, siteUrl } from "@/lib/stripe";
 import { createAdminClient, createClient, getUser } from "@/lib/supabase/server";
-import { isDatabaseConfigured } from "@/lib/queries";
+import { getCollections, isDatabaseConfigured } from "@/lib/queries";
 import { FALLBACK_PRODUCTS } from "@/lib/fallback-data";
 import {
+  BUILDER_MAX_LETTERS,
   BUILDER_NO_CHARM_DISCOUNT,
   BUILDER_PRICING,
   SHIPPING,
   shippingCost,
 } from "@/lib/config";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
 import type { Product } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -22,9 +24,14 @@ const LineSchema = z.object({
   quantity: z.number().int().min(1).max(20),
   custom: z
     .object({
-      collection_slug: z.string().min(1),
-      collection_name: z.string().min(1),
-      letters: z.string().min(1).max(5),
+      collection_slug: z.string().min(1).max(60),
+      // Kept only for older clients; the server uses the stored name.
+      collection_name: z.string().min(1).max(60),
+      letters: z
+        .string()
+        .min(1)
+        .max(BUILDER_MAX_LETTERS)
+        .regex(/^[A-Za-z]+$/, "Letters only."),
       with_charm: z.boolean(),
     })
     .optional(),
@@ -63,6 +70,8 @@ type SummaryLine = {
   art: string;
   tint: string;
   variant: string;
+  colour: string | null;
+  attachment_id: string | null;
   unit_price: number;
   quantity: number;
   personalisation: unknown;
@@ -120,6 +129,8 @@ async function savePendingOrder(input: {
         variant_label: item.variant,
         art: item.art,
         tint: item.tint,
+        colour: item.colour,
+        attachment_id: item.attachment_id,
         unit_price: item.unit_price,
         quantity: item.quantity,
         personalisation: item.personalisation,
@@ -138,6 +149,16 @@ async function savePendingOrder(input: {
  * product and how many. A tampered basket cannot change what is charged.
  */
 export async function POST(request: Request) {
+  // This route writes order rows with the service-role key, so an unthrottled
+  // loop could fill the table. Real shoppers check out a handful of times.
+  const limit = rateLimit(clientKey(request, "checkout"), 10, 60_000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many checkout attempts. Please wait a moment." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+    );
+  }
+
   let body: z.infer<typeof BodySchema>;
   try {
     body = BodySchema.parse(await request.json());
@@ -156,6 +177,15 @@ export async function POST(request: Request) {
   }
 
   const products = await loadProducts(body.lines.map((l) => l.slug));
+
+  // Personalised lines are priced against a real collection, never the
+  // colourway name the client claims.
+  const needsCollections = body.lines.some((l) => l.custom);
+  const collections = new Map(
+    needsCollections
+      ? (await getCollections()).map((c) => [c.slug, c] as const)
+      : [],
+  );
 
   const lineItems: {
     price_data: {
@@ -180,8 +210,31 @@ export async function POST(request: Request) {
     let unitPrice: number;
     let description: string;
 
+    // Without this check, attaching a `custom` block to any product would
+    // price it as a name charm — a $18 item for $3.
+    if (line.custom && !product.is_personalised) {
+      return NextResponse.json(
+        { error: `“${product.short_name}” is not a personalised product.` },
+        { status: 400 },
+      );
+    }
+    if (product.is_personalised && !line.custom) {
+      return NextResponse.json(
+        { error: `“${product.short_name}” needs to be built in the designer.` },
+        { status: 400 },
+      );
+    }
+
     if (line.custom) {
       // Builder item: flat bundle price by letter count, ignore client price.
+      const collection = collections.get(line.custom.collection_slug);
+      if (!collection) {
+        return NextResponse.json(
+          { error: "That colourway is no longer available." },
+          { status: 409 },
+        );
+      }
+
       const letters = line.custom.letters.replace(/[^A-Za-z]/g, "").toUpperCase();
       const bundle = BUILDER_PRICING[letters.length];
       if (!bundle) {
@@ -191,7 +244,8 @@ export async function POST(request: Request) {
         );
       }
       unitPrice = bundle - (line.custom.with_charm ? 0 : BUILDER_NO_CHARM_DISCOUNT);
-      description = `${line.custom.collection_name} · ${letters}${
+      // Use the collection's stored name, not the client's copy of it.
+      description = `${collection.name} · ${letters}${
         line.custom.with_charm ? " · with charm" : " · letters only"
       }`;
     } else {
@@ -225,6 +279,8 @@ export async function POST(request: Request) {
       art: product.art,
       tint: product.tint,
       variant: description,
+      colour: line.colour ?? null,
+      attachment_id: line.attachment_id ?? null,
       unit_price: unitPrice,
       quantity: line.quantity,
       personalisation: line.custom ?? null,
@@ -243,7 +299,10 @@ export async function POST(request: Request) {
       customer_email: user?.email ?? body.email,
       success_url: `${siteUrl()}/order/confirmed?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl()}/cart?cancelled=1`,
-      allow_promotion_codes: true,
+      // Deliberately off: orders store subtotal/shipping/total with no
+      // discount column, so a promo code would leave those three inconsistent.
+      // Add a `discount` column and reconcile in the webhook before enabling.
+      allow_promotion_codes: false,
       billing_address_collection: "auto",
       shipping_address_collection: { allowed_countries: ["AU"] },
       phone_number_collection: { enabled: true },
@@ -274,6 +333,9 @@ export async function POST(request: Request) {
         shipping_method: body.shipping_method,
         subtotal: String(subtotal),
         shipping: String(shipping),
+        // Small enough for Stripe's 500-char cap, and the one piece of the
+        // basket the webhook cannot rebuild from line items.
+        gift_note: (body.gift_note ?? "").slice(0, 450),
       },
     });
 

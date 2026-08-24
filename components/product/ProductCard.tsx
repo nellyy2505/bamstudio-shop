@@ -18,11 +18,9 @@ const TINT_CLASS: Record<string, string> = {
 export function ProductCard({
   product,
   quickAdd = true,
-  priority = false,
 }: {
   product: Product;
   quickAdd?: boolean;
-  priority?: boolean;
 }) {
   const badge = product.is_bestseller
     ? "Bestseller"

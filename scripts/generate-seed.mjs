@@ -10,7 +10,7 @@
  * Prices: the sheet's "My price" column is authoritative once filled. Until
  * then we fall back to PRICE_BY_CATEGORY so the shop has something to show.
  */
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 
@@ -212,7 +212,7 @@ function coloursFor(row) {
   return unique.map((name) => ({ name, hex: COLOUR_HEX[name] }));
 }
 
-function describe(row, art) {
+function describe(row) {
   const theme = row.Theme ?? "";
   const isClicker = String(row.Category ?? "").includes("Clicker");
   const base = isClicker
@@ -261,7 +261,7 @@ const values = rows.map((row) => {
   const isPersonalised = PERSONALISED.has(sku);
 
   const details = [
-    { title: "Item details", body: describe(row, art) },
+    { title: "Item details", body: describe(row) },
     {
       title: "Materials & care",
       body: "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers — a wipe with a damp cloth is all it needs.",
@@ -281,7 +281,7 @@ const values = rows.map((row) => {
     q(row.Product),
     q(row.Category),
     q(row.Theme ?? "Other"),
-    q(describe(row, art)),
+    q(describe(row)),
     price,
     q(art),
     q(tint),
@@ -384,7 +384,7 @@ const fallbackProducts = rows.map((row, index) => {
     short_name: String(row.Product),
     category: String(row.Category),
     theme: String(row.Theme ?? "Other"),
-    description: describe(row, art),
+    description: describe(row),
     price: priceFor(row),
     art,
     tint,
@@ -392,7 +392,7 @@ const fallbackProducts = rows.map((row, index) => {
     colours: coloursFor(row),
     attachments: ATTACHMENT_SETS[row.Attachment] ?? ATTACHMENT_SETS.None,
     details: [
-      { title: "Item details", body: describe(row, art) },
+      { title: "Item details", body: describe(row) },
       {
         title: "Materials & care",
         body: "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers.",

@@ -40,14 +40,14 @@ export function ProfileCard({
 
     try {
       const supabase = createClient();
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim() || null,
-          phone: form.phone.trim() || null,
-        })
-        .eq("id", userId);
+      // upsert, not update: a 0-row update reports no error, so an account
+      // whose trigger-created profile row is missing would "save" nothing.
+      const { error } = await supabase.from("profiles").upsert({
+        id: userId,
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim() || null,
+        phone: form.phone.trim() || null,
+      });
 
       if (error) throw new Error(error.message);
       setState("done");

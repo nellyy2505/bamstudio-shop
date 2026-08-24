@@ -13,6 +13,9 @@ import type { ArtKey, Tint } from "@/lib/types";
 export const metadata: Metadata = {
   title: "Order confirmed",
   robots: { index: false },
+  // The URL carries a Stripe session id that reads back the customer's
+  // address, so it must not leak to any third party in a Referer header.
+  referrer: "no-referrer",
 };
 
 type SearchParams = Promise<{ session_id?: string | string[] }>;

@@ -36,18 +36,22 @@ export function SearchBar({ initialQuery = "" }: { initialQuery?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const listId = useId();
 
-  // Debounced suggestion fetch, with in-flight cancellation.
+  // Debounced suggestion fetch, with in-flight cancellation. Every state
+  // update happens inside the timer or the fetch, never synchronously in the
+  // effect body — a synchronous one would cascade an extra render per keypress.
   useEffect(() => {
     const term = query.trim();
     if (term.length < 2) {
-      setResults([]);
-      setLoading(false);
-      return;
+      const clear = setTimeout(() => {
+        setResults([]);
+        setLoading(false);
+      }, 0);
+      return () => clearTimeout(clear);
     }
 
     const controller = new AbortController();
-    setLoading(true);
     const timer = setTimeout(async () => {
+      setLoading(true);
       try {
         const res = await fetch(
           `/api/search/suggest?q=${encodeURIComponent(term)}`,

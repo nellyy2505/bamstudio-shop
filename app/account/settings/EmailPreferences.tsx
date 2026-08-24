@@ -95,10 +95,11 @@ export function EmailPreferences({
 
     try {
       const supabase = createClient();
+      // upsert so a missing profile row self-heals rather than silently
+      // updating zero rows and reporting success.
       const { error: cause } = await supabase
         .from("profiles")
-        .update({ [key]: next })
-        .eq("id", userId);
+        .upsert({ id: userId, [key]: next });
       if (cause) throw new Error(cause.message);
     } catch (cause) {
       setValues(previous);

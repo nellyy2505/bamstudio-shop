@@ -26,6 +26,22 @@ function addressFrom(session: Stripe.Checkout.Session) {
 }
 
 /**
+ * Order numbers are only issued on payment, so abandoned checkouts don't burn
+ * them and customers don't see gaps of hundreds between consecutive orders.
+ * The random suffix stops anyone enumerating other people's orders on /track.
+ */
+async function nextOrderNumber(
+  supabase: ReturnType<typeof createAdminClient>,
+): Promise<string> {
+  const { data, error } = await supabase.rpc("next_order_number");
+  if (error || !data) {
+    console.error("Could not allocate order number:", error?.message);
+    throw new Error("order number allocation failed");
+  }
+  return data as string;
+}
+
+/**
  * Promotes the `pending` order staged at checkout to `confirmed`, filling in
  * the address and totals Stripe collected.
  *
@@ -50,10 +66,11 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
   if (staged) {
     if (staged.status !== "pending") return; // already handled
 
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from("orders")
       .update({
         status: "confirmed",
+        order_number: await nextOrderNumber(supabase),
         email:
           session.customer_details?.email ??
           session.customer_email ??
@@ -64,12 +81,18 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", staged.id)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .select("id");
 
     if (error) {
       console.error("Could not confirm order:", error.message);
       throw new Error("order confirm failed");
     }
+
+    // Zero rows means a concurrent delivery already confirmed this order.
+    // PostgREST reports no error for that, so the count is the only signal —
+    // without it, retries would decrement stock a second time.
+    if (!updated || updated.length === 0) return;
 
     await decrementStock(supabase, staged.id);
     return;
@@ -89,10 +112,13 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
       email:
         session.customer_details?.email ?? session.customer_email ?? "unknown",
       status: "confirmed",
+      order_number: await nextOrderNumber(supabase),
       subtotal: Number(session.metadata?.subtotal ?? session.amount_subtotal ?? 0),
       shipping: Number(session.metadata?.shipping ?? 0),
       total: session.amount_total ?? 0,
       shipping_method: session.metadata?.shipping_method || "standard",
+      // The one basket detail Stripe's line items cannot carry back.
+      gift_note: session.metadata?.gift_note || null,
       shipping_address: addressFrom(session),
       stripe_session_id: session.id,
       stripe_payment_intent: paymentIntent,

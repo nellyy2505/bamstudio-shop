@@ -117,7 +117,7 @@ export function TrackForm() {
             <Field
               label="Order number"
               htmlFor="track-order"
-              hint="Looks like BAM-1042."
+              hint="Looks like BS-1042-9F3A."
             >
               <input
                 id="track-order"
@@ -126,7 +126,7 @@ export function TrackForm() {
                 required
                 maxLength={40}
                 autoComplete="off"
-                placeholder="BAM-1042"
+                placeholder="BS-1042-9F3A"
                 className={inputClass}
               />
             </Field>

@@ -132,7 +132,9 @@ export default async function ProductPage({ params }: { params: Params }) {
 
           <div className="flex flex-wrap items-baseline gap-3">
             <b className="text-3xl">{money(product.price)}</b>
-            <span className="text-[13px] text-muted">AUD · GST included</span>
+            <span className="text-[13px] text-muted">
+              AUD{SHOP.gstRegistered ? " · GST included" : ""}
+            </span>
           </div>
 
           <p

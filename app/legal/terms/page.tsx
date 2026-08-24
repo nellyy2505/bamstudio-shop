@@ -36,7 +36,9 @@ export default function TermsPage() {
 
       <h2>Prices and payment</h2>
       <p>
-        All prices are in Australian dollars and include any GST that applies.
+        All prices are in Australian dollars. [REGISTERED BUSINESS NAME] is not
+        currently registered for GST, so no GST is charged on your order; if
+        that changes, prices shown will include it.
         Prices exclude delivery, which is shown at checkout before you pay.
       </p>
       <p>

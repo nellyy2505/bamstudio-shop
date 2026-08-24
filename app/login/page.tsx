@@ -31,7 +31,16 @@ export default async function LoginPage({
 }) {
   const params = await searchParams;
   const next = safeNext(one(params.next));
-  const error = one(params.error);
+  // Map the callback's error code to our own copy — never render text that
+  // arrived in the URL.
+  const AUTH_ERRORS: Record<string, string> = {
+    denied: "Sign-in was cancelled. You can try again below.",
+    expired: "That sign-in link has expired. Request a new one.",
+    invalid: "That sign-in link was incomplete. Try signing in again.",
+    failed: "We couldn't complete sign-in. Please try again.",
+  };
+  const errorCode = one(params.error);
+  const error = errorCode ? (AUTH_ERRORS[errorCode] ?? AUTH_ERRORS.failed) : undefined;
 
   return (
     <div className="wrap flex justify-center py-12 md:py-16">
