@@ -85,6 +85,36 @@ type SummaryLine = {
 };
 
 /**
+ * Packs the basket into Stripe's 500-character metadata budget as
+ * "slug:qty,slug:qty". Entries are dropped whole rather than the string being
+ * sliced — a cut mid-entry would hand the webhook a truncated slug and
+ * silently skip that product's stock movement.
+ */
+const STOCK_METADATA_LIMIT = 480;
+
+function stockMap(items: SummaryLine[]): string {
+  const parts: string[] = [];
+  let length = 0;
+
+  for (const item of items) {
+    if (item.personalisation) continue;
+    const entry = `${item.slug}:${item.quantity}`;
+    const cost = entry.length + (parts.length > 0 ? 1 : 0);
+    if (length + cost > STOCK_METADATA_LIMIT) {
+      console.warn(
+        `Stock metadata full — ${item.slug} omitted; its stock will not move ` +
+          "if the webhook has to rebuild this order.",
+      );
+      continue;
+    }
+    parts.push(entry);
+    length += cost;
+  }
+
+  return parts.join(",");
+}
+
+/**
  * Records the basket as a `pending` order keyed by the Stripe session, so the
  * webhook only has to confirm it. Stripe's 500-character metadata limit makes
  * carrying the basket on the session itself unworkable.
@@ -445,14 +475,10 @@ export async function POST(request: Request) {
         // Small enough for Stripe's 500-char cap, and the one piece of the
         // basket the webhook cannot rebuild from line items.
         gift_note: (body.gift_note ?? "").slice(0, 450),
-        // "slug:qty,slug:qty" — compact enough to fit the cap, and the only
-        // way the webhook's rebuild path can find products to decrement.
-        // Personalised lines are omitted: they hold no ready-to-ship stock.
-        stock: summary
-          .filter((item) => !item.personalisation)
-          .map((item) => `${item.slug}:${item.quantity}`)
-          .join(",")
-          .slice(0, 480),
+        // "slug:qty,slug:qty" — the only way the webhook's rebuild path can
+        // find products to decrement. Personalised lines are omitted: they
+        // hold no ready-to-ship stock.
+        stock: stockMap(summary),
       },
     });
 

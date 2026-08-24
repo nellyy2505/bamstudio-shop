@@ -57,19 +57,31 @@ export default function ContactPage() {
               New designs, print fails and restock news go up first on social.
               DMs get answered, just more slowly than email.
             </p>
+            {/* A link labelled "Instagram" that goes somewhere else is its own
+                small false promise, so an unset handle renders no link — the
+                same choice the footer makes. */}
             <div className="mt-3 flex flex-wrap gap-3 text-sm font-bold">
-              <a
-                href={SHOP.socials.instagram ?? "/contact"}
-                className="text-accent underline underline-offset-2 hover:text-accent-dark"
-              >
-                Instagram
-              </a>
-              <a
-                href={SHOP.socials.tiktok ?? "/contact"}
-                className="text-accent underline underline-offset-2 hover:text-accent-dark"
-              >
-                TikTok
-              </a>
+              {SHOP.socials.instagram ? (
+                <a
+                  href={SHOP.socials.instagram}
+                  className="text-accent underline underline-offset-2 hover:text-accent-dark"
+                >
+                  Instagram
+                </a>
+              ) : null}
+              {SHOP.socials.tiktok ? (
+                <a
+                  href={SHOP.socials.tiktok}
+                  className="text-accent underline underline-offset-2 hover:text-accent-dark"
+                >
+                  TikTok
+                </a>
+              ) : null}
+              {!SHOP.socials.instagram && !SHOP.socials.tiktok ? (
+                <span className="font-normal text-faint">
+                  Handles go here once they&apos;re set.
+                </span>
+              ) : null}
             </div>
           </section>
 
