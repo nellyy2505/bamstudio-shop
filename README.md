@@ -1,36 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bam Studio — online shop
 
-## Getting Started
+The storefront for Bam Studio: 3D-printed fidget clickers, charms and a
+build-your-own name charm, printed to order in Sydney.
 
-First, run the development server:
+- **Framework:** Next.js 16 (App Router, React 19, TypeScript)
+- **Styling:** Tailwind CSS v4, design tokens in `app/globals.css`
+- **Database & accounts:** Supabase (Postgres + Auth, Google + email)
+- **Payments:** Stripe Checkout + webhook
+- **Hosting:** Vercel
+
+## Run it locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local     # fill in the keys — see SETUP.md
+npm run dev                    # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app **runs with no database at all**: when the Supabase variables are
+missing it serves a sample catalogue from `lib/fallback-data.ts`, so you can
+browse, search and build a name charm immediately. Checkout needs real Stripe
+keys.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Full step-by-step credentials and deployment guide: **[SETUP.md](SETUP.md)**.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project layout
 
-## Learn More
+```
+app/
+  page.tsx                    home
+  shop/                       catalogue + filters + sort
+  product/[slug]/             product detail, gallery, buy box, reviews
+  builder/                    design-your-own name charm
+  collections/                the six colourways
+  search/                     search results
+  cart/                       basket → Stripe Checkout
+  order/confirmed/            post-payment confirmation
+  track/                      guest order tracking
+  login/ signup/ forgot-password/ reset-password/ auth/
+  account/                    orders, favourites, addresses, settings
+  about/ faq/ contact/ legal/ not-found.tsx
+  api/
+    checkout/                 creates the Stripe Checkout Session
+    webhooks/stripe/          records paid orders (service role)
+    search/suggest/           header typeahead
+    track/ contact/ newsletter/
+components/
+  ui/                         Button, Pill, Stars, Field, Alert, Icon…
+  layout/                     Header, Footer, SearchBar
+  product/                    ProductCard, QuickAdd, Favourite
+  builder/                    Keycap, KeycapWord
+  cart/CartProvider.tsx       basket state (localStorage-backed)
+  ProductArt.tsx              the illustrated product artwork
+lib/
+  config.ts                   prices, shipping, builder bundles — business rules
+  queries.ts                  all catalogue reads (with fallback)
+  types.ts  format.ts  stripe.ts  supabase/
+supabase/
+  migrations/0001_init.sql    schema, RLS policies, helper functions
+  seed.sql                    catalogue, generated from the workbook
+scripts/generate-seed.mjs     regenerates seed.sql + fallback-data.ts
+```
 
-To learn more about Next.js, take a look at the following resources:
+## The catalogue comes from your spreadsheet
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`scripts/generate-seed.mjs` reads the **Products** sheet of
+`../Documents/3D_Planner.xlsx` and writes both `supabase/seed.sql` and the
+local fallback data. It is the one place that maps a SKU to its artwork.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+node scripts/generate-seed.mjs                    # default workbook path
+node scripts/generate-seed.mjs /path/to/file.xlsx
+```
 
-## Deploy on Vercel
+Rules it applies:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **"My price" wins.** When that column is filled it becomes the shop price.
+  Until then, a per-category fallback price is used — see `PRICE_BY_CATEGORY`.
+- **Licensed characters are excluded** (`LICENSED_SKUS`). Hello Kitty is
+  currently filtered out; add any others there.
+- Display/packaging items and the lucky scoop are stall-only and skipped.
+- New products need an entry in `ART_BY_SKU` to get bespoke artwork,
+  otherwise they fall back to their theme's default.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+After regenerating, re-run `supabase/seed.sql` against your database.
+
+## Business rules live in one file
+
+`lib/config.ts` holds the free-shipping threshold, postage prices, print lead
+time and the builder's flat bundle pricing. Change a number there and it
+updates every page, the basket and the Stripe session together. **All money is
+in cents** to avoid floating-point drift.
+
+## Prices are recalculated server-side
+
+`app/api/checkout/route.ts` never trusts the browser's prices. It reloads each
+product from the database, re-derives the unit price from the base price plus
+the attachment delta (or the flat bundle price for a name charm), and charges
+that. A tampered basket cannot change what Stripe collects.
+
+## Commands
+
+```bash
+npm run dev      # dev server
+npm run build    # production build (run before every deploy)
+npm run lint     # eslint
+npx tsc --noEmit # typecheck
+```

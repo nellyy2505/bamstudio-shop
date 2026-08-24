@@ -1,26 +1,98 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Surfaces & ink */
+  --color-bg: #fdfbf8;
+  --color-surface: #ffffff;
+  --color-ink: #252220;
+  --color-muted: #6e6a62;
+  --color-faint: #9c968c;
+  --color-line: #eae5dc;
+  --color-line2: #ddd6cb;
+
+  /* Brand */
+  --color-accent: #b85c38;
+  --color-accent-dark: #9a4826;
+  --color-accent-soft: #f8ece5;
+  --color-star: #e8a33d;
+  --color-good: #4c7a3f;
+  --color-good-soft: #eaf0e4;
+  --color-danger: #9a4a38;
+  --color-danger-soft: #e9d3cb;
+
+  /* Product tints */
+  --color-blush: #f7e3de;
+  --color-butter: #f6edd6;
+  --color-sage: #e9eee0;
+  --color-sky: #e2eaf0;
+  --color-lilac: #ece6f2;
+  --color-cream: #f4efe6;
+
+  /* Supplied by next/font in app/layout.tsx (self-hosted, no external call). */
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1rem;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* Visible focus for keyboard users only */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  .wrap {
+    max-width: 1240px;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  @media (min-width: 768px) {
+    .wrap {
+      padding-inline: 2.5rem;
+    }
+  }
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 1rem;
+  }
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,0 +1,180 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Button, Icon, cx } from "@/components/ui";
+import { useCart } from "@/components/cart/CartProvider";
+import { money } from "@/lib/format";
+import type { Product } from "@/lib/types";
+
+/** Colour + attachment pickers, quantity and the two buy buttons. */
+export function ProductBuy({ product }: { product: Product }) {
+  const { add } = useCart();
+  const router = useRouter();
+
+  const colours = product.colours ?? [];
+  const attachments = product.attachments ?? [];
+
+  const [colour, setColour] = useState(colours[0]?.name ?? null);
+  const [attachmentId, setAttachmentId] = useState(attachments[0]?.id ?? null);
+  const [quantity, setQuantity] = useState(1);
+  const [added, setAdded] = useState(false);
+
+  const attachment = attachments.find((a) => a.id === attachmentId) ?? null;
+  const unitPrice = product.price + (attachment?.price_delta ?? 0);
+
+  // Personalised products are configured in the builder, not here.
+  if (product.is_personalised) {
+    return (
+      <div className="rounded-2xl bg-lilac p-5">
+        <b className="text-[15px]">This one is made to your spec</b>
+        <p className="mt-1.5 mb-4 text-sm text-muted">
+          Pick the letters, colourway and cord in the builder — flat price by
+          name length, from {money(product.price)}.
+        </p>
+        <Link
+          href="/builder"
+          className="inline-flex h-12 items-center gap-2 rounded-full bg-accent px-6 font-display font-semibold text-white hover:bg-accent-dark"
+        >
+          <Icon name="sparkle" size={18} />
+          Design yours
+        </Link>
+      </div>
+    );
+  }
+
+  function addToCart() {
+    add({
+      product_id: product.id,
+      slug: product.slug,
+      name: product.short_name,
+      art: product.art,
+      tint: product.tint,
+      colour,
+      attachment_id: attachment?.id ?? null,
+      attachment_label: attachment?.label ?? null,
+      unit_price: unitPrice,
+      quantity,
+      is_personalised: false,
+    });
+    setAdded(true);
+    setTimeout(() => setAdded(false), 2000);
+  }
+
+  return (
+    <div>
+      {colours.length > 0 ? (
+        <fieldset className="mb-5">
+          <legend className="mb-2.5 text-[13.5px] font-extrabold">
+            Colour:{" "}
+            <span className="font-semibold text-muted">{colour ?? "Any"}</span>
+          </legend>
+          <div className="flex flex-wrap gap-3">
+            {colours.map((option) => (
+              <button
+                key={option.name}
+                type="button"
+                onClick={() => setColour(option.name)}
+                aria-pressed={colour === option.name}
+                aria-label={option.name}
+                title={option.name}
+                className={cx(
+                  "h-9 w-9 rounded-full",
+                  colour === option.name
+                    ? "outline-2 outline-offset-[3px] outline-ink"
+                    : "border border-line2",
+                )}
+                style={{ background: option.hex }}
+              />
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+
+      {attachments.length > 0 ? (
+        <fieldset className="mb-5">
+          <legend className="mb-2.5 text-[13.5px] font-extrabold">
+            Attachment
+          </legend>
+          <div className="flex flex-wrap gap-2.5">
+            {attachments.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setAttachmentId(option.id)}
+                aria-pressed={attachmentId === option.id}
+                className={cx(
+                  "rounded-full px-4 py-3 text-[13.5px] font-extrabold",
+                  attachmentId === option.id
+                    ? "bg-ink text-white"
+                    : "border border-line2 bg-surface hover:border-ink",
+                )}
+              >
+                {option.label}
+                {option.price_delta !== 0
+                  ? ` ${option.price_delta > 0 ? "+" : "−"}${money(Math.abs(option.price_delta))}`
+                  : ""}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="flex h-12 items-center rounded-full border border-line2 bg-surface">
+          <button
+            type="button"
+            onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+            disabled={quantity <= 1}
+            aria-label="Decrease quantity"
+            className="flex h-12 w-12 items-center justify-center disabled:opacity-40"
+          >
+            <Icon name="minus" size={16} />
+          </button>
+          <span aria-live="polite" className="w-8 text-center font-bold">
+            {quantity}
+          </span>
+          <button
+            type="button"
+            onClick={() => setQuantity((q) => Math.min(20, q + 1))}
+            aria-label="Increase quantity"
+            className="flex h-12 w-12 items-center justify-center"
+          >
+            <Icon name="plus" size={16} />
+          </button>
+        </div>
+
+        <Button onClick={addToCart} className="min-w-[200px] flex-1">
+          {added ? (
+            <>
+              <Icon name="check" size={18} strokeWidth={2.4} />
+              Added to basket
+            </>
+          ) : (
+            <>
+              <Icon name="bag" size={18} />
+              Add to basket · {money(unitPrice * quantity)}
+            </>
+          )}
+        </Button>
+      </div>
+
+      <Button
+        variant="ghost"
+        full
+        className="mt-3"
+        onClick={() => {
+          addToCart();
+          router.push("/cart");
+        }}
+      >
+        Buy it now
+      </Button>
+
+      <p aria-live="polite" className="sr-only">
+        {added ? `${product.short_name} added to your basket.` : ""}
+      </p>
+    </div>
+  );
+}
