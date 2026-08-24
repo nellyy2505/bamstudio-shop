@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { ProductArt } from "@/components/ProductArt";
 import { ProductGrid } from "@/components/product/ProductCard";
-import { ButtonLink, Icon, Pill, SectionHead, Stars } from "@/components/ui";
+import { ButtonLink, Icon, Pill, SectionHead } from "@/components/ui";
 import { KeycapWord } from "@/components/builder/Keycap";
 import { getCollections, getProducts } from "@/lib/queries";
-import { SHIPPING, SHOP } from "@/lib/config";
+import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitDays } from "@/lib/config";
 import { money } from "@/lib/format";
 import type { ArtKey, Tint } from "@/lib/types";
 
@@ -46,6 +46,23 @@ const CATEGORY_TILES: { label: string; art: ArtKey; tint: Tint; href: string }[]
     },
   ];
 
+/**
+ * Things that are actually true of a pre-revenue, print-to-order shop. No
+ * ratings or review counts live here until customers have written some.
+ */
+const HERO_FACTS = [
+  { icon: "pin" as const, label: `Printed to order in ${SHOP.city}` },
+  { icon: "heart" as const, label: "Designed by the family" },
+  {
+    icon: "truck" as const,
+    label: `Free shipping over ${money(SHIPPING.freeThreshold)}`,
+  },
+  { icon: "sparkle" as const, label: "Original designs only" },
+];
+
+/** Carrier transit for standard post — quoted separately from printing. */
+const [STANDARD_MIN, STANDARD_MAX] = transitDays("standard");
+
 const PROMISES = [
   {
     icon: "box" as const,
@@ -54,8 +71,8 @@ const PROMISES = [
   },
   {
     icon: "truck" as const,
-    title: "Ships in 2–4 days",
-    body: `Australia-wide. Free standard shipping over ${money(SHIPPING.freeThreshold)}.`,
+    title: `Dispatched in ${PRINT_LEAD_TIME.label}`,
+    body: `That's printing time, not delivery — standard post adds ${STANDARD_MIN}–${STANDARD_MAX} business days. Free over ${money(SHIPPING.freeThreshold)}.`,
   },
   {
     icon: "shield" as const,
@@ -105,13 +122,18 @@ export default async function HomePage() {
                 Design your own
               </ButtonLink>
             </div>
-            <div className="mt-8 flex flex-wrap items-center gap-2">
-              <Stars rating={5} size={16} />
-              <b className="text-sm">4.9</b>
-              <span className="text-[13.5px] text-[#5C564C]">
-                from market &amp; online reviews
-              </span>
-            </div>
+            <ul className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13.5px] text-[#5C564C]">
+              {HERO_FACTS.map((fact) => (
+                <li key={fact.label} className="flex items-center gap-1.5">
+                  <Icon
+                    name={fact.icon}
+                    size={15}
+                    className="shrink-0 text-accent-dark"
+                  />
+                  {fact.label}
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

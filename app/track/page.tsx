@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Breadcrumbs, Icon } from "@/components/ui";
 import { TrackForm } from "./TrackForm";
-import { PRINT_LEAD_TIME, SHIPPING } from "@/lib/config";
+import { PRINT_LEAD_TIME, SHIPPING, transitLabel } from "@/lib/config";
 import { money } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ const NOTES = [
   {
     icon: "truck" as const,
     title: "Then the post",
-    body: `Standard post is ${money(SHIPPING.methods[0].price)} (${SHIPPING.methods[0].description}); express is ${money(SHIPPING.methods[1].price)} (${SHIPPING.methods[1].description}).`,
+    body: `Standard post is ${money(SHIPPING.methods[0].price)} (${transitLabel("standard")}); express is ${money(SHIPPING.methods[1].price)} (${transitLabel("express")}).`,
   },
   {
     icon: "lock" as const,

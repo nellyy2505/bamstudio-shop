@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Breadcrumbs, ButtonLink, Icon } from "@/components/ui";
 import type { IconName } from "@/components/ui";
-import { PRINT_LEAD_TIME, SHIPPING, SHOP } from "@/lib/config";
+import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitLabel } from "@/lib/config";
 import { money } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -59,8 +59,8 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
         </p>
         <p>
           After dispatch: {standard.label.toLowerCase()} post is{" "}
-          {money(standard.price)} ({standard.description}) and express is{" "}
-          {money(express.price)} ({express.description}). Standard shipping is
+          {money(standard.price)} ({transitLabel(standard.id)}) and express is{" "}
+          {money(express.price)} ({transitLabel(express.id)}). Standard shipping is
           free once your order reaches{" "}
           {money(SHIPPING.freeThreshold)}. Express speeds up the post, not the
           printing — the print time still applies.

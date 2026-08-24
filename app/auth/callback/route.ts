@@ -5,6 +5,9 @@ export const runtime = "nodejs";
 
 const DEFAULT_NEXT = "/account/orders";
 
+/** The one destination that earns a verified-recovery marker. */
+const RECOVERY_NEXT = "/reset-password";
+
 /**
  * `next` is attacker-controllable, so only same-origin paths are allowed.
  * `//host` and `/\host` are protocol-relative to a browser — an open redirect.
@@ -56,5 +59,27 @@ export async function GET(request: Request) {
     return loginWithError(url.origin, expired ? "expired" : "failed", error.message);
   }
 
-  return NextResponse.redirect(new URL(next, url.origin));
+  const response = NextResponse.redirect(new URL(next, url.origin));
+
+  // A session on its own says nothing about *how* it was obtained, so
+  // /reset-password cannot tell "just clicked the emailed recovery link" from
+  // "someone walked up to a browser that was left signed in". This cookie is
+  // the only place that distinction exists: we set it exactly once, here,
+  // after a code exchange that the user reached by following a reset link.
+  // /reset-password waives the current-password check only when it sees it.
+  //
+  // Deliberately narrow: httpOnly (script can't forge or read it), path-scoped
+  // to /reset-password (never sent anywhere else), and 15 minutes — long
+  // enough to pick a password, too short to be a standing bypass.
+  if (next === RECOVERY_NEXT) {
+    response.cookies.set("bs_pw_recovery", "1", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: RECOVERY_NEXT,
+      maxAge: 900,
+    });
+  }
+
+  return response;
 }

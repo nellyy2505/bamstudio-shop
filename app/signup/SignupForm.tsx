@@ -42,6 +42,37 @@ const METER_FILL = [
 
 const METER_LABEL = ["", "Weak", "Fair", "Good", "Strong"] as const;
 
+/**
+ * Sign-up errors that are safe to show verbatim-ish, keyed by Supabase's
+ * stable error code. Every one of these is about what the visitor just typed
+ * or how fast they typed it — none of them reveal whether an address is
+ * already registered here.
+ */
+const SAFE_SIGNUP_ERRORS: Record<string, string> = {
+  weak_password: "That password is too weak. Use at least 8 characters, with a number and a symbol.",
+  email_address_invalid: "That email address doesn't look right. Please check it.",
+  validation_failed: "Please check the details you entered and try again.",
+  over_request_rate_limit: "Too many attempts. Please wait a minute and try again.",
+  over_email_send_rate_limit: "Too many attempts. Please wait a minute and try again.",
+  signup_disabled: "New accounts are temporarily closed. Please try again later.",
+  email_provider_disabled: "Signing up with an email address isn't available right now.",
+};
+
+/**
+ * Supabase reports an existing address as "User already registered" whenever
+ * email confirmation is off. Echoing that turns this form into an oracle:
+ * anyone could type addresses at it and learn which ones have accounts —
+ * precisely the leak /forgot-password goes out of its way to avoid. So we
+ * treat it as indistinguishable from success: the visitor sees the same
+ * "check your email to confirm" screen either way, and the real owner of the
+ * address is the only person who learns anything from what does (or doesn't)
+ * arrive in their inbox.
+ */
+function isAlreadyRegistered(code: string | undefined, message: string): boolean {
+  if (code === "user_already_exists" || code === "email_exists") return true;
+  return /already\s*(registered|exists|in use)/i.test(message);
+}
+
 function strengthOf(password: string): number {
   let score = 0;
   if (password.length >= 8) score += 1;
@@ -107,7 +138,20 @@ export function SignupForm() {
     });
 
     if (signUpError) {
-      setError(signUpError.message);
+      // Same screen as the success path below — see isAlreadyRegistered.
+      if (isAlreadyRegistered(signUpError.code, signUpError.message)) {
+        setConfirmSent(true);
+        setPending(false);
+        return;
+      }
+
+      const safe = signUpError.code
+        ? SAFE_SIGNUP_ERRORS[signUpError.code]
+        : undefined;
+      setError(
+        safe ??
+          "We couldn't create that account. Please check your details and try again.",
+      );
       setPending(false);
       return;
     }

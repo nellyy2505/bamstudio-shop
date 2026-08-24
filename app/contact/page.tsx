@@ -59,13 +59,13 @@ export default function ContactPage() {
             </p>
             <div className="mt-3 flex flex-wrap gap-3 text-sm font-bold">
               <a
-                href={SHOP.socials.instagram}
+                href={SHOP.socials.instagram ?? "/contact"}
                 className="text-accent underline underline-offset-2 hover:text-accent-dark"
               >
                 Instagram
               </a>
               <a
-                href={SHOP.socials.tiktok}
+                href={SHOP.socials.tiktok ?? "/contact"}
                 className="text-accent underline underline-offset-2 hover:text-accent-dark"
               >
                 TikTok

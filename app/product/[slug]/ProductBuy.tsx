@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button, Icon, cx } from "@/components/ui";
+import { Button, Icon, cx, inputClass } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
 import { money } from "@/lib/format";
+import {
+  PERSONALISATION_TEXT_MAX,
+  PERSONALISATION_TEXT_PATTERN,
+} from "@/lib/config";
 import type { Product } from "@/lib/types";
 
 /** Colour + attachment pickers, quantity and the two buy buttons. */
@@ -20,12 +24,18 @@ export function ProductBuy({ product }: { product: Product }) {
   const [attachmentId, setAttachmentId] = useState(attachments[0]?.id ?? null);
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [personalText, setPersonalText] = useState("");
+  const [textError, setTextError] = useState<string | null>(null);
+
+  const needsText = product.personalisation_mode === "text";
+  const label = product.personalisation_label ?? "Text to print";
 
   const attachment = attachments.find((a) => a.id === attachmentId) ?? null;
   const unitPrice = product.price + (attachment?.price_delta ?? 0);
 
-  // Personalised products are configured in the builder, not here.
-  if (product.is_personalised) {
+  // Builder charms are configured letter by letter, priced by length, so the
+  // buy box hands off rather than guessing. Text personalisation stays here.
+  if (product.personalisation_mode === "builder") {
     return (
       <div className="rounded-2xl bg-lilac p-5">
         <b className="text-[15px]">This one is made to your spec</b>
@@ -34,7 +44,7 @@ export function ProductBuy({ product }: { product: Product }) {
           name length, from {money(product.price)}.
         </p>
         <Link
-          href="/builder"
+          href={`/builder?product=${product.slug}`}
           className="inline-flex h-12 items-center gap-2 rounded-full bg-accent px-6 font-display font-semibold text-white hover:bg-accent-dark"
         >
           <Icon name="sparkle" size={18} />
@@ -44,7 +54,20 @@ export function ProductBuy({ product }: { product: Product }) {
     );
   }
 
-  function addToCart() {
+  function addToCart(): boolean {
+    if (needsText) {
+      const trimmed = personalText.trim();
+      if (!trimmed) {
+        setTextError(`Add the ${label.toLowerCase()} you'd like printed.`);
+        return false;
+      }
+      if (!PERSONALISATION_TEXT_PATTERN.test(trimmed)) {
+        setTextError("Letters, numbers, spaces and - ' & . / only.");
+        return false;
+      }
+    }
+    setTextError(null);
+
     add({
       product_id: product.id,
       slug: product.slug,
@@ -56,10 +79,12 @@ export function ProductBuy({ product }: { product: Product }) {
       attachment_label: attachment?.label ?? null,
       unit_price: unitPrice,
       quantity,
-      is_personalised: false,
+      is_personalised: needsText,
+      personalisation_text: needsText ? personalText.trim() : null,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
+    return true;
   }
 
   return (
@@ -121,6 +146,42 @@ export function ProductBuy({ product }: { product: Product }) {
         </fieldset>
       ) : null}
 
+      {needsText ? (
+        <div className="mb-5">
+          <label
+            htmlFor="personalisation"
+            className="mb-1.5 block text-[13.5px] font-extrabold"
+          >
+            {label}
+          </label>
+          <input
+            id="personalisation"
+            type="text"
+            required
+            maxLength={PERSONALISATION_TEXT_MAX}
+            value={personalText}
+            onChange={(event) => {
+              setPersonalText(event.target.value);
+              if (textError) setTextError(null);
+            }}
+            aria-invalid={textError ? true : undefined}
+            aria-describedby="personalisation-hint"
+            placeholder={`e.g. ${label === "Pet's name" ? "Mochi" : "14.03.24"}`}
+            className={inputClass}
+          />
+          <p
+            id="personalisation-hint"
+            className={cx(
+              "mt-1.5 text-xs",
+              textError ? "font-semibold text-danger" : "text-muted",
+            )}
+          >
+            {textError ??
+              `Up to ${PERSONALISATION_TEXT_MAX} characters, printed exactly as you type it. Personalised items can only be returned if faulty.`}
+          </p>
+        </div>
+      ) : null}
+
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <div className="flex h-12 items-center rounded-full border border-line2 bg-surface">
           <button
@@ -145,7 +206,12 @@ export function ProductBuy({ product }: { product: Product }) {
           </button>
         </div>
 
-        <Button onClick={addToCart} className="min-w-[200px] flex-1">
+        <Button
+          onClick={() => {
+            addToCart();
+          }}
+          className="min-w-[200px] flex-1"
+        >
           {added ? (
             <>
               <Icon name="check" size={18} strokeWidth={2.4} />
@@ -165,8 +231,7 @@ export function ProductBuy({ product }: { product: Product }) {
         full
         className="mt-3"
         onClick={() => {
-          addToCart();
-          router.push("/cart");
+          if (addToCart()) router.push("/cart");
         }}
       >
         Buy it now

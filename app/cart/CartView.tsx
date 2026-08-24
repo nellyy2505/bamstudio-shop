@@ -15,7 +15,14 @@ import {
   cx,
 } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
-import { PRINT_LEAD_TIME, SHIPPING, SHOP, shippingCost } from "@/lib/config";
+import {
+  PAYMENT_BADGES,
+  PRINT_LEAD_TIME,
+  SHIPPING,
+  SHOP,
+  shippingCost,
+  transitLabel,
+} from "@/lib/config";
 import { gstComponent, money, pluralise } from "@/lib/format";
 import type { CartLine, Product, Tint } from "@/lib/types";
 
@@ -262,7 +269,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                 <Icon name="truck" size={14} />
                 {freeShippingRemaining === 0
                   ? "Free shipping unlocked"
-                  : "Free shipping at $49"}
+                  : `Free shipping at ${money(SHIPPING.freeThreshold)}`}
               </span>
               <b className={freeShippingRemaining === 0 ? "text-good" : "text-muted"}>
                 {freeShippingRemaining === 0
@@ -306,7 +313,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                     <span className="flex-1">
                       <b className="text-[14px]">{option.label}</b>
                       <span className="block text-xs text-muted">
-                        {option.description}
+                        {transitLabel(option.id)}
                       </span>
                     </span>
                     <b className={cx("text-sm", cost === 0 && "text-good")}>
@@ -353,7 +360,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
           </Button>
 
           <div className="mt-3.5 flex flex-wrap justify-center gap-2">
-            {["VISA", "MC", "PAYPAL", "APPLE PAY"].map((name) => (
+            {PAYMENT_BADGES.map((name) => (
               <span
                 key={name}
                 className="rounded border border-line2 px-1.5 py-1 text-[9.5px] font-extrabold text-muted"

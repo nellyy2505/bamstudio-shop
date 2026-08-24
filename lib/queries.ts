@@ -80,6 +80,22 @@ export async function getProducts(
 
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.theme) query = query.eq("theme", filters.theme);
+  // `attachments` is a jsonb array of objects, so the attachment filter is a
+  // containment test: `attachments @> '[{"id":"strap"}]'`. jsonb containment
+  // is partial for objects, so only the id has to match. This must run before
+  // .range() so the exact count and the page window agree — filtering the
+  // returned page in JS afterwards would leave `total` counting unfiltered
+  // rows, over-reporting the header and inventing empty trailing pages.
+  //
+  // The value is stringified deliberately: postgrest-js renders a JS array as
+  // a Postgres array literal (`cs.{...}`), which mangles objects. A string is
+  // passed through as-is, giving PostgREST the JSON it wants.
+  if (filters.attachment) {
+    query = query.contains(
+      "attachments",
+      JSON.stringify([{ id: filters.attachment }]),
+    );
+  }
   if (filters.min !== undefined) query = query.gte("price", filters.min);
   if (filters.max !== undefined) query = query.lte("price", filters.max);
 
@@ -112,14 +128,7 @@ export async function getProducts(
     return { products: [], total: 0 };
   }
 
-  let products = (data ?? []) as Product[];
-  // Attachment lives in a jsonb column, so it filters in application code.
-  if (filters.attachment) {
-    products = products.filter((p) =>
-      (p.attachments ?? []).some((a) => a.id === filters.attachment),
-    );
-  }
-
+  const products = (data ?? []) as Product[];
   return { products, total: count ?? products.length };
 }
 

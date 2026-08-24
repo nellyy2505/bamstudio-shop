@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ProductArt } from "@/components/ProductArt";
@@ -31,9 +32,12 @@ const TINT_BG: Record<Tint, string> = {
 export function BuilderClient({
   collections,
   anchor,
+  alternatives = [],
 }: {
   collections: Collection[];
   anchor: Product;
+  /** Every builder-mode product, so the shopper can switch what they're making. */
+  alternatives?: Product[];
 }) {
   const { add } = useCart();
   const router = useRouter();
@@ -74,7 +78,7 @@ export function BuilderClient({
     add({
       product_id: anchor.id,
       slug: anchor.slug,
-      name: `${word} name charm`,
+      name: `${word} ${anchor.short_name.toLowerCase()}`,
       art: collection.charm_art as ArtKey,
       tint: collection.tint,
       colour: collection.name,
@@ -97,6 +101,27 @@ export function BuilderClient({
 
   return (
     <div className="wrap pt-10">
+      {alternatives.length > 1 ? (
+        <div className="mb-8 flex flex-wrap items-center gap-2.5">
+          <span className="text-[13.5px] font-extrabold">Making:</span>
+          {alternatives.map((option) => (
+            <Link
+              key={option.slug}
+              href={`/builder?product=${option.slug}`}
+              aria-current={option.slug === anchor.slug ? "page" : undefined}
+              className={cx(
+                "rounded-full px-4 py-2 text-[13.5px] font-extrabold",
+                option.slug === anchor.slug
+                  ? "bg-ink text-white"
+                  : "border border-line2 bg-surface hover:border-ink",
+              )}
+            >
+              {option.short_name}
+            </Link>
+          ))}
+        </div>
+      ) : null}
+
       <div className="grid items-start gap-10 lg:grid-cols-[1.35fr_1fr] lg:gap-12">
         <div className="flex flex-col gap-9">
           {/* ------------------------------------------------ 1 collection */}

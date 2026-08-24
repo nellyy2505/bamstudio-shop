@@ -1,5 +1,5 @@
 import { Stars } from "@/components/ui";
-import { relativeTime } from "@/lib/format";
+import { pluralise, relativeTime } from "@/lib/format";
 import type { Product, Review } from "@/lib/types";
 
 function Histogram({ reviews }: { reviews: Review[] }) {
@@ -43,27 +43,42 @@ export function ReviewsSection({
   product: Product;
   reviews: Review[];
 }) {
+  // No review history yet, so no score, no stars and no distribution — and no
+  // claims about a review process that has not run once.
+  const hasReviews = product.review_count > 0;
+
   return (
     <section id="reviews" className="mt-16 scroll-mt-24">
       <div className="grid items-start gap-10 lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-14">
         <div>
-          <h2 className="mb-4 text-2xl">Reviews ({product.review_count})</h2>
-          <div className="mb-4 flex items-center gap-3">
-            <b className="font-display text-[40px] leading-none">
-              {product.rating.toFixed(1)}
-            </b>
-            <div>
-              <Stars rating={product.rating} size={17} />
-              <p className="text-[12.5px] text-muted">
-                Based on verified purchases
+          <h2 className="mb-4 text-2xl">
+            {hasReviews ? `Reviews (${product.review_count})` : "Reviews"}
+          </h2>
+          {hasReviews ? (
+            <>
+              <div className="mb-4 flex items-center gap-3">
+                <b className="font-display text-[40px] leading-none">
+                  {product.rating.toFixed(1)}
+                </b>
+                <div>
+                  <Stars rating={product.rating} size={17} />
+                  <p className="text-[12.5px] text-muted">
+                    Based on {pluralise(product.review_count, "review")}
+                  </p>
+                </div>
+              </div>
+              {reviews.length > 0 ? <Histogram reviews={reviews} /> : null}
+              <p className="text-[13px] text-muted">
+                Reviews come from shoppers who bought this piece. We publish
+                them unedited, good and bad.
               </p>
-            </div>
-          </div>
-          {reviews.length > 0 ? <Histogram reviews={reviews} /> : null}
-          <p className="text-[13px] text-muted">
-            Reviews come from shoppers who bought this piece. We publish them
-            unedited, good and bad.
-          </p>
+            </>
+          ) : (
+            <p className="text-[13px] text-muted">
+              Nobody has reviewed this piece yet, so there is no rating to show.
+              Reviews will only ever come from shoppers who bought it.
+            </p>
+          )}
         </div>
 
         <div>

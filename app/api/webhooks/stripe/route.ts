@@ -54,23 +54,38 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
 
   const { data: staged } = await supabase
     .from("orders")
-    .select("id, status")
+    .select("id, status, order_items(id)")
     .eq("stripe_session_id", session.id)
     .maybeSingle();
+
+  // A staged row with no line items is unusable — confirming it would leave a
+  // paid order with no record of what to print. Treat it exactly like a
+  // missing row so the Stripe rebuild below fills it in instead.
+  const stagedItems = (staged as { order_items?: unknown[] } | null)?.order_items;
+  const stagedIsUsable = Boolean(staged) && (stagedItems?.length ?? 0) > 0;
+
+  if (staged && !stagedIsUsable) {
+    console.error(
+      `Staged order ${staged.id} has no items — rebuilding from Stripe.`,
+    );
+    await supabase.from("orders").delete().eq("id", staged.id);
+  }
 
   const paymentIntent =
     typeof session.payment_intent === "string"
       ? session.payment_intent
       : (session.payment_intent?.id ?? null);
 
-  if (staged) {
+  if (staged && stagedIsUsable) {
     if (staged.status !== "pending") return; // already handled
 
+    // The order number is allocated AFTER we know this update won the race.
+    // Allocating it inline would burn a sequence value on every duplicate
+    // delivery, defeating the point of gap-free numbers.
     const { data: updated, error } = await supabase
       .from("orders")
       .update({
         status: "confirmed",
-        order_number: await nextOrderNumber(supabase),
         email:
           session.customer_details?.email ??
           session.customer_email ??
@@ -94,6 +109,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
     // without it, retries would decrement stock a second time.
     if (!updated || updated.length === 0) return;
 
+    await assignOrderNumber(supabase, staged.id);
     await decrementStock(supabase, staged.id);
     return;
   }
@@ -112,7 +128,6 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
       email:
         session.customer_details?.email ?? session.customer_email ?? "unknown",
       status: "confirmed",
-      order_number: await nextOrderNumber(supabase),
       subtotal: Number(session.metadata?.subtotal ?? session.amount_subtotal ?? 0),
       shipping: Number(session.metadata?.shipping ?? 0),
       total: session.amount_total ?? 0,
@@ -133,18 +148,97 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
     throw new Error("order insert failed");
   }
 
+  await assignOrderNumber(supabase, order.id);
+
+  // The basket is gone, so recover what we can: Stripe knows the descriptions
+  // and amounts, and checkout left a slug:qty map in metadata that lets us
+  // restore the real product link, artwork and stock movement.
+  const stockMap = parseStockMap(session.metadata?.stock);
+  const slugs = [...stockMap.keys()];
+  const { data: productRows } = slugs.length
+    ? await supabase
+        .from("products")
+        .select("id, slug, short_name, art, tint")
+        .in("slug", slugs)
+    : { data: [] };
+
+  type ProductRow = {
+    id: string;
+    slug: string;
+    short_name: string;
+    art: string;
+    tint: string;
+  };
+  const bySlug = new Map(
+    ((productRows ?? []) as ProductRow[]).map((row) => [row.slug, row]),
+  );
+  const byName = new Map(
+    ((productRows ?? []) as ProductRow[]).map((row) => [row.short_name, row]),
+  );
+
   const { error: itemsError } = await supabase.from("order_items").insert(
-    lineItems.data.map((item) => ({
-      order_id: order.id,
-      product_name: item.description ?? "Item",
-      variant_label: "",
-      art: "macaron",
-      tint: "cream",
-      unit_price: item.price?.unit_amount ?? 0,
-      quantity: item.quantity ?? 1,
-    })),
+    lineItems.data.map((item) => {
+      const product = byName.get(item.description ?? "");
+      return {
+        order_id: order.id,
+        product_id: product?.id ?? null,
+        product_name: item.description ?? "Item",
+        variant_label: "",
+        art: product?.art ?? "macaron",
+        tint: product?.tint ?? "cream",
+        unit_price: item.price?.unit_amount ?? 0,
+        quantity: item.quantity ?? 1,
+      };
+    }),
   );
   if (itemsError) console.error("Could not record items:", itemsError.message);
+
+  // Stock still has to move on this path — it exists precisely because the
+  // database was unreachable at checkout, not because the sale didn't happen.
+  for (const [slug, quantity] of stockMap) {
+    const product = bySlug.get(slug);
+    if (!product) continue;
+    const { error } = await supabase.rpc("decrement_stock", {
+      p_product_id: product.id,
+      p_quantity: quantity,
+    });
+    if (error) console.error("Stock decrement failed:", error.message);
+  }
+}
+
+/**
+ * Gives a confirmed order its customer-facing number, once and only once.
+ * Scoped to rows that don't have one yet, so a retry cannot renumber an order
+ * the customer has already been emailed.
+ */
+async function assignOrderNumber(
+  supabase: ReturnType<typeof createAdminClient>,
+  orderId: string,
+) {
+  const { error } = await supabase
+    .from("orders")
+    .update({ order_number: await nextOrderNumber(supabase) })
+    .eq("id", orderId)
+    .is("order_number", null);
+
+  if (error) {
+    console.error("Could not assign order number:", error.message);
+    throw new Error("order number assignment failed");
+  }
+}
+
+/** Parses the compact "slug:qty,slug:qty" map checkout leaves in metadata. */
+function parseStockMap(raw: string | undefined): Map<string, number> {
+  const map = new Map<string, number>();
+  if (!raw) return map;
+  for (const entry of raw.split(",")) {
+    const [slug, qty] = entry.split(":");
+    const quantity = Number(qty);
+    if (slug && Number.isFinite(quantity) && quantity > 0) {
+      map.set(slug, (map.get(slug) ?? 0) + quantity);
+    }
+  }
+  return map;
 }
 
 /** Ready-to-ship stock only; made-to-order lines sit at zero already. */
@@ -202,6 +296,18 @@ export async function POST(request: Request) {
       case "checkout.session.async_payment_succeeded":
         await confirmOrder(event.data.object);
         break;
+      case "checkout.session.async_payment_failed": {
+        // A delayed payment that never cleared. Stripe does not send
+        // `expired` for a completed session, so without this the staged row
+        // would sit pending forever.
+        const supabase = createAdminClient();
+        await supabase
+          .from("orders")
+          .delete()
+          .eq("stripe_session_id", event.data.object.id)
+          .eq("status", "pending");
+        break;
+      }
       case "checkout.session.expired": {
         // Tidy up the staged row so abandoned baskets don't accumulate.
         const supabase = createAdminClient();

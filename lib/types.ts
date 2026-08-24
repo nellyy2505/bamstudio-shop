@@ -64,6 +64,10 @@ export type Product = {
   is_new: boolean;
   /** Personalised items cannot be returned and skip the ready-to-ship path. */
   is_personalised: boolean;
+  /** How personalisation is collected — see PersonalisationMode. */
+  personalisation_mode: "builder" | "text" | null;
+  /** Field label for "text" mode, e.g. "Pet's name". */
+  personalisation_label: string | null;
   active: boolean;
 };
 
@@ -107,12 +111,15 @@ export type CartLine = {
   unit_price: number;
   quantity: number;
   is_personalised: boolean;
+  /** Builder charms only: the colourway and letters chosen. */
   custom?: {
     collection_slug: string;
     collection_name: string;
     letters: string;
     with_charm: boolean;
   };
+  /** "text" mode only: the single line the customer asked us to print. */
+  personalisation_text?: string | null;
 };
 
 export type OrderStatus =

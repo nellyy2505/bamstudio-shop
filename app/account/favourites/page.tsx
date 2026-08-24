@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ProductArt } from "@/components/ProductArt";
+import { FavouritesSync } from "@/components/product/FavouriteButton";
 import { ButtonLink, EmptyState, Icon, Stars, cx } from "@/components/ui";
 import { money, pluralise } from "@/lib/format";
 import type { Product, Tint } from "@/lib/types";
@@ -49,22 +50,29 @@ export default async function FavouritesPage() {
 
   if (products.length === 0) {
     return (
-      <EmptyState
-        icon={
-          <span className="flex h-32 w-32 items-center justify-center rounded-[32px] bg-blush">
-            <Icon name="heart" size={52} strokeWidth={1.4} />
-          </span>
-        }
-        title="Nothing saved yet"
-        body="Tap the heart on any product and it lands here — handy for keeping an eye on a colourway before you commit."
-      >
-        <ButtonLink href="/shop">Browse the range</ButtonLink>
-      </EmptyState>
+      <>
+        {/* A guest list hearted before signing in may still be waiting to be
+            pushed up; this re-fetches once it has, so the page doesn't claim
+            "nothing saved" while /shop shows filled hearts. */}
+        <FavouritesSync />
+        <EmptyState
+          icon={
+            <span className="flex h-32 w-32 items-center justify-center rounded-[32px] bg-blush">
+              <Icon name="heart" size={52} strokeWidth={1.4} />
+            </span>
+          }
+          title="Nothing saved yet"
+          body="Tap the heart on any product and it lands here — handy for keeping an eye on a colourway before you commit."
+        >
+          <ButtonLink href="/shop">Browse the range</ButtonLink>
+        </EmptyState>
+      </>
     );
   }
 
   return (
     <div>
+      <FavouritesSync />
       <h1 className="mb-1.5 text-3xl md:text-4xl">Your favourites</h1>
       <p className="mb-7 text-sm text-muted">
         {pluralise(products.length, "saved item")} · the heart on any product
@@ -103,7 +111,7 @@ export default async function FavouritesPage() {
                 </span>
               </div>
               <b className="text-[15px]">
-                {product.is_personalised ? "From " : ""}
+                {product.personalisation_mode === "builder" ? "From " : ""}
                 {money(product.price)}{" "}
                 <span className="text-[11.5px] font-semibold text-faint">
                   AUD

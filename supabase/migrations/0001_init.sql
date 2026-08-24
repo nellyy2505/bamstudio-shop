@@ -72,6 +72,11 @@ create table if not exists public.products (
   is_bestseller boolean not null default false,
   is_new boolean not null default false,
   is_personalised boolean not null default false,
+  -- How personalisation is collected: 'builder' (keycap letter builder,
+  -- priced by bundle) or 'text' (one free-text line, priced at `price`).
+  personalisation_mode text
+    check (personalisation_mode in ('builder','text')),
+  personalisation_label text,
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -167,6 +172,8 @@ as $$
 $$;
 
 revoke all on function public.next_order_number() from public, anon, authenticated;
+-- Explicit, not inherited: the webhook cannot confirm a paid order without it.
+grant execute on function public.next_order_number() to service_role;
 
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
@@ -208,6 +215,8 @@ create table if not exists public.order_items (
   -- product's first colour and attachment.
   colour text,
   attachment_id text,
+  -- Builder charms: {collection_slug, letters, with_charm}.
+  -- Text personalisation: {text}.
   personalisation jsonb
 );
 
@@ -236,9 +245,23 @@ drop policy if exists "reviews are public" on public.reviews;
 create policy "reviews are public" on public.reviews
   for select using (true);
 
+-- No client-side review writing. The previous policy only checked that the
+-- row's user_id matched the caller, which let any signed-in account post a
+-- review on any product with verified = true — under copy that promises
+-- reviews come from real purchases.
+--
+-- When a review UI ships, replace this with a policy that (a) forces
+-- verified to be derived, not supplied, and (b) requires a delivered order
+-- containing that product, e.g.:
+--   for insert with check (
+--     auth.uid() = user_id and verified = false and
+--     exists (select 1 from public.orders o
+--             join public.order_items oi on oi.order_id = o.id
+--             where o.user_id = auth.uid()
+--               and oi.product_id = reviews.product_id
+--               and o.status = 'delivered')
+--   )
 drop policy if exists "users write own reviews" on public.reviews;
-create policy "users write own reviews" on public.reviews
-  for insert with check (auth.uid() = user_id);
 
 -- Profiles: owner only.
 drop policy if exists "own profile read" on public.profiles;
@@ -372,3 +395,4 @@ as $$
 $$;
 
 revoke all on function public.decrement_stock(uuid, integer) from public, anon, authenticated;
+grant execute on function public.decrement_stock(uuid, integer) to service_role;

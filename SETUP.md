@@ -42,7 +42,8 @@ Go to **Project Settings → API Keys** (and **Data API** for the URL):
 2. Open `supabase/migrations/0001_init.sql` from this project, copy the whole
    file, paste it in, and click **Run**. It should say "Success".
 3. New query again. Copy all of `supabase/seed.sql`, paste, **Run**. This
-   loads your 44 products, 6 collections and sample reviews.
+   loads your 44 products and 6 colourway collections. No reviews —
+   those only ever come from real customers.
 4. Check **Table Editor → products** — you should see the catalogue.
 
 ### 1d. Turn on Google sign-in
@@ -151,6 +152,7 @@ Open <http://localhost:3000>. Then check:
 - [ ] Products load on `/shop` (44 of them)
 - [ ] Search suggests as you type
 - [ ] `/builder` builds a name charm and adds it to the basket
+- [ ] A pet-bowl style product asks for text before it can be added
 - [ ] `/signup` creates an account and the confirmation email arrives
 - [ ] Google sign-in works on `/login`
 - [ ] Checkout redirects to Stripe. Pay with test card
@@ -192,9 +194,10 @@ follow the "push an existing repository" lines it gives you.
 
 1. Stripe → **Developers → Webhooks → Add endpoint**.
 2. Endpoint URL: `https://YOUR-DOMAIN/api/webhooks/stripe`
-3. **Events to send** — select exactly these three:
+3. **Events to send** — select exactly these four:
    - `checkout.session.completed`
    - `checkout.session.async_payment_succeeded`
+   - `checkout.session.async_payment_failed`
    - `checkout.session.expired`
 4. Add endpoint, then reveal the **Signing secret** (`whsec_…`).
 5. In Vercel → Settings → Environment Variables, update
@@ -243,7 +246,13 @@ Do these in order on launch day:
    endpoint, and update `STRIPE_WEBHOOK_SECRET`. Test mode and live mode have
    completely separate keys and webhooks.
 6. **Place one real order yourself** with a real card and refund it, to prove
-   the whole path works.
+   the whole path works. Check the order row lands in Supabase with a real
+   `order_number` and its line items — if `next_order_number()` cannot run, the
+   webhook fails and no order is recorded, so this test is not optional.
+7. **Turn on the payment methods you advertise.** The footer and basket list
+   `PAYMENT_BADGES` from `lib/config.ts` (cards only by default). If you enable
+   PayPal, Apple Pay or Afterpay in the Stripe dashboard, add them there —
+   and don't list one you haven't enabled.
 
 ---
 
@@ -252,6 +261,8 @@ Do these in order on launch day:
 | Item | Why | Where it shows up |
 |---|---|---|
 | Product photography | You don't have photos yet | The shop uses illustrated artwork; replace `components/ProductArt.tsx` usage with `next/image` when you have shots |
+| Ratings and reviews | Nothing has sold online yet | Every product ships with 0 reviews and no star rating — they appear as real customers write them. Nothing is invented |
+| Ready-to-ship stock | Nothing is printed ahead | `stock_on_hand` is 0 everywhere, so products read "printed to order". Set real counts once you print stock in advance |
 | ABN | Application still in progress | Footer, legal pages, Stripe verification |
 | Real prices | "My price" is empty in the workbook | Placeholder prices from `PRICE_BY_CATEGORY` |
 | Business bank account | Not opened yet | Stripe payouts |

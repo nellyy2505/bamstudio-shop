@@ -47,11 +47,31 @@ export default async function OrderConfirmedPage({
   let firstName = "";
   let shippingLine: string | null = null;
 
+  /**
+   * Stripe hands the browser this session id BEFORE payment, and redirects
+   * here for delayed payment methods while the money is still in flight. So
+   * the page must never take reaching it as proof of payment — it reads the
+   * session's real state and says only what is true.
+   *
+   *  paid       — money taken, order confirmed.
+   *  processing — checkout completed on a delayed method; not yet paid.
+   *  unpaid     — never completed. Their basket must survive.
+   */
+  let paymentState: "paid" | "processing" | "unpaid" | "unknown" = "unknown";
+
   // Read the session straight from Stripe so the page is correct even if the
   // webhook has not landed yet.
   if (sessionId) {
     try {
       const session = await getStripe().checkout.sessions.retrieve(sessionId);
+
+      paymentState =
+        session.payment_status === "paid"
+          ? "paid"
+          : session.status === "complete"
+            ? "processing"
+            : "unpaid";
+
       email = session.customer_details?.email ?? null;
       total = session.amount_total ?? null;
       firstName = (session.collected_information?.shipping_details?.name ?? "")
@@ -112,24 +132,46 @@ export default async function OrderConfirmedPage({
     }
   }
 
+  // Nothing was paid: keep the basket intact and send them back to it.
+  if (paymentState === "unpaid" || paymentState === "unknown") {
+    return <NotPaid hasSession={Boolean(sessionId)} />;
+  }
+
+  const paid = paymentState === "paid";
+
   return (
     <div className="wrap max-w-3xl pt-12">
+      {/* Clearing is safe here: checkout completed, so the basket is spent. */}
       <ClearCartOnMount />
 
       <div className="mb-8 flex flex-col items-center text-center">
-        <span className="flex h-20 w-20 items-center justify-center rounded-full bg-good-soft text-good">
-          <Icon name="check" size={36} strokeWidth={2.4} />
+        <span
+          className={`flex h-20 w-20 items-center justify-center rounded-full ${
+            paid ? "bg-good-soft text-good" : "bg-cream text-muted"
+          }`}
+        >
+          <Icon name={paid ? "check" : "clock"} size={36} strokeWidth={2.4} />
         </span>
         <h1 className="mt-5 mb-2 text-3xl md:text-[34px]">
-          {firstName ? `Thanks ${firstName} — ` : "Thanks — "}order confirmed!
+          {paid
+            ? `${firstName ? `Thanks ${firstName} — ` : "Thanks — "}order confirmed!`
+            : `${firstName ? `Thanks ${firstName} — ` : "Thanks — "}payment is processing`}
         </h1>
         <p className="text-muted">
-          {email ? (
-            <>
-              A receipt is on its way to <b className="text-ink">{email}</b>
-            </>
+          {paid ? (
+            email ? (
+              <>
+                A receipt is on its way to <b className="text-ink">{email}</b>
+              </>
+            ) : (
+              "A receipt is on its way to your inbox."
+            )
           ) : (
-            "A receipt is on its way to your inbox."
+            <>
+              Your payment method settles over a day or two. We&apos;ll email
+              {email ? <b className="text-ink"> {email}</b> : " you"} the moment
+              it clears, and printing starts then.
+            </>
           )}
         </p>
       </div>
@@ -146,15 +188,19 @@ export default async function OrderConfirmedPage({
               ) : null}
               <span
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-extrabold ${
-                  i === 0
+                  i === 0 && paid
                     ? "bg-good text-white"
                     : "border border-line2 bg-surface text-faint"
                 }`}
               >
-                {i === 0 ? <Icon name="check" size={15} strokeWidth={2.6} /> : i + 1}
+                {i === 0 && paid ? (
+                  <Icon name="check" size={15} strokeWidth={2.6} />
+                ) : (
+                  i + 1
+                )}
               </span>
               <span
-                className={`text-[12.5px] font-extrabold ${i === 0 ? "text-ink" : "text-faint"}`}
+                className={`text-[12.5px] font-extrabold ${i === 0 && paid ? "text-ink" : "text-faint"}`}
               >
                 {step}
               </span>
@@ -166,8 +212,9 @@ export default async function OrderConfirmedPage({
           <Icon name="box" size={18} className="mt-px shrink-0" />
           <span>
             Your pieces are <b className="text-ink">printed to order</b> —
-            printing usually takes {PRINT_LEAD_TIME.label}, then tracking lands
-            in your inbox the moment it ships.
+            {paid ? " printing" : " once payment clears, printing"} takes{" "}
+            {PRINT_LEAD_TIME.label}, then tracking lands in your inbox the
+            moment it ships.
           </span>
         </p>
       </div>
@@ -203,7 +250,7 @@ export default async function OrderConfirmedPage({
           </div>
           {total !== null ? (
             <div className="flex justify-between pt-4 text-[15px]">
-              <b>Total paid</b>
+              <b>{paid ? "Total paid" : "Total due"}</b>
               <b>{money(total)} AUD</b>
             </div>
           ) : null}
@@ -252,6 +299,48 @@ export default async function OrderConfirmedPage({
           <Pill tone="neutral">No checkout session found</Pill>
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Reached by opening the success URL without completing payment — the session
+ * id is handed to the browser before Stripe collects any money. Nothing is
+ * claimed, and crucially <ClearCartOnMount /> is NOT rendered, so the basket
+ * is still there when they go back.
+ */
+function NotPaid({ hasSession }: { hasSession: boolean }) {
+  return (
+    <div className="wrap max-w-2xl pt-14 pb-8">
+      <div className="flex flex-col items-center text-center">
+        <span className="flex h-20 w-20 items-center justify-center rounded-full bg-cream text-muted">
+          <Icon name="bag" size={36} strokeWidth={1.8} />
+        </span>
+        <h1 className="mt-5 mb-2 text-3xl">
+          {hasSession ? "This order wasn't completed" : "No order to show"}
+        </h1>
+        <p className="max-w-md text-muted">
+          {hasSession
+            ? "No payment was taken, so there's nothing to confirm yet. Your basket is exactly as you left it."
+            : "We couldn't find a checkout to confirm. If you've just paid, check your email for the receipt."}
+        </p>
+        <div className="mt-7 flex flex-wrap justify-center gap-3.5">
+          <ButtonLink href="/cart">Back to your basket</ButtonLink>
+          <ButtonLink href="/shop" variant="ghost">
+            Keep shopping
+          </ButtonLink>
+        </div>
+        <p className="mt-6 text-[13px] text-muted">
+          Charged but seeing this?{" "}
+          <Link
+            href="/contact"
+            className="text-accent underline underline-offset-2"
+          >
+            Tell us
+          </Link>{" "}
+          and we&apos;ll sort it out.
+        </p>
+      </div>
     </div>
   );
 }

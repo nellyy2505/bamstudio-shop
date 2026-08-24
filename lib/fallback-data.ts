@@ -56,12 +56,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 32,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": true,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -121,12 +123,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 35,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -194,12 +198,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 38,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -271,12 +277,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 7,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -344,12 +352,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 13,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -421,12 +431,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 16,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -494,12 +506,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 38,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -567,12 +581,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 10,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -640,12 +656,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 13,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": true,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -717,12 +735,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 16,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": true,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -794,12 +814,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 29,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -867,12 +889,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 32,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -944,12 +968,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 38,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": true,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1021,12 +1047,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 10,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": true,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1094,12 +1122,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.7,
-    "review_count": 32,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": true,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1154,12 +1184,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 32,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1214,12 +1246,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 35,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1274,12 +1308,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 44,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1334,12 +1370,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 16,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1407,12 +1445,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 35,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1467,12 +1507,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 38,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1527,12 +1569,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 41,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1587,12 +1631,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 7,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": true,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1647,12 +1693,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 13,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1707,12 +1755,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 16,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1767,12 +1817,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 29,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1827,12 +1879,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 38,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1887,12 +1941,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 10,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1947,12 +2003,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 13,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -1964,7 +2022,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "category": "Clicker keychain",
     "theme": "Letters & names",
     "description": "A palm-sized custom name charm with a spring-loaded clicker inside — the fidget you keep reaching for. Printed in layered PLA and finished by hand. Cube letters on a cord. Their 7 base colours x 6 letter colours is a smart, cheap way to look like a range. Theme: Letters & names.",
-    "price": 900,
+    "price": 400,
     "art": "letters",
     "tint": "lilac",
     "gallery": [
@@ -2002,12 +2060,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 16,
+    "rating": 0,
+    "review_count": 0,
     "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": true,
+    "personalisation_mode": "builder",
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2062,12 +2122,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 32,
+    "rating": 0,
+    "review_count": 0,
     "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": true,
+    "personalisation_mode": "text",
+    "personalisation_label": "Numbers or date to print",
     "active": true
   },
   {
@@ -2122,12 +2184,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 38,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2182,12 +2246,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 41,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2242,12 +2308,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 38,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2302,12 +2370,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 41,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2362,12 +2432,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 44,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2422,12 +2494,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 7,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2482,12 +2556,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 10,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2521,12 +2597,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 35,
+    "rating": 0,
+    "review_count": 0,
     "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": true,
+    "personalisation_mode": "text",
+    "personalisation_label": "Pet's name",
     "active": true
   },
   {
@@ -2560,12 +2638,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 32,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": true,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2599,12 +2679,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 35,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2649,12 +2731,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 38,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2666,7 +2750,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "category": "Phone & bag",
     "theme": "Phone & bag",
     "description": "A alphabet bag charm on cord, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Theme: Phone & bag.",
-    "price": 1500,
+    "price": 400,
     "art": "letters",
     "tint": "lilac",
     "gallery": [
@@ -2704,12 +2788,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 41,
+    "rating": 0,
+    "review_count": 0,
     "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": true,
+    "personalisation_mode": "builder",
+    "personalisation_label": null,
     "active": true
   },
   {
@@ -2743,12 +2829,14 @@ export const FALLBACK_PRODUCTS: Product[] = [
         "body": "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers."
       }
     ],
-    "rating": 4.9,
-    "review_count": 32,
-    "stock_on_hand": 3,
+    "rating": 0,
+    "review_count": 0,
+    "stock_on_hand": 0,
     "is_bestseller": false,
     "is_new": false,
     "is_personalised": false,
+    "personalisation_mode": null,
+    "personalisation_label": null,
     "active": true
   }
 ];

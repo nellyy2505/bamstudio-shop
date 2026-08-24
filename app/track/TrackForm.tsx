@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useState } from "react";
 import { ProductImage } from "@/components/ProductArt";
 import { Alert, Button, Field, Icon, Pill, inputClass } from "@/components/ui";
-import { PRINT_LEAD_TIME, SHIPPING } from "@/lib/config";
+import {
+  PRINT_LEAD_TIME,
+  SHIPPING,
+  transitDays,
+  transitLabel,
+} from "@/lib/config";
 import { deliveryWindow, formatDate, money } from "@/lib/format";
 import { ORDER_STATUS_FLOW } from "@/lib/types";
 import type { Address, ArtKey, OrderStatus, Tint } from "@/lib/types";
@@ -59,12 +64,6 @@ const STEP_COPY: Record<OrderStatus, { label: string; body: string }> = {
     label: "Cancelled",
     body: "This order was cancelled and nothing was printed.",
   },
-};
-
-/** Carrier transit ranges, matching the labels in SHIPPING.methods. */
-const TRANSIT_DAYS: Record<string, [number, number]> = {
-  standard: [3, 7],
-  express: [1, 3],
 };
 
 type Status = "idle" | "searching" | "found" | "missing" | "error";
@@ -207,8 +206,9 @@ function OrderResult({ order }: { order: TrackedOrder }) {
       : flow.indexOf(order.status);
 
   const method = SHIPPING.methods.find((m) => m.id === order.shipping_method);
-  const transit = TRANSIT_DAYS[order.shipping_method] ?? TRANSIT_DAYS.standard;
-  const eta = deliveryWindow(transit[0], transit[1], new Date(order.created_at));
+  // Unknown methods fall back to standard inside the helper.
+  const [transitMin, transitMax] = transitDays(order.shipping_method);
+  const eta = deliveryWindow(transitMin, transitMax, new Date(order.created_at));
   const items = order.items ?? [];
   const address = order.shipping_address;
 
@@ -312,8 +312,9 @@ function OrderResult({ order }: { order: TrackedOrder }) {
               <>
                 Estimated arrival <b className="text-ink">{eta}</b> — printing
                 ({PRINT_LEAD_TIME.label}) plus{" "}
-                {method?.description ?? "carrier transit"}. Estimates are not
-                guarantees; Australia Post has its own opinions.
+                {transitLabel(order.shipping_method) || "carrier transit"}.
+                Estimates are not guarantees; Australia Post has its own
+                opinions.
               </>
             )}
           </span>

@@ -13,6 +13,15 @@ export type LocalStore<T> = {
   getSnapshot: () => T;
   getServerSnapshot: () => T;
   set: (updater: T | ((current: T) => T)) => void;
+  /**
+   * Pull the stored value into the cache without rendering anything, and
+   * return it. `subscribe` does this for components; callers that need the
+   * real value outside a render — reconciling against a server, say — would
+   * otherwise read the initial value on a page with no subscribed component.
+   * Browser only, idempotent, and never emits: it seeds the cache rather than
+   * changing it.
+   */
+  hydrate: () => T;
   /** False until the browser value has been read at least once. */
   isHydrated: () => boolean;
 };
@@ -40,17 +49,22 @@ export function createLocalStore<T>(
     }
   }
 
+  function hydrate(): T {
+    if (!hydrated) {
+      hydrated = true;
+      const stored = read();
+      if (stored !== initial) {
+        cache = stored;
+      }
+    }
+    return cache;
+  }
+
   return {
     subscribe(listener) {
       // First subscriber pulls the stored value in; this runs during React's
       // subscribe phase, not as a setState inside an effect body.
-      if (!hydrated) {
-        hydrated = true;
-        const stored = read();
-        if (stored !== initial) {
-          cache = stored;
-        }
-      }
+      hydrate();
       listeners.add(listener);
 
       // Keep other tabs in sync.
@@ -69,6 +83,7 @@ export function createLocalStore<T>(
 
     getSnapshot: () => cache,
     getServerSnapshot: () => initial,
+    hydrate,
     isHydrated: () => hydrated,
 
     set(updater) {

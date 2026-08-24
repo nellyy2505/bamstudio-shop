@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalShell } from "../LegalShell";
-import { PRINT_LEAD_TIME, SHIPPING, SHOP } from "@/lib/config";
+import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitLabel } from "@/lib/config";
 import { money } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -97,9 +97,9 @@ export default function TermsPage() {
       <h2>Delivery</h2>
       <p>
         We post within Australia through Australia Post. Standard post is{" "}
-        {money(SHIPPING.methods[0].price)} ({SHIPPING.methods[0].description})
+        {money(SHIPPING.methods[0].price)} ({transitLabel("standard")})
         and express is {money(SHIPPING.methods[1].price)} (
-        {SHIPPING.methods[1].description}), both measured from dispatch, not from
+        {transitLabel("express")}), both measured from dispatch, not from
         when you order. Standard post is free on orders of{" "}
         {money(SHIPPING.freeThreshold)} or more.
       </p>

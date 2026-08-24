@@ -19,12 +19,26 @@ export const SHOP = {
    * being collected. Flip it (and set the ABN) on the day you register.
    */
   gstRegistered: process.env.NEXT_PUBLIC_GST_REGISTERED === "true",
-  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "hello@example.com",
+  /**
+   * Falls back to a bracketed placeholder rather than a plausible-looking
+   * address like hello@example.com, which reads as real and silently swallows
+   * customer mail. Guard live mailto: links with `hasSupportEmail`.
+   */
+  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "[HELLO@YOURDOMAIN]",
+  hasSupportEmail: Boolean(process.env.NEXT_PUBLIC_SUPPORT_EMAIL),
   socials: {
-    instagram: process.env.NEXT_PUBLIC_INSTAGRAM_URL ?? "#",
-    tiktok: process.env.NEXT_PUBLIC_TIKTOK_URL ?? "#",
+    instagram: process.env.NEXT_PUBLIC_INSTAGRAM_URL || null,
+    tiktok: process.env.NEXT_PUBLIC_TIKTOK_URL || null,
   },
 } as const;
+
+/**
+ * Payment methods advertised in the footer and basket. Only list what Stripe
+ * will actually offer: cards are always available, but PayPal, Apple Pay and
+ * Afterpay each need switching on in the Stripe dashboard first. Advertising
+ * one that isn't enabled is a false claim on the checkout page.
+ */
+export const PAYMENT_BADGES: string[] = ["VISA", "MASTERCARD", "AMEX"];
 
 export const SHIPPING = {
   /** Free standard shipping at or above this basket subtotal. */
@@ -33,17 +47,32 @@ export const SHIPPING = {
     {
       id: "standard",
       label: "Standard",
-      description: "3–7 business days · tracked",
+      /** Carrier transit only — printing happens before this starts. */
+      transitDays: [3, 7],
       price: 950,
     },
     {
       id: "express",
       label: "Express",
-      description: "1–3 business days · tracked",
+      transitDays: [1, 3],
       price: 1450,
     },
   ],
 } as const;
+
+/** "3–7 business days · tracked", derived so the numbers can't drift. */
+export function transitLabel(methodId: string): string {
+  const method = SHIPPING.methods.find((m) => m.id === methodId);
+  if (!method) return "";
+  const [min, max] = method.transitDays;
+  return `${min}–${max} business days · tracked`;
+}
+
+/** Transit range for a method, defaulting to standard. */
+export function transitDays(methodId: string): readonly [number, number] {
+  const method = SHIPPING.methods.find((m) => m.id === methodId);
+  return (method ?? SHIPPING.methods[0]).transitDays;
+}
 
 export type ShippingMethodId = (typeof SHIPPING.methods)[number]["id"];
 
@@ -70,6 +99,22 @@ export const BUILDER_PRICING: Record<number, number> = {
 };
 
 export const BUILDER_MAX_LETTERS = 5;
+
+/** Cheapest a builder charm can be — the honest "from" price to advertise. */
+export const BUILDER_FROM_PRICE = Math.min(...Object.values(BUILDER_PRICING));
+
+/**
+ * How a product collects its personalisation.
+ *  - "builder": the keycap letter builder, priced by BUILDER_PRICING.
+ *  - "text":    a single free-text field on the product page, priced at the
+ *               product's own price (a pet bowl, a date chain).
+ *  - null:      not personalised.
+ */
+export type PersonalisationMode = "builder" | "text" | null;
+
+/** Free-text personalisation must stay printable and short enough to print. */
+export const PERSONALISATION_TEXT_MAX = 20;
+export const PERSONALISATION_TEXT_PATTERN = /^[A-Za-z0-9 '&.\-/]+$/;
 
 /** Charm is included by default; dropping it takes a dollar off. */
 export const BUILDER_NO_CHARM_DISCOUNT = 100;

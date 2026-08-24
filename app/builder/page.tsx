@@ -30,18 +30,34 @@ const STEPS = [
   },
 ];
 
-export default async function BuilderPage() {
+type SearchParams = Promise<{ product?: string | string[] }>;
+
+export default async function BuilderPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const params = await searchParams;
+  const requested = Array.isArray(params.product)
+    ? params.product[0]
+    : params.product;
+
   const [collections, { products }] = await Promise.all([
     getCollections(),
     getProducts({ perPage: 60 }),
   ]);
 
   // The builder charges a bundle price, but an order line still needs a real
-  // product row behind it. Prefer the catalogue's custom name charm.
+  // product row behind it. More than one product is built here — the name
+  // charm and the alphabet bag charm — so `?product=` picks which, and only a
+  // builder-mode product is ever accepted (checkout rejects anything else).
+  const builderProducts = products.filter(
+    (p) => p.personalisation_mode === "builder",
+  );
   const anchor =
-    products.find((p) => p.slug === "custom-name-charm") ??
-    products.find((p) => p.is_personalised) ??
-    products[0];
+    builderProducts.find((p) => p.slug === requested) ??
+    builderProducts.find((p) => p.slug === "custom-name-charm") ??
+    builderProducts[0];
 
   if (!anchor || collections.length === 0) {
     return (
@@ -63,7 +79,7 @@ export default async function BuilderPage() {
             The market-stall favourite, online
           </Pill>
           <h1 className="mt-3.5 mb-2 text-[32px] md:text-[40px]">
-            Design your own name charm
+            Design your own {anchor.short_name.toLowerCase()}
           </h1>
           <p className="mx-auto max-w-2xl text-[#5F5769] md:text-base">
             Pick a collection, spell it out, add a charm. Flat price by name
@@ -72,7 +88,11 @@ export default async function BuilderPage() {
         </div>
       </div>
 
-      <BuilderClient collections={collections} anchor={anchor} />
+      <BuilderClient
+        collections={collections}
+        anchor={anchor}
+        alternatives={builderProducts}
+      />
 
       <section className="wrap pt-16">
         <h2 className="mb-6 text-2xl">How it arrives</h2>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SHOP } from "@/lib/config";
+import { PAYMENT_BADGES, SHOP } from "@/lib/config";
 import { NewsletterForm } from "./NewsletterForm";
 
 const COLUMNS = [
@@ -25,8 +25,6 @@ const COLUMNS = [
   },
 ];
 
-const PAYMENTS = ["VISA", "MASTERCARD", "PAYPAL", "APPLE PAY"];
-
 export function Footer() {
   return (
     <footer className="mt-20 bg-[#2B2724] text-[#BDB6AA]">
@@ -41,7 +39,7 @@ export function Footer() {
               printed to order in {SHOP.city}.
             </p>
             <div className="flex flex-wrap gap-2">
-              {PAYMENTS.map((name) => (
+              {PAYMENT_BADGES.map((name) => (
                 <span
                   key={name}
                   className="rounded-md border border-[#46403A] px-2 py-1 text-[10px] font-extrabold text-[#D8D2C6]"
@@ -75,13 +73,19 @@ export function Footer() {
               New drops and {SHOP.city} market dates, about once a month.
             </p>
             <NewsletterForm />
+            {/* Both URLs are env-configured and null until they're set, so a
+                missing one is simply not linked rather than rendered dead. */}
             <div className="mt-4 flex gap-4 text-[13px]">
-              <a href={SHOP.socials.instagram} className="hover:text-white">
-                Instagram
-              </a>
-              <a href={SHOP.socials.tiktok} className="hover:text-white">
-                TikTok
-              </a>
+              {SHOP.socials.instagram ? (
+                <a href={SHOP.socials.instagram} className="hover:text-white">
+                  Instagram
+                </a>
+              ) : null}
+              {SHOP.socials.tiktok ? (
+                <a href={SHOP.socials.tiktok} className="hover:text-white">
+                  TikTok
+                </a>
+              ) : null}
             </div>
           </div>
         </div>

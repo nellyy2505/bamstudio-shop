@@ -12,7 +12,7 @@ import {
   getReviews,
 } from "@/lib/queries";
 import { PRINT_LEAD_TIME, SHIPPING, SHOP } from "@/lib/config";
-import { deliveryWindow, money } from "@/lib/format";
+import { deliveryWindow, money, pluralise } from "@/lib/format";
 import { siteUrl } from "@/lib/stripe";
 
 export const revalidate = 300;
@@ -71,16 +71,26 @@ export default async function ProductPage({ params }: { params: Params }) {
       "@type": "Offer",
       priceCurrency: "AUD",
       price: (product.price / 100).toFixed(2),
-      availability: "https://schema.org/InStock",
+      // Nothing is warehoused by default — anything not already printed is
+      // made to order, which is PreOrder, not OutOfStock.
+      availability: readyToShip
+        ? "https://schema.org/InStock"
+        : "https://schema.org/PreOrder",
       url: `${siteUrl()}/product/${product.slug}`,
     },
   };
+
+  // JSON.stringify does not escape the less-than sign, so a product name
+  // containing a closing script tag would break out of the tag below and
+  // inject markup. The unicode escape is still valid JSON and parses back to
+  // the identical string, so consumers see no difference.
+  const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, "\\u003c");
 
   return (
     <div className="wrap pt-7">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdHtml }}
       />
 
       <Breadcrumbs
@@ -119,16 +129,19 @@ export default async function ProductPage({ params }: { params: Params }) {
             {product.name}
           </h1>
 
-          <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
-            <Stars rating={product.rating} size={16} />
-            <b className="text-[14.5px]">{product.rating.toFixed(1)}</b>
-            <a
-              href="#reviews"
-              className="text-[13.5px] text-accent underline underline-offset-2"
-            >
-              {product.review_count} reviews
-            </a>
-          </div>
+          {/* Nothing to show until a customer actually leaves a review. */}
+          {product.review_count > 0 ? (
+            <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
+              <Stars rating={product.rating} size={16} />
+              <b className="text-[14.5px]">{product.rating.toFixed(1)}</b>
+              <a
+                href="#reviews"
+                className="text-[13.5px] text-accent underline underline-offset-2"
+              >
+                {pluralise(product.review_count, "review")}
+              </a>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-baseline gap-3">
             <b className="text-3xl">{money(product.price)}</b>

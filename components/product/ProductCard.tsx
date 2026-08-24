@@ -70,13 +70,21 @@ export function ProductCard({
         >
           {product.short_name}
         </Link>
-        <div className="my-0.5 flex items-center gap-1.5">
-          <Stars rating={product.rating} size={13} />
-          <span className="text-xs text-muted">({product.review_count})</span>
-        </div>
+        {product.review_count > 0 ? (
+          <div className="my-0.5 flex items-center gap-1.5">
+            <Stars rating={product.rating} size={13} />
+            <span className="text-xs text-muted">({product.review_count})</span>
+          </div>
+        ) : (
+          /* No reviews yet, so no stars and no "(0)" — but hold the row's
+             height so the price line stays put across a mixed grid. */
+          <div className="my-0.5 h-4" aria-hidden="true" />
+        )}
         <div className="flex items-baseline justify-between gap-2">
           <b className="text-[15px]">
-            {product.is_personalised ? "From " : ""}
+            {/* Only builder charms are priced by length; text personalisation
+                costs exactly what the card says. */}
+            {product.personalisation_mode === "builder" ? "From " : ""}
             {money(product.price)}{" "}
             <span className="text-[11.5px] font-semibold text-faint">AUD</span>
           </b>

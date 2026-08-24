@@ -112,7 +112,28 @@ that. A tampered basket cannot change what Stripe collects.
 4. `checkout.session.expired` deletes the abandoned `pending` row.
 
 `pending` rows are excluded from the account order list and from guest
-tracking — an unpaid checkout is not an order.
+tracking — an unpaid checkout is not an order. `/order/confirmed` reads the
+session's real `payment_status` and only claims an order is confirmed when
+Stripe says it was paid; anything else keeps the basket intact.
+
+If the order cannot be staged (a database blip), checkout **fails and expires
+the Stripe session** rather than letting someone pay for an order we have no
+record of and cannot print.
+
+## Personalisation
+
+Two modes, set per product in `scripts/generate-seed.mjs` and stored in
+`products.personalisation_mode`:
+
+- **`builder`** — the keycap letter builder at `/builder?product=<slug>`,
+  priced by letter count from `BUILDER_PRICING`. The catalogue price is the
+  cheapest bundle, so the page never advertises a figure the builder can't
+  charge.
+- **`text`** — one free-text line collected on the product page (a pet's name,
+  a date), priced at the product's own price.
+
+Checkout refuses a builder payload on anything that isn't `builder` mode —
+without that check, any product could be bought at name-charm prices.
 
 ## Commands
 
