@@ -36,7 +36,8 @@ export default function ContactPage() {
             <p className="mt-1.5 text-[14px] text-muted">
               Prefer your own inbox? Write to{" "}
               <a
-                href={`mailto:${SHOP.supportEmail}`}
+                href={SHOP.hasSupportEmail ? `mailto:${SHOP.supportEmail}` : "/contact"}
+                aria-disabled={SHOP.hasSupportEmail ? undefined : true}
                 className="font-bold text-accent underline underline-offset-2"
               >
                 {SHOP.supportEmail}

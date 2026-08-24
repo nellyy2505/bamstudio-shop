@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     template: `%s · ${SHOP.name}`,
   },
   description:
-    "Fidget clicker keychains, custom name charms and desk pieces, 3D-printed to order in Sydney. Free Australian shipping over $49.",
+    "Fidget clicker keychains, custom name charms and desk pieces, 3D-printed to order in Sydney. Free Australian shipping from $49.",
   openGraph: {
     type: "website",
     siteName: SHOP.name,

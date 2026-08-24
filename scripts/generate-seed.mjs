@@ -10,7 +10,7 @@
  * Prices: the sheet's "My price" column is authoritative once filled. Until
  * then we fall back to PRICE_BY_CATEGORY so the shop has something to show.
  */
-import { writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 
@@ -114,12 +114,36 @@ const PERSONALISATION = {
 const PERSONALISED = new Set(Object.keys(PERSONALISATION));
 
 /**
- * Cheapest builder bundle, mirroring BUILDER_PRICING in lib/config.ts (a .mjs
- * script can't import the TypeScript module). Builder products are listed at
- * this price so the page, the card and the JSON-LD all advertise a figure the
- * builder can actually charge — their old catalogue price never occurred.
+ * Cheapest builder bundle. Builder products are listed at this price so the
+ * page, the card and the JSON-LD all advertise a figure the builder can
+ * actually charge.
+ *
+ * Read out of lib/config.ts rather than duplicated: a .mjs script can't import
+ * the TypeScript module, but it can parse the one literal it needs, so editing
+ * BUILDER_PRICING can't silently leave the catalogue advertising a price the
+ * builder no longer offers.
  */
-const BUILDER_FROM_PRICE = 400;
+const BUILDER_FROM_PRICE = readBuilderFromPrice();
+
+function readBuilderFromPrice() {
+  const config = readFileSync(
+    path.resolve(import.meta.dirname, "..", "lib", "config.ts"),
+    "utf8",
+  );
+  const block = config.match(
+    /BUILDER_PRICING:\s*Record<number,\s*number>\s*=\s*\{([^}]*)\}/,
+  );
+  const prices = [...(block?.[1] ?? "").matchAll(/:\s*(\d+)/g)].map((m) =>
+    Number(m[1]),
+  );
+  if (prices.length === 0) {
+    throw new Error(
+      "Could not read BUILDER_PRICING from lib/config.ts — builder products " +
+        "would be listed at a price the builder cannot charge.",
+    );
+  }
+  return Math.min(...prices);
+}
 
 /** Categories we don't sell online (stall infrastructure and stall mechanics). */
 const SKIP_CATEGORIES = new Set(["Display & packaging", "Market offer"]);

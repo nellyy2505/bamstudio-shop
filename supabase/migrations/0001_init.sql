@@ -194,6 +194,9 @@ create table if not exists public.orders (
   shipping_address jsonb not null,
   stripe_session_id text unique,
   stripe_payment_intent text,
+  -- Flipped exactly once, by the webhook, in a compare-and-set. Stripe retries
+  -- deliveries, so without this a retry would decrement stock a second time.
+  stock_applied boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -359,22 +362,52 @@ revoke all on function public.lookup_order(text, text) from public;
 grant execute on function public.lookup_order(text, text) to anon, authenticated;
 
 -- ------------------------------------------------------------ search helper
+-- The old body ORed the full-text match with `name ilike '%' || q || '%'` and
+-- the same over `theme`. A leading wildcard can never use an index, so every
+-- suggestion keystroke cost a sequential scan of products, and the input was
+-- unbounded. Three changes:
+--   * the term is trimmed and capped at 64 characters here, not only in the
+--     route — this function is callable over PostgREST by anon, so it must not
+--     trust its caller;
+--   * the `theme` wildcard branch is gone. `search_vector` already indexes
+--     theme (weight B) alongside name, category and description, and there is
+--     a GIN index on it, so that branch only duplicated what the tsquery
+--     already found;
+--   * the surviving `name` branch is a PREFIX match on lower(name). It exists
+--     so partial words typed into the typeahead ("keych") still hit before
+--     they stem into a full lexeme. Anchored at the left it is sargable — a
+--     `lower(name) text_pattern_ops` btree (or a trigram index) would be used
+--     if one is added later; even with today's indexes it is far cheaper than
+--     an unanchored match. LIKE metacharacters in the term are escaped so a
+--     query of "%" cannot expand back into "match every row".
 create or replace function public.search_products(p_query text)
 returns setof public.products
 language sql
 stable
 as $$
-  select *
-  from public.products
-  where active = true
+  with term as (
+    select left(btrim(coalesce(p_query, '')), 64) as q
+  ),
+  parsed as (
+    select
+      q,
+      websearch_to_tsquery('english', q) as tsq,
+      -- Backslash first, or it would double-escape the escapes added after it.
+      replace(replace(replace(lower(q), '\', '\\'), '%', '\%'), '_', '\_')
+        as prefix
+    from term
+  )
+  select p.*
+  from public.products p, parsed
+  where p.active = true
+    and parsed.q <> ''
     and (
-      search_vector @@ websearch_to_tsquery('english', p_query)
-      or name ilike '%' || p_query || '%'
-      or theme ilike '%' || p_query || '%'
+      p.search_vector @@ parsed.tsq
+      or lower(p.name) like parsed.prefix || '%'
     )
   order by
-    ts_rank(search_vector, websearch_to_tsquery('english', p_query)) desc,
-    is_bestseller desc
+    ts_rank(p.search_vector, parsed.tsq) desc,
+    p.is_bestseller desc
   limit 60;
 $$;
 

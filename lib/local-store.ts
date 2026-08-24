@@ -24,6 +24,12 @@ export type LocalStore<T> = {
   hydrate: () => T;
   /** False until the browser value has been read at least once. */
   isHydrated: () => boolean;
+  /**
+   * Drop the stored value and fall back to `initial`, notifying subscribers.
+   * Unlike `set(initial)` this removes the key rather than writing the initial
+   * value back, so nothing of the old value is left behind on the device.
+   */
+  clear: () => void;
 };
 
 export function createLocalStore<T>(
@@ -96,6 +102,16 @@ export function createLocalStore<T>(
         window.localStorage.setItem(key, JSON.stringify(next));
       } catch {
         // Quota or private mode — state still works for this page view.
+      }
+      emit();
+    },
+
+    clear() {
+      cache = initial;
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        // Storage blocked — the in-memory cache is cleared either way.
       }
       emit();
     },

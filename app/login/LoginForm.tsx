@@ -29,6 +29,54 @@ function GoogleMark() {
   );
 }
 
+/**
+ * Sign-in errors that are safe to show, keyed by Supabase's stable error code
+ * — the same allow-list shape /login/page.tsx uses for the auth-callback
+ * codes. Every entry here is about how fast the visitor is going or about the
+ * project's configuration; none of them depend on whether the address typed
+ * into the form has an account.
+ */
+const SAFE_SIGNIN_ERRORS: Record<string, string> = {
+  over_request_rate_limit: "Too many attempts. Please wait a minute and try again.",
+  over_email_send_rate_limit: "Too many attempts. Please wait a minute and try again.",
+  user_banned: "This account is locked. Please contact us to get back in.",
+  validation_failed: "Please enter both your email address and your password.",
+  email_provider_disabled: "Signing in with an email address isn't available right now.",
+  provider_disabled: "That sign-in method isn't available right now.",
+};
+
+/**
+ * Everything not on the list above collapses to this one message.
+ *
+ * Supabase distinguishes "Invalid login credentials" (invalid_credentials —
+ * no such address, OR the wrong password) from "Email not confirmed"
+ * (email_not_confirmed — the address exists but has never been confirmed).
+ * Rendering those separately turns this form into the account oracle that
+ * /signup and /forgot-password were both hardened against, so all three
+ * outcomes produce exactly this string.
+ *
+ * That leaves the genuine need behind "Email not confirmed": someone who
+ * signed up an hour ago and never opened the email has no way to guess why
+ * they are stuck. The resolution is to fold the hint into the generic copy —
+ * it tells anyone who HAS just signed up where to look, while asserting
+ * nothing about the address that was typed. Someone probing addresses reads
+ * the identical sentence back for every one of them.
+ */
+const GENERIC_SIGNIN_ERROR =
+  "We couldn't sign you in. Check your email address and password. If you've just created an account, open the confirmation email we sent you first.";
+
+function signInMessage(
+  code: string | undefined,
+  status: number | undefined,
+  fallback: string = GENERIC_SIGNIN_ERROR,
+): string {
+  const safe = code ? SAFE_SIGNIN_ERRORS[code] : undefined;
+  if (safe) return safe;
+  // Responses can arrive rate-limited without a code.
+  if (status === 429) return SAFE_SIGNIN_ERRORS.over_request_rate_limit;
+  return fallback;
+}
+
 export function LoginForm({
   next,
   initialError,
@@ -56,7 +104,15 @@ export function LoginForm({
       },
     });
     if (oauthError) {
-      setError(oauthError.message);
+      // No address has been typed at this point, so nothing can be enumerated
+      // here — but the raw text is provider/config noise, not shopper copy.
+      setError(
+        signInMessage(
+          oauthError.code,
+          oauthError.status,
+          "We couldn't start sign-in with Google. Please try again.",
+        ),
+      );
       setPending(false);
     }
   }
@@ -73,7 +129,7 @@ export function LoginForm({
     });
 
     if (signInError) {
-      setError(signInError.message);
+      setError(signInMessage(signInError.code, signInError.status));
       setPending(false);
       return;
     }

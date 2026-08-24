@@ -148,6 +148,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
             attachment_id: line.attachment_id,
             quantity: line.quantity,
             custom: line.custom,
+            personalisation_text: line.personalisation_text ?? undefined,
           })),
           shipping_method: method,
           gift_note: giftNote || undefined,

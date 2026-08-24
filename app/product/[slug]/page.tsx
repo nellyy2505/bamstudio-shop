@@ -11,7 +11,7 @@ import {
   getRelatedProducts,
   getReviews,
 } from "@/lib/queries";
-import { PRINT_LEAD_TIME, SHIPPING, SHOP } from "@/lib/config";
+import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitDays } from "@/lib/config";
 import { deliveryWindow, money, pluralise } from "@/lib/format";
 import { siteUrl } from "@/lib/stripe";
 
@@ -144,7 +144,12 @@ export default async function ProductPage({ params }: { params: Params }) {
           ) : null}
 
           <div className="flex flex-wrap items-baseline gap-3">
-            <b className="text-3xl">{money(product.price)}</b>
+            <b className="text-3xl">
+              {/* Builder charms are priced by letter count, so the headline is
+                  a "from" figure — matching the grid card. */}
+              {product.personalisation_mode === "builder" ? "From " : ""}
+              {money(product.price)}
+            </b>
             <span className="text-[13px] text-muted">
               AUD{SHOP.gstRegistered ? " · GST included" : ""}
             </span>
@@ -174,8 +179,9 @@ export default async function ProductPage({ params }: { params: Params }) {
             <p className="flex items-start gap-2.5">
               <Icon name="truck" size={18} className="mt-0.5 shrink-0" />
               <span>
-                <b>Estimated delivery {deliveryWindow(3, 7)}</b> · Standard{" "}
-                {money(SHIPPING.methods[0].price)}, free over{" "}
+                <b>Estimated delivery {deliveryWindow(...transitDays("standard"))}</b> ·{" "}
+                Standard{" "}
+                {money(SHIPPING.methods[0].price)}, free from{" "}
                 {money(SHIPPING.freeThreshold)}
               </span>
             </p>

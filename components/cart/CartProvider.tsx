@@ -51,13 +51,23 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+/**
+ * Two basket lines merge only when they are genuinely the same thing to print.
+ * The personalisation has to be part of that: without it, a bowl for "Mochi"
+ * and one for "Luna" collapse into quantity 2 of "Mochi" — two bowls charged
+ * and both printed with the wrong name.
+ */
 function lineKey(line: Omit<CartLine, "key">): string {
   const custom = line.custom
     ? `${line.custom.collection_slug}:${line.custom.letters}:${line.custom.with_charm}`
     : "";
-  return [line.product_id, line.colour ?? "", line.attachment_id ?? "", custom].join(
-    "|",
-  );
+  return [
+    line.product_id,
+    line.colour ?? "",
+    line.attachment_id ?? "",
+    custom,
+    line.personalisation_text ?? "",
+  ].join("|");
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {

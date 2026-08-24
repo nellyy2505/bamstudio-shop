@@ -64,11 +64,27 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
   const stagedItems = (staged as { order_items?: unknown[] } | null)?.order_items;
   const stagedIsUsable = Boolean(staged) && (stagedItems?.length ?? 0) > 0;
 
-  if (staged && !stagedIsUsable) {
+  // Scoped to `pending`: a confirmed order that somehow has no items has
+  // already taken money and moved stock, so deleting and rebuilding it would
+  // double-decrement and renumber a sale the customer has been emailed about.
+  // Only an unconfirmed staging row is safe to discard.
+  const rebuildFromStripe = Boolean(staged) && !stagedIsUsable;
+  if (staged && rebuildFromStripe) {
+    if (staged.status !== "pending") {
+      console.error(
+        `Order ${staged.id} is ${staged.status} but has no items — needs a ` +
+          "manual look; leaving it alone rather than rebuilding.",
+      );
+      return;
+    }
     console.error(
       `Staged order ${staged.id} has no items — rebuilding from Stripe.`,
     );
-    await supabase.from("orders").delete().eq("id", staged.id);
+    await supabase
+      .from("orders")
+      .delete()
+      .eq("id", staged.id)
+      .eq("status", "pending");
   }
 
   const paymentIntent =
@@ -77,7 +93,14 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
       : (session.payment_intent?.id ?? null);
 
   if (staged && stagedIsUsable) {
-    if (staged.status !== "pending") return; // already handled
+    if (staged.status !== "pending") {
+      // Already confirmed — but a previous delivery may have died between the
+      // confirming update and the follow-up work. Both steps compare-and-set
+      // (a null order number, an unclaimed stock_applied), so running them
+      // again is safe and is what makes the retry worth anything.
+      await finishConfirmation(supabase, staged.id);
+      return;
+    }
 
     // The order number is allocated AFTER we know this update won the race.
     // Allocating it inline would burn a sequence value on every duplicate
@@ -109,8 +132,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
     // without it, retries would decrement stock a second time.
     if (!updated || updated.length === 0) return;
 
-    await assignOrderNumber(supabase, staged.id);
-    await decrementStock(supabase, staged.id);
+    await finishConfirmation(supabase, staged.id);
     return;
   }
 
@@ -195,6 +217,10 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
 
   // Stock still has to move on this path — it exists precisely because the
   // database was unreachable at checkout, not because the sale didn't happen.
+  // Claimed through the same compare-and-set as the staged path, so a later
+  // retry taking the other branch cannot decrement these counts again.
+  if (!(await claimStock(supabase, order.id))) return;
+
   for (const [slug, quantity] of stockMap) {
     const product = bySlug.get(slug);
     if (!product) continue;
@@ -204,6 +230,19 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
     });
     if (error) console.error("Stock decrement failed:", error.message);
   }
+}
+
+/**
+ * The steps that follow a successful confirm. Split out so a retry can pick
+ * up an order that was confirmed but never got its number or its stock
+ * movement — the window where the previous delivery crashed or timed out.
+ */
+async function finishConfirmation(
+  supabase: ReturnType<typeof createAdminClient>,
+  orderId: string,
+) {
+  await assignOrderNumber(supabase, orderId);
+  await decrementStock(supabase, orderId);
 }
 
 /**
@@ -241,11 +280,43 @@ function parseStockMap(raw: string | undefined): Map<string, number> {
   return map;
 }
 
-/** Ready-to-ship stock only; made-to-order lines sit at zero already. */
+/**
+ * Claims the right to move an order's stock, exactly once, via a
+ * compare-and-set. Returns false when another delivery already claimed it.
+ * Both the staged path and the Stripe-rebuild path go through this, so a
+ * retry that lands on the other path cannot double-count.
+ */
+async function claimStock(
+  supabase: ReturnType<typeof createAdminClient>,
+  orderId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("orders")
+    .update({ stock_applied: true })
+    .eq("id", orderId)
+    .eq("stock_applied", false)
+    .select("id");
+
+  if (error) {
+    console.error("Could not claim stock movement:", error.message);
+    throw new Error("stock claim failed");
+  }
+  return Boolean(data && data.length > 0);
+}
+
+/**
+ * Ready-to-ship stock only; made-to-order lines sit at zero already.
+ *
+ * Claims the work with a compare-and-set on `stock_applied` before touching
+ * any counts, so a Stripe retry — or a retry finishing a half-completed
+ * confirm — cannot decrement the same order twice.
+ */
 async function decrementStock(
   supabase: ReturnType<typeof createAdminClient>,
   orderId: string,
 ) {
+  if (!(await claimStock(supabase, orderId))) return;
+
   const { data: items } = await supabase
     .from("order_items")
     .select("product_id, quantity, personalisation")

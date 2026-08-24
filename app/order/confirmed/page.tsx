@@ -11,7 +11,9 @@ import { money } from "@/lib/format";
 import type { ArtKey, Tint } from "@/lib/types";
 
 export const metadata: Metadata = {
-  title: "Order confirmed",
+  // Neutral on purpose: this page also renders the processing and never-paid
+  // states, and the browser tab should not announce a confirmation for those.
+  title: "Your order",
   robots: { index: false },
   // The URL carries a Stripe session id that reads back the customer's
   // address, so it must not leak to any third party in a Referer header.

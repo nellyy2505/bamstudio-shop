@@ -55,7 +55,7 @@ const HERO_FACTS = [
   { icon: "heart" as const, label: "Designed by the family" },
   {
     icon: "truck" as const,
-    label: `Free shipping over ${money(SHIPPING.freeThreshold)}`,
+    label: `Free shipping from ${money(SHIPPING.freeThreshold)}`,
   },
   { icon: "sparkle" as const, label: "Original designs only" },
 ];
@@ -72,7 +72,7 @@ const PROMISES = [
   {
     icon: "truck" as const,
     title: `Dispatched in ${PRINT_LEAD_TIME.label}`,
-    body: `That's printing time, not delivery — standard post adds ${STANDARD_MIN}–${STANDARD_MAX} business days. Free over ${money(SHIPPING.freeThreshold)}.`,
+    body: `That's printing time, not delivery — standard post adds ${STANDARD_MIN}–${STANDARD_MAX} business days. Free from ${money(SHIPPING.freeThreshold)}.`,
   },
   {
     icon: "shield" as const,

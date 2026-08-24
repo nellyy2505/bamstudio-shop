@@ -307,22 +307,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Colour is free text on the wire; only a colour this product actually
-    // comes in may reach the Stripe line description or the order record.
-    const colours = product.colours ?? [];
+    // Colour is resolved per branch below: a builder line's "colour" is its
+    // colourway, which is validated against the collections table, not the
+    // product's own colour list (builder products have none).
     let colour: string | null = null;
-    if (line.colour) {
-      const match = colours.find((c) => c.name === line.colour);
-      if (!match) {
-        return NextResponse.json(
-          { error: `“${product.short_name}” doesn't come in that colour.` },
-          { status: 400 },
-        );
-      }
-      colour = match.name;
-    } else if (colours.length > 0) {
-      colour = colours[0].name;
-    }
 
     if (line.custom) {
       // Builder item: flat bundle price by letter count, ignore client price.
@@ -343,6 +331,8 @@ export async function POST(request: Request) {
         );
       }
       unitPrice = bundle - (line.custom.with_charm ? 0 : BUILDER_NO_CHARM_DISCOUNT);
+      // Taken from the collection we just looked up, never the client's copy.
+      colour = collection.name;
 
       // The cord/keyring/strap choice has to reach the Stripe line, the order
       // detail page and the packing list, or the wrong finding gets shipped.
@@ -359,6 +349,22 @@ export async function POST(request: Request) {
         .filter(Boolean)
         .join(" · ");
     } else {
+      // Colour is free text on the wire; only a colour this product actually
+      // comes in may reach the Stripe line description or the order record.
+      const colours = product.colours ?? [];
+      if (line.colour) {
+        const match = colours.find((c) => c.name === line.colour);
+        if (!match) {
+          return NextResponse.json(
+            { error: `“${product.short_name}” doesn't come in that colour.` },
+            { status: 400 },
+          );
+        }
+        colour = match.name;
+      } else if (colours.length > 0) {
+        colour = colours[0].name;
+      }
+
       const attachment = (product.attachments ?? []).find(
         (a) => a.id === line.attachment_id,
       );

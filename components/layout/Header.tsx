@@ -32,7 +32,7 @@ export function Header({ signedIn }: { signedIn: boolean }) {
   return (
     <>
       <div className="bg-ink px-4 py-2.5 text-center text-[13px] font-semibold text-[#F6F2EA]">
-        Free AU shipping over{" "}
+        Free AU shipping from{" "}
         <b className="text-[#F3C89B]">{money(SHIPPING.freeThreshold)}</b>
         <span className="hidden sm:inline">
           {" "}
