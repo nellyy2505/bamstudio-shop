@@ -230,6 +230,10 @@ Do these in order on launch day:
    have someone check them.
 3. **Set the real shop details** in Vercel: `NEXT_PUBLIC_SUPPORT_EMAIL`,
    `NEXT_PUBLIC_ABN` (once it clears), and the social URLs.
+   Leave `NEXT_PUBLIC_GST_REGISTERED` as `false` — the shop deliberately shows
+   no GST component while you're under the $75,000 threshold, because
+   displaying GST you don't collect misrepresents the price. Set it to `true`
+   only on the day you register.
 4. **Wire up transactional email.** Right now the contact form and newsletter
    only log to the server. Sign up for <https://resend.com> (free tier: 3,000
    emails/month), then implement the TODOs in `app/api/contact/route.ts` and
