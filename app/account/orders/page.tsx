@@ -112,6 +112,8 @@ export default async function OrdersPage({
         "*, order_items(*, products(id, slug, short_name, price, art, tint, colours, attachments, is_personalised))",
       )
       .eq("user_id", user.id)
+      // 'pending' rows are unpaid checkouts staged for the Stripe webhook.
+      .neq("status", "pending")
       .order("created_at", { ascending: false });
 
     if (error) {

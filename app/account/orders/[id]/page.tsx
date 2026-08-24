@@ -63,6 +63,8 @@ export default async function OrderDetailPage({
       .select("*, order_items(*)")
       .eq("id", id)
       .eq("user_id", user.id)
+      // 'pending' rows are unpaid checkouts staged for the Stripe webhook.
+      .neq("status", "pending")
       .maybeSingle();
 
     if (error) console.error("account order query failed:", error.message);

@@ -99,6 +99,21 @@ product from the database, re-derives the unit price from the base price plus
 the attachment delta (or the flat bundle price for a name charm), and charges
 that. A tampered basket cannot change what Stripe collects.
 
+## How an order is recorded
+
+1. **Checkout** creates the Stripe session *and* writes the basket to `orders`
+   with status `pending`, keyed by `stripe_session_id`. (Stripe's metadata
+   caps each value at 500 characters, far too small for a basket.)
+2. **The webhook** (`checkout.session.completed`) flips that row to
+   `confirmed` and fills in the address and total Stripe collected. The update
+   is scoped to rows still `pending`, so Stripe's retries are harmless.
+3. If the database was unreachable at step 1, the webhook rebuilds the order
+   from Stripe's own line items instead, so a paid sale is never lost.
+4. `checkout.session.expired` deletes the abandoned `pending` row.
+
+`pending` rows are excluded from the account order list and from guest
+tracking — an unpaid checkout is not an order.
+
 ## Commands
 
 ```bash

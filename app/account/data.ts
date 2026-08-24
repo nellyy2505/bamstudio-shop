@@ -47,6 +47,7 @@ export async function requireAccount() {
 }
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
+  pending: "Awaiting payment",
   confirmed: "Confirmed",
   printing: "Printing",
   packed: "Packed",
@@ -56,6 +57,7 @@ export const STATUS_LABEL: Record<OrderStatus, string> = {
 };
 
 export const STATUS_TONE: Record<OrderStatus, "warn" | "good" | "neutral"> = {
+  pending: "neutral",
   confirmed: "warn",
   printing: "warn",
   packed: "warn",

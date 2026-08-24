@@ -192,9 +192,10 @@ follow the "push an existing repository" lines it gives you.
 
 1. Stripe → **Developers → Webhooks → Add endpoint**.
 2. Endpoint URL: `https://YOUR-DOMAIN/api/webhooks/stripe`
-3. **Events to send** — select exactly these two:
+3. **Events to send** — select exactly these three:
    - `checkout.session.completed`
    - `checkout.session.async_payment_succeeded`
+   - `checkout.session.expired`
 4. Add endpoint, then reveal the **Signing secret** (`whsec_…`).
 5. In Vercel → Settings → Environment Variables, update
    `STRIPE_WEBHOOK_SECRET` with it, then **Redeploy**.

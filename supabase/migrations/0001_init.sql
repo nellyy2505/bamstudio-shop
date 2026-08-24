@@ -157,8 +157,10 @@ create table if not exists public.orders (
     default 'BS-' || nextval('public.order_number_seq')::text,
   user_id uuid references auth.users(id) on delete set null,
   email text not null,
-  status text not null default 'confirmed'
-    check (status in ('confirmed','printing','packed','shipped','delivered','cancelled')),
+  -- 'pending' is written when the Stripe session is created; the webhook
+  -- promotes it to 'confirmed' once payment actually succeeds.
+  status text not null default 'pending'
+    check (status in ('pending','confirmed','printing','packed','shipped','delivered','cancelled')),
   subtotal integer not null,
   shipping integer not null default 0,
   total integer not null,
@@ -298,6 +300,8 @@ as $$
   from public.orders o
   where upper(trim(o.order_number)) = upper(trim(p_order_number))
     and lower(trim(o.email)) = lower(trim(p_email))
+    -- Abandoned checkouts were never paid for; they are not trackable orders.
+    and o.status <> 'pending'
   limit 1;
 $$;
 

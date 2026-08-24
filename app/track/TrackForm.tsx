@@ -30,6 +30,11 @@ type TrackedOrder = {
 };
 
 const STEP_COPY: Record<OrderStatus, { label: string; body: string }> = {
+  // Unpaid checkouts are excluded by lookup_order, so this never renders.
+  pending: {
+    label: "Awaiting payment",
+    body: "This checkout was never completed.",
+  },
   confirmed: {
     label: "Confirmed",
     body: "Payment received and your order joined the print queue.",

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getStripe, siteUrl } from "@/lib/stripe";
-import { createClient, getUser } from "@/lib/supabase/server";
+import { createAdminClient, createClient, getUser } from "@/lib/supabase/server";
 import { isDatabaseConfigured } from "@/lib/queries";
 import { FALLBACK_PRODUCTS } from "@/lib/fallback-data";
 import {
@@ -57,6 +57,80 @@ async function loadProducts(slugs: string[]): Promise<Map<string, Product>> {
   return new Map(((data ?? []) as Product[]).map((p) => [p.slug, p]));
 }
 
+type SummaryLine = {
+  product_id: string;
+  name: string;
+  art: string;
+  tint: string;
+  variant: string;
+  unit_price: number;
+  quantity: number;
+  personalisation: unknown;
+};
+
+/**
+ * Records the basket as a `pending` order keyed by the Stripe session, so the
+ * webhook only has to confirm it. Stripe's 500-character metadata limit makes
+ * carrying the basket on the session itself unworkable.
+ *
+ * A failure here must not block checkout: the webhook can still rebuild an
+ * order from the Stripe session, so we log and continue.
+ */
+async function savePendingOrder(input: {
+  sessionId: string;
+  userId: string | null;
+  email: string;
+  subtotal: number;
+  shipping: number;
+  shippingMethod: string;
+  giftNote: string | null;
+  items: SummaryLine[];
+}) {
+  if (!isDatabaseConfigured() || !process.env.SUPABASE_SERVICE_ROLE_KEY) return;
+
+  try {
+    const supabase = createAdminClient();
+    const { data: order, error } = await supabase
+      .from("orders")
+      .insert({
+        user_id: input.userId,
+        email: input.email,
+        status: "pending",
+        subtotal: input.subtotal,
+        shipping: input.shipping,
+        total: input.subtotal + input.shipping,
+        shipping_method: input.shippingMethod,
+        gift_note: input.giftNote,
+        shipping_address: {},
+        stripe_session_id: input.sessionId,
+      })
+      .select("id")
+      .single();
+
+    if (error || !order) {
+      console.error("Could not stage order:", error?.message);
+      return;
+    }
+
+    const { error: itemsError } = await supabase.from("order_items").insert(
+      input.items.map((item) => ({
+        order_id: order.id,
+        product_id: item.product_id,
+        product_name: item.name,
+        variant_label: item.variant,
+        art: item.art,
+        tint: item.tint,
+        unit_price: item.unit_price,
+        quantity: item.quantity,
+        personalisation: item.personalisation,
+      })),
+    );
+    if (itemsError) console.error("Could not stage items:", itemsError.message);
+  } catch (error) {
+    console.error("Could not stage order:", error);
+  }
+}
+
 /**
  * Creates a Stripe Checkout Session.
  *
@@ -91,7 +165,7 @@ export async function POST(request: Request) {
     };
     quantity: number;
   }[] = [];
-  const summary: Record<string, unknown>[] = [];
+  const summary: SummaryLine[] = [];
   let subtotal = 0;
 
   for (const line of body.lines) {
@@ -193,30 +267,25 @@ export async function POST(request: Request) {
           },
         },
       ],
+      // Stripe caps each metadata value at 500 characters, so the basket is
+      // persisted to our own database below rather than carried here.
       metadata: {
         user_id: user?.id ?? "",
         shipping_method: body.shipping_method,
-        gift_note: (body.gift_note ?? "").slice(0, 450),
         subtotal: String(subtotal),
         shipping: String(shipping),
-      },
-      // Stripe metadata values cap at 500 chars, so the basket rides in its
-      // own field, chunked if it needs to be.
-      payment_intent_data: {
-        metadata: { order_summary_len: String(summary.length) },
       },
     });
 
-    // Stash the full basket where the webhook can read it back.
-    await stripe.checkout.sessions.update(session.id, {
-      metadata: {
-        user_id: user?.id ?? "",
-        shipping_method: body.shipping_method,
-        gift_note: (body.gift_note ?? "").slice(0, 450),
-        subtotal: String(subtotal),
-        shipping: String(shipping),
-        items: JSON.stringify(summary).slice(0, 4900),
-      },
+    await savePendingOrder({
+      sessionId: session.id,
+      userId: user?.id ?? null,
+      email: user?.email ?? body.email ?? "",
+      subtotal,
+      shipping,
+      shippingMethod: body.shipping_method,
+      giftNote: body.gift_note ?? null,
+      items: summary,
     });
 
     return NextResponse.json({ url: session.url, id: session.id });

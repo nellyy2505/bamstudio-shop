@@ -116,6 +116,8 @@ export type CartLine = {
 };
 
 export type OrderStatus =
+  /** Staged when the Stripe session opens; never shown to the customer. */
+  | "pending"
   | "confirmed"
   | "printing"
   | "packed"

@@ -4,6 +4,8 @@ import { ProductImage } from "@/components/ProductArt";
 import { ButtonLink, Icon, Pill } from "@/components/ui";
 import { ClearCartOnMount } from "./ClearCartOnMount";
 import { getStripe } from "@/lib/stripe";
+import { isDatabaseConfigured } from "@/lib/queries";
+import { createClient } from "@/lib/supabase/server";
 import { PRINT_LEAD_TIME, SHOP } from "@/lib/config";
 import { money } from "@/lib/format";
 import type { ArtKey, Tint } from "@/lib/types";
@@ -66,10 +68,41 @@ export default async function OrderConfirmedPage({
           .join(", ");
       }
 
-      const raw = session.metadata?.items;
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-        if (Array.isArray(parsed)) items = parsed as LineSummary[];
+      // Line items live in our own database, staged when the session was
+      // created — Stripe's metadata is too small to carry a basket.
+      if (isDatabaseConfigured()) {
+        const supabase = await createClient();
+        const { data: order } = await supabase
+          .from("orders")
+          .select("id, order_items(product_name, variant_label, art, tint, unit_price, quantity)")
+          .eq("stripe_session_id", sessionId)
+          .maybeSingle();
+
+        const rows = (order as { order_items?: LineSummary[] } | null)
+          ?.order_items;
+        if (Array.isArray(rows)) {
+          items = rows.map((row) => ({
+            name: (row as unknown as { product_name?: string }).product_name,
+            variant: (row as unknown as { variant_label?: string }).variant_label,
+            art: row.art,
+            tint: row.tint,
+            unit_price: row.unit_price,
+            quantity: row.quantity,
+          }));
+        }
+      }
+
+      // Fall back to Stripe's own line items when there is no order row yet.
+      if (items.length === 0) {
+        const lineItems = await getStripe().checkout.sessions.listLineItems(
+          sessionId,
+          { limit: 100 },
+        );
+        items = lineItems.data.map((item) => ({
+          name: item.description ?? "Item",
+          unit_price: item.price?.unit_amount ?? 0,
+          quantity: item.quantity ?? 1,
+        }));
       }
     } catch (error) {
       console.error("Could not read checkout session:", error);
