@@ -56,8 +56,20 @@ kill_timeout = "30s"
     # The one public value that is fixed by the app name itself. The Dockerfile
     # hard-fails without it (app/layout.tsx's `metadataBase` calls `siteUrl()`
     # at module scope), so pinning it here means a plain `fly deploy` can never
-    # trip that guard. Change it when a custom domain is attached.
-    NEXT_PUBLIC_SITE_URL = "https://bamstudioshop.com"
+    # trip that guard.
+    #
+    # This is the app's OWN hostname, not the domain the shop will eventually
+    # answer on. It was pinned to https://bamstudioshop.com before anything had
+    # ever been deployed — a domain still pointing at Porkbun's parking page. A
+    # manual `fly deploy` would have baked that in, and this value is Stripe's
+    # `success_url`: a customer would have paid and then been redirected to a
+    # "this domain is parked" page, charged, with no order number. CI overrides
+    # it with the GitHub Variable, so only a hand-run deploy was exposed.
+    #
+    # ⚠️ Change this in the SAME commit as the NEXT_PUBLIC_SITE_URL GitHub
+    # Variable when the custom domain is attached, or CI and a hand-run
+    # `fly deploy` will build two different shops. SETUP.md Step 5f.
+    NEXT_PUBLIC_SITE_URL = "https://bamstudio-shop.fly.dev"
 
     # The remaining seven are deliberately NOT pinned here. A placeholder would
     # not fail — it would build a perfectly successful image pointing at a
