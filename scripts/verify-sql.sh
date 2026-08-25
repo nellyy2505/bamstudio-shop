@@ -115,12 +115,20 @@ create schema if not exists auth;
 grant usage on schema auth to anon, authenticated, service_role;
 grant usage on schema public to anon, authenticated, service_role;
 
+-- Hosted Supabase does NOT put extensions in `public` — it puts them in a
+-- schema called `extensions`. Reproducing that here is the whole point: this
+-- shim used to install pgcrypto into `public`, where it sat on the default
+-- search_path and every SECURITY DEFINER function could see it. The harness
+-- printed 29/29 while 0001_init.sql could not be applied to a real Supabase
+-- project at all, because `next_order_number()` pins
+-- `search_path = public` and could not resolve `gen_random_bytes`.
+-- A green run has to mean the migration works on the database it ships to.
+create schema if not exists extensions;
+grant usage on schema extensions to anon, authenticated, service_role;
+
 -- gen_random_uuid() is core in 16, but gen_random_bytes() — used by
 -- next_order_number() for the anti-enumeration suffix — is not.
-create extension if not exists pgcrypto;
--- Hosted Supabase puts extensions in their own schema and some SQL written
--- against it is qualified `extensions.`; create it so such a reference resolves.
-create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
 
 -- auth.users stand-in. The migration references exactly two columns: `id`
 -- (FK target from profiles/reviews/addresses/favourites/orders) and

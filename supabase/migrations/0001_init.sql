@@ -161,11 +161,21 @@ create sequence if not exists public.order_number_seq start 1042;
 -- Order numbers are allocated on payment, not when a checkout opens, so
 -- abandoned sessions don't burn them. The random suffix stops anyone walking
 -- the sequence to look up other people's orders on the tracking page.
+-- `extensions` is on the search_path here and on no other function in this
+-- file, because this is the only one that calls into pgcrypto. Hosted Supabase
+-- installs pgcrypto into a schema called `extensions`, not into `public`, so
+-- with `search_path = public` alone the body below cannot resolve
+-- gen_random_bytes() and `create function` itself fails — this migration could
+-- not be applied to a real Supabase project. Qualifying the call as
+-- `extensions.gen_random_bytes` would work on Supabase and break anywhere
+-- pgcrypto lives elsewhere; naming both schemas works in both places.
+-- Keep the search_path pinned: a SECURITY DEFINER function that inherits the
+-- caller's search_path is how a caller gets to choose which function runs.
 create or replace function public.next_order_number()
 returns text
 language sql
 volatile
-security definer set search_path = public
+security definer set search_path = public, extensions
 as $$
   select 'BS-' || nextval('public.order_number_seq')::text || '-' ||
          upper(substr(encode(gen_random_bytes(3), 'hex'), 1, 4));
