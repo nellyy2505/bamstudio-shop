@@ -4,7 +4,54 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Alert, Button, Field, Icon, cx, inputClass } from "@/components/ui";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+
+/**
+ * Whether the browser holds the keys it needs to reach Supabase Auth.
+ *
+ * Defect this closes: with no Supabase env vars — the shop's state today, and
+ * a supported mode of this app — `createClient()` threw inside the submit
+ * handler. The rejection was unhandled, `setPending(false)` never ran and the
+ * button sat on "Creating account…" forever with no error ever reaching the
+ * customer. Same class as WORKLOG §0.1: a customer-facing claim ("Check your
+ * email to confirm") not gated on the capability behind it, plus a hang.
+ *
+ * `isSupabaseConfigured()` (lib/supabase/client.ts) rather than
+ * `isDatabaseConfigured()` (lib/queries.ts): the two booleans are identical,
+ * but lib/queries imports the *server* client and therefore `next/headers`,
+ * which a "use client" module may not pull in. This helper also lives beside
+ * the `createClient()` that throws and is literally the negation of that
+ * throw, so the gate cannot drift from the thing it guards.
+ *
+ * Hydration: it reads only `NEXT_PUBLIC_SUPABASE_URL` and
+ * `NEXT_PUBLIC_SUPABASE_ANON_KEY`, which Next inlines into the client bundle
+ * at build time, so the server render and the hydrated render reach the
+ * identical answer and the markup matches.
+ *
+ * This is not the public-mirror pattern lib/config.ts warns against (see the
+ * note where `SHOP.canSendEmail` used to be). That flag mirrored a server-only
+ * secret and the two could disagree. These two variables are not a mirror of
+ * anything: the anon key is public by design and the browser genuinely needs
+ * both to talk to Supabase at all, so this reads the browser's own capability
+ * directly — the one fact, in the one place, checked by the one helper.
+ */
+const CAN_SIGN_UP = isSupabaseConfigured();
+
+/**
+ * Shown when the shop has no accounts system behind it. Plain, in the shop's
+ * voice, and it never names an env var, prints an exception or blames the
+ * details the customer typed — none of that is theirs to fix.
+ */
+const UNAVAILABLE =
+  "Accounts aren't switched on yet — this shop isn't connected to its accounts system, so we can't create one for you. Nothing you type here would reach us. Have a browse in the meantime and try again later.";
+
+const OFFLINE =
+  "We couldn't reach the shop just now. Check your connection and try again.";
+
+/** Supabase raises this (status 0) when the request never got a response. */
+function isOffline(error: { name?: string; status?: number }): boolean {
+  return error.name === "AuthRetryableFetchError" || error.status === 0;
+}
 
 const AFTER_SIGNUP = "/account/orders";
 
@@ -88,7 +135,9 @@ export function SignupForm() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [marketing, setMarketing] = useState(true);
+  // Unticked by default: the privacy policy says marketing only goes to people
+  // who asked for it, and a pre-ticked box is not asking.
+  const [marketing, setMarketing] = useState(false);
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -98,17 +147,46 @@ export function SignupForm() {
 
   async function signUpWithGoogle() {
     setError(null);
+
+    // Defence in depth: this button is disabled while unconfigured, so the
+    // click should not be reachable — but if it arrives it must say something
+    // true rather than throw into a dead promise.
+    if (!CAN_SIGN_UP) {
+      setError(UNAVAILABLE);
+      return;
+    }
+
     setPending(true);
-    const supabase = createClient();
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(AFTER_SIGNUP)}`,
-      },
-    });
-    if (oauthError) {
-      setError(oauthError.message);
-      setPending(false);
+    // The only path that deliberately leaves the button busy is the one that
+    // is navigating away. Every other path — a returned error, a throw —
+    // hands the button back.
+    let leaving = false;
+    try {
+      const supabase = createClient();
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(AFTER_SIGNUP)}`,
+        },
+      });
+      if (oauthError) {
+        // Was `oauthError.message`: Supabase's own text is provider and
+        // configuration noise ("Failed to fetch"), not shop copy, and no
+        // address has been typed here for it to say anything about.
+        setError(
+          isOffline(oauthError)
+            ? OFFLINE
+            : "We couldn't start sign-up with Google. Please try again.",
+        );
+        return;
+      }
+      // signInWithOAuth redirects the tab itself once it resolves cleanly.
+      leaving = true;
+    } catch {
+      // The exception is never shown — no stack trace, no env-var name.
+      setError(CAN_SIGN_UP ? OFFLINE : UNAVAILABLE);
+    } finally {
+      if (!leaving) setPending(false);
     }
   }
 
@@ -116,57 +194,82 @@ export function SignupForm() {
     event.preventDefault();
     setError(null);
 
+    // See signUpWithGoogle: the fields below are disabled while unconfigured.
+    if (!CAN_SIGN_UP) {
+      setError(UNAVAILABLE);
+      return;
+    }
+
     if (password.length < 8) {
       setPasswordError("Use at least 8 characters.");
       return;
     }
     setPasswordError(undefined);
     setPending(true);
-
-    const supabase = createClient();
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-          marketing_opt_in: marketing,
+    let leaving = false;
+    try {
+      const supabase = createClient();
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            marketing_opt_in: marketing,
+          },
+          emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(AFTER_SIGNUP)}`,
         },
-        emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(AFTER_SIGNUP)}`,
-      },
-    });
+      });
 
-    if (signUpError) {
-      // Same screen as the success path below — see isAlreadyRegistered.
-      if (isAlreadyRegistered(signUpError.code, signUpError.message)) {
-        setConfirmSent(true);
-        setPending(false);
+      if (signUpError) {
+        // A request that never landed says nothing about the address typed,
+        // so it must not be dressed up as "check your details" — and it must
+        // not reach the confirmation screen either, because no mail was sent.
+        if (isOffline(signUpError)) {
+          setError(OFFLINE);
+          return;
+        }
+
+        // Same screen as the success path below — see isAlreadyRegistered.
+        if (isAlreadyRegistered(signUpError.code, signUpError.message)) {
+          setConfirmSent(true);
+          return;
+        }
+
+        const safe = signUpError.code
+          ? SAFE_SIGNUP_ERRORS[signUpError.code]
+          : undefined;
+        setError(
+          safe ??
+            "We couldn't create that account. Please check your details and try again.",
+        );
         return;
       }
 
-      const safe = signUpError.code
-        ? SAFE_SIGNUP_ERRORS[signUpError.code]
-        : undefined;
-      setError(
-        safe ??
-          "We couldn't create that account. Please check your details and try again.",
-      );
-      setPending(false);
-      return;
-    }
+      // No session means the project requires email confirmation first.
+      if (!data.session) {
+        setConfirmSent(true);
+        return;
+      }
 
-    // No session means the project requires email confirmation first.
-    if (!data.session) {
-      setConfirmSent(true);
-      setPending(false);
-      return;
+      router.push(AFTER_SIGNUP);
+      router.refresh();
+      leaving = true;
+    } catch {
+      setError(CAN_SIGN_UP ? OFFLINE : UNAVAILABLE);
+    } finally {
+      // Runs on every path, including the throw that used to leave the button
+      // stuck on "Creating account…" with no error ever reaching the customer.
+      if (!leaving) setPending(false);
     }
-
-    router.push(AFTER_SIGNUP);
-    router.refresh();
   }
 
+  // Only reachable once CAN_SIGN_UP is true — every path that sets
+  // confirmSent runs after a real Supabase signUp call. Supabase Auth's
+  // confirmation email genuinely sends once the project is connected, so this
+  // claim is true wherever it can be rendered at all; it is gated by
+  // construction rather than softened.
   if (confirmSent) {
     return (
       <div className="flex flex-col items-center gap-4 py-4 text-center">
@@ -195,6 +298,9 @@ export function SignupForm() {
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Not an error the customer caused, so it renders before they touch
+          anything rather than after a submit that cannot work. */}
+      {!CAN_SIGN_UP ? <Alert tone="error">{UNAVAILABLE}</Alert> : null}
       {error ? <Alert tone="error">{error}</Alert> : null}
 
       <Button
@@ -202,7 +308,7 @@ export function SignupForm() {
         variant="soft"
         full
         onClick={signUpWithGoogle}
-        disabled={pending}
+        disabled={pending || !CAN_SIGN_UP}
       >
         <GoogleMark />
         Sign up with Google
@@ -228,6 +334,7 @@ export function SignupForm() {
               placeholder="Mia"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
+              disabled={!CAN_SIGN_UP}
               className={inputClass}
             />
           </Field>
@@ -241,6 +348,7 @@ export function SignupForm() {
               placeholder="Nguyen"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
+              disabled={!CAN_SIGN_UP}
               className={inputClass}
             />
           </Field>
@@ -256,6 +364,7 @@ export function SignupForm() {
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={!CAN_SIGN_UP}
             className={inputClass}
           />
         </Field>
@@ -277,6 +386,7 @@ export function SignupForm() {
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={!CAN_SIGN_UP}
               className={inputClass}
             />
             <div className="mt-2 flex items-center gap-2">
@@ -311,12 +421,23 @@ export function SignupForm() {
             type="checkbox"
             checked={marketing}
             onChange={(e) => setMarketing(e.target.checked)}
+            disabled={!CAN_SIGN_UP}
             className="mt-0.5 h-4 w-4 rounded border-line2 accent-accent"
           />
-          Email me new drops and the occasional restock. No spam, promise.
+          {/* Nothing sends marketing email, so this records a preference rather
+              than starting a subscription. Saying otherwise would promise mail
+              that no code writes. */}
+          Count me in for news about new drops and restocks. There is no mailing
+          list yet, so nothing will be sent for now — you can change this any
+          time in your account settings.
         </label>
 
-        <Button type="submit" size="lg" full disabled={pending}>
+        <Button
+          type="submit"
+          size="lg"
+          full
+          disabled={pending || !CAN_SIGN_UP}
+        >
           {pending ? "Creating account…" : "Create account"}
         </Button>
 
