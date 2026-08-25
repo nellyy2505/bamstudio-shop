@@ -26,6 +26,21 @@ export const SHOP = {
    */
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "[HELLO@YOURDOMAIN]",
   hasSupportEmail: Boolean(process.env.NEXT_PUBLIC_SUPPORT_EMAIL),
+  /*
+   * There is deliberately no `canSendEmail` here any more.
+   *
+   * It used to read the public build flag `NEXT_PUBLIC_EMAIL_ENABLED` while
+   * every actual send checked the `RESEND_API_KEY` / `EMAIL_FROM` secrets via
+   * `isEmailConfigured()`. Two switches for one fact means they can disagree,
+   * and both disagreeing states shipped a lie: flag on with no secrets offered
+   * a contact form whose enquiries reached nobody, and secrets set with the
+   * flag off hid a working form while the legal pages denied sending mail the
+   * shop was in fact sending.
+   *
+   * The capability is now read once, on the server, from `isEmailConfigured()`
+   * (lib/email.ts) and handed to client components as a prop — see lib/contact.ts.
+   * Do not reintroduce a public mirror of a server fact.
+   */
   socials: {
     instagram: process.env.NEXT_PUBLIC_INSTAGRAM_URL || null,
     tiktok: process.env.NEXT_PUBLIC_TIKTOK_URL || null,
