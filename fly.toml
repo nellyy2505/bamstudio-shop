@@ -1,0 +1,152 @@
+# ---------------------------------------------------------------------------
+# Bam Studio shop — Fly.io app configuration.
+#
+# Schema checked against Fly's current docs, not written from memory:
+#   https://fly.io/docs/reference/configuration/
+#   https://fly.io/docs/launch/autostop-autostart/       (auto_stop_machines)
+#   https://fly.io/docs/blueprints/long-running-tasks/   (kill_timeout, after())
+#   https://fly.io/docs/reference/suspend-resume/        (what suspend does)
+#
+# No secrets live in this file. It is committed. Runtime secrets are set with
+# `fly secrets set` and arrive as real process env vars — which is the only
+# way the app can read them, because `output: "standalone"` does not load
+# .env.local or any other .env file.
+# ---------------------------------------------------------------------------
+
+app = "bamstudio-shop"
+primary_region = "syd"
+
+# Fly sends kill_signal to PID 1, waits kill_timeout, then SIGKILLs.
+#
+# PID 1 here is Next's standalone server.js, which registers its own SIGINT and
+# SIGTERM handlers (next/dist/server/lib/start-server.js) — verified in the
+# built tree — so it drains rather than being killed where it stands, and no
+# tini/dumb-init shim is needed in the Dockerfile.
+#
+# The default kill_timeout of 5s is too short for this app. The order
+# confirmation email is sent from an `after()` task (app/api/webhooks/stripe/
+# route.ts), which by definition runs after the response has already been
+# flushed — so at any instant there can be an outbound HTTPS request to Resend
+# in flight that no open inbound connection accounts for. 30s is a drain
+# window, not a "let the job finish" knob (Fly's words), but it is the
+# difference between that send completing and a customer being charged without
+# ever being told. Max permitted is 300s.
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[build]
+  # `next build` peaks at ~1.6 GB RSS. It cannot run on the 512 MB app VM and
+  # never does: `fly deploy` builds on Fly's remote builder (or CI builds and
+  # pushes an image). The machine only ever runs the finished server, ~150 MB.
+
+  [build.args]
+    # NEXT_PUBLIC_* values are inlined into the JS bundles by `next build`, so
+    # they must be present as BUILD ARGS. A Fly secret set afterwards is too
+    # late — the strings are already baked into the JavaScript.
+    #
+    # Nothing secret may be added here or passed as a build arg at all: build
+    # args are recorded in the image history and readable by anyone who can
+    # pull the image. SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY,
+    # STRIPE_WEBHOOK_SECRET, RESEND_API_KEY and EMAIL_FROM are runtime-only:
+    #
+    #   fly secrets set SUPABASE_SERVICE_ROLE_KEY=... STRIPE_SECRET_KEY=... \
+    #                   STRIPE_WEBHOOK_SECRET=... RESEND_API_KEY=... \
+    #                   EMAIL_FROM='Bam Studio <hello@yourdomain.com.au>'
+
+    # The one public value that is fixed by the app name itself. The Dockerfile
+    # hard-fails without it (app/layout.tsx's `metadataBase` calls `siteUrl()`
+    # at module scope), so pinning it here means a plain `fly deploy` can never
+    # trip that guard. Change it when a custom domain is attached.
+    NEXT_PUBLIC_SITE_URL = "https://bamstudioshop.com"
+
+    # The remaining seven are deliberately NOT pinned here. A placeholder would
+    # not fail — it would build a perfectly successful image pointing at a
+    # Supabase project that does not exist, and the shop would come up serving
+    # the bundled sample catalogue and looking fine. Silent-wrong is worse than
+    # loud-missing, so pass them at deploy time or from CI:
+    #
+    #   fly deploy \
+    #     --build-arg NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co \
+    #     --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key> \
+    #     --build-arg NEXT_PUBLIC_SUPPORT_EMAIL=hello@yourdomain.com.au \
+    #     --build-arg NEXT_PUBLIC_ABN=<abn> \
+    #     --build-arg NEXT_PUBLIC_GST_REGISTERED=false \
+    #     --build-arg NEXT_PUBLIC_INSTAGRAM_URL=<url> \
+    #     --build-arg NEXT_PUBLIC_TIKTOK_URL=<url>
+    #
+    # The anon key is not a secret — Next ships it to every browser — it is
+    # simply not knowable from inside this repo.
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  processes = ["app"]
+
+  # -------------------------------------------------------------------------
+  # DO NOT TURN AUTOSTOP ON TO SAVE MONEY.
+  #
+  # This is a correctness setting, not a cost preference. Two things this app
+  # depends on live only in the machine's memory:
+  #
+  #  1. The order-confirmation email. app/api/webhooks/stripe/route.ts hands
+  #     the send to `after()` from next/server, which runs the task AFTER the
+  #     response has been flushed to Stripe. Fly's proxy counts inbound
+  #     connections; it cannot see work running inside the machine. Fly
+  #     documents this exact trap: "Background work running inside the machine
+  #     ... doesn't count", and "A few minutes later, it stops the machine. The
+  #     report dies half-finished." Here that report is the only notification
+  #     a paying customer gets.
+  #
+  #  2. lib/rate-limit.ts is a plain in-process Map. It is currently the ONLY
+  #     protection on POST /api/track, which hands back a customer's postal
+  #     address to anyone holding an order number and an email. A machine that
+  #     stops resets every bucket, so an attacker who can provoke an idle stop
+  #     wins their full retry budget back, repeatedly, for free.
+  #
+  # "suspend" is not a safe middle ground. It does snapshot RAM, so the rate
+  # limiter's Map would survive it — but Fly is explicit that "on resume, the
+  # machine thinks its network connections are still live. External systems
+  # ... may disagree", with ECONNRESET the usual outcome. That is precisely
+  # the in-flight Resend request from (1). Suspend keeps the state and breaks
+  # the socket, which is the half that mattered.
+  #
+  # If this app ever needs to scale to zero, both problems have to be fixed
+  # first: move the email send onto a durable queue, and move the rate limiter
+  # into shared storage (Redis/Upstash — lib/rate-limit.ts says the call site
+  # does not change). Until then, one machine stays up.
+  # -------------------------------------------------------------------------
+  auto_stop_machines = "off"
+  # Fly's docs recommend keeping autostop and autostart both enabled or both
+  # disabled, so machines cannot end up never starting or never stopping.
+  auto_start_machines = false
+  # Strictly speaking this is inert while autostop is "off" — Fly defines it as
+  # "the number of Machines to keep running ... when auto_stop_machines is
+  # 'stop' or 'suspend'". It is kept as a second lock: if someone does flip
+  # autostop on despite the wall of text above, this still holds one machine
+  # up in syd. Neither line survives a careless edit on its own.
+  min_machines_running = 1
+
+  # Health check hits /api/health, NOT "/".
+  #
+  # The root layout (app/layout.tsx) awaits getUser() on every single request
+  # to decide whether the header says "Sign in" or "Account". Pointing the
+  # check at "/" would mean a full React render plus a Supabase auth round trip
+  # every interval, forever, on the one 512 MB machine — self-inflicted load on
+  # the app and on Supabase's rate limits, in exchange for no extra signal.
+  # /api/health is a cheap liveness endpoint that touches nothing.
+  [[http_service.checks]]
+    path = "/api/health"
+    method = "GET"
+    protocol = "http"        # TLS terminates at Fly's proxy; internal is plain.
+    interval = "15s"
+    timeout = "5s"
+    # Cold start is a couple of seconds (the standalone server reports "Ready"
+    # almost immediately); 10s is slack, not a mask for a slow boot.
+    grace_period = "10s"
+
+[[vm]]
+  # 512 MB is the measured requirement: the running server sits at ~150 MB RSS.
+  # It is NOT enough to build in — see [build] above.
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  processes = ["app"]

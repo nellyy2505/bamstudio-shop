@@ -8,7 +8,8 @@ build-your-own name charm, printed to order in Sydney.
 - **Database & accounts:** Supabase (Postgres + Auth, Google + email)
 - **Payments:** Stripe Checkout + webhook
 - **Transactional email:** Resend, over plain `fetch` (no client library)
-- **Hosting:** Vercel
+- **Hosting:** Fly.io — one always-on 512 MB machine in `syd`, running a Docker
+  image built from `output: "standalone"`. See *Deployment shape* below
 
 ## Run it locally
 
@@ -17,6 +18,11 @@ npm install
 cp .env.example .env.local     # fill in the keys — see SETUP.md
 npm run dev                    # http://localhost:3000
 ```
+
+`.env.local` is **local development only**. The deployed shop reads no `.env`
+file at all — `output: "standalone"` does not load them — so production config
+arrives as real environment variables: build args for the `NEXT_PUBLIC_*` values
+and Fly secrets for the rest. *Deployment shape* below has the split.
 
 The app **runs with no database at all**: when the Supabase variables are
 missing it serves a sample catalogue from `lib/fallback-data.ts`, so you can
@@ -52,6 +58,9 @@ app/
     checkout/                 creates the Stripe Checkout Session
     webhooks/stripe/          records paid orders (service role), sends the
                               order-confirmation email via after()
+    health/                   dependency-free liveness endpoint for Fly's
+                              health check — touches no Supabase, no Stripe,
+                              no network
     search/suggest/           header typeahead
     track/ contact/ newsletter/
 components/
@@ -81,7 +90,139 @@ scripts/
   verify-sql.sh               applies the schema + seed + verify.sql to a
                               local Postgres 16 and checks every assertion
   replay-checkout.mjs         replays the real CartView payloads at /api/checkout
+proxy.ts                      Next 16's renamed middleware: refreshes the
+                              Supabase auth cookie, guards /account, and
+                              excludes api/webhooks and api/health
+Dockerfile                    deps → build → runtime; node:22-slim
+fly.toml                      app, region, machine size, health check
+.dockerignore                 what never enters the build context
+.github/workflows/deploy.yml  push to master → flyctl deploy --remote-only
 ```
+
+## Deployment shape
+
+The shop runs as a Docker container on **one always-on Fly.io machine in `syd`**
+(`shared-cpu-1x`, 512 MB). It moved off Vercel because Vercel's Hobby plan
+forbids commercial use — its own example being "any method of requesting or
+processing payment from visitors of the site" — and Pro is US$20/developer/month;
+Fly is about A$6/month, is the only managed option with a Sydney region, and
+keeps a long-lived Node process, which two things in this app require (see
+*Always-on is a correctness constraint* below). `SETUP.md` Step 5 is the
+owner-facing runbook; this section is the reasoning.
+
+**Build and run are separated by memory.** `next build` peaks at about **1.6 GB
+RSS**, which does not fit on the 512 MB app machine and is not reliable on 1 GB
+either. The running server is about **150 MB RSS**. So builds happen on Fly's
+remote builder — `fly deploy --remote-only`, which is what
+`.github/workflows/deploy.yml` runs — and the machine only ever receives a
+finished image. `next.config.ts` sets `output: "standalone"`, which traces what
+the server actually imports: about **72 MB of deployable tree (~24 MB gzipped)**
+against **629 MB of `node_modules`**.
+
+The `Dockerfile` is three stages — `deps` (`npm ci`) → `build` (`next build`) →
+`runtime` (`node server.js`) — on `node:22-slim`. Points worth not rediscovering,
+all of them recorded in comments at the lines themselves:
+
+- `.next/static` and `public/` are **not** traced by standalone, because they are
+  served rather than imported. The runtime stage copies them beside `server.js`
+  by hand. Drop either and pages still return 200 while every asset 404s.
+- The app tree is **root-owned and the process runs as `node`**, so a code
+  execution bug cannot rewrite `server.js`. Only `.next/cache` is writable.
+- `HOSTNAME=0.0.0.0`, port 8080. Fly's proxy reaches the machine over its
+  private 6PN address, so the standalone server's default localhost bind would
+  make every health check fail with connection refused.
+- The build stage **needs outbound network**: `next/font/google` downloads
+  Poppins and Nunito Sans and self-hosts them.
+- There is no `HEALTHCHECK` instruction — Fly Machines do not read Docker's
+  health status. The check that matters is `[[http_service.checks]]` in
+  `fly.toml`, hitting `/api/health` every 15s.
+
+### Configuration reaches the container two different ways
+
+The standalone server **does not read `.env.local`, or any `.env` file**. That is
+the root of the only real deployment gotcha here:
+
+| Kind | Route in | Changing it |
+|---|---|---|
+| Every `NEXT_PUBLIC_*` value | Docker **build arg**, inlined by `next build` | **Rebuild and redeploy** |
+| `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` | **Fly secret**, read at request time | Restart |
+
+Never put a secret in a build arg — build args are recorded in image history.
+
+**`NEXT_PUBLIC_SITE_URL` is worth its own paragraph, because it does not behave
+the way "environment variable" suggests.** Turbopack **constant-folds** it into
+the server bundle: in the built tree `siteUrl()` compiles down to
+`function(){ return "https://…".replace(/\/$/,"") }` inside
+`.next/server/chunks/lib_stripe_ts_*.js`, with the `process.env` read and the
+throw branch both gone. Measured at runtime: booting the built server with a
+*different* value still emits the value it was built with, and booting it with
+the variable *removed* does not throw — it serves the baked one. So **changing
+the shop's domain is a rebuild and redeploy, not an env change and a restart**,
+and setting it as a Fly secret does nothing at all. The `siteUrl()` throw in
+`lib/stripe.ts` therefore fires **at build time only** (via `metadataBase` in
+`app/layout.tsx`); that, plus the `test -n` guard in the Dockerfile, is what
+stops a bad image existing in the first place. The value is **not** in
+`.next/static`, so nothing about this leaks to the browser. For contrast,
+`getStripe()` in the same file compiles with its `process.env.STRIPE_SECRET_KEY`
+read intact — a secret really is read at runtime.
+
+### Always-on is a correctness constraint, not a cost setting
+
+`fly.toml` sets `auto_stop_machines = "off"`, `auto_start_machines = false` and
+`min_machines_running = 1`. **Do not "optimise" these.** Two things live only in
+the machine's memory:
+
+1. **The order-confirmation email** is sent from `after()` in
+   `app/api/webhooks/stripe/route.ts`, which by definition runs *after* the
+   response has been flushed to Stripe. Fly's proxy counts inbound connections
+   and cannot see work running inside the machine, so a machine that stops
+   drops a send that nothing is holding a connection open for — a charged
+   customer who is never told.
+2. **`lib/rate-limit.ts` is an in-process `Map`**, and it is the only protection
+   on `POST /api/track`. A stop resets every bucket, so anyone who can provoke
+   an idle stop wins their retry budget back for free.
+
+`suspend` is not a middle ground: it snapshots RAM, so the limiter would
+survive, but the machine resumes believing sockets are still live that the other
+end has abandoned — precisely the in-flight Resend request from (1). It keeps
+the state and breaks the socket, which is the half that mattered.
+
+(Strictly, `min_machines_running` is inert while autostop is `"off"` — Fly
+defines it only for `"stop"`/`"suspend"`. It is kept as a second lock in case
+someone flips autostop on anyway.)
+
+`kill_signal = "SIGTERM"` with `kill_timeout = "30s"` is the other half of the
+same concern: the default 5s drain window is too short for an in-flight Resend
+request that no inbound connection accounts for. Next's standalone `server.js`
+registers its own SIGTERM handler, so no `tini`/`dumb-init` shim is needed.
+
+### The health endpoint, and why `proxy.ts` excludes it
+
+`app/api/health/route.ts` answers exactly one question — is this process alive
+and serving HTTP — and touches no Supabase, no Stripe, no network and no
+filesystem. That is deliberate on two counts: Fly polls it every 15 seconds
+forever, so anything hung off it is permanent background load; and a check that
+fails when a *dependency* is down is a readiness check in a liveness check's
+clothes, which would have Fly restart a healthy machine because Supabase
+blinked. The shop is built to browse on sample data with no database at all, so
+"Supabase is down" must not read as "this container is dead".
+
+`proxy.ts`'s matcher excludes `api/health` alongside `api/webhooks`, because
+every matched request runs `supabase.auth.getUser()` — a network round trip.
+Leaving the health path matched would spend Supabase free-tier request budget
+continuously, on a request that carries no cookies and can never be signed in.
+(`api/webhooks` is excluded for a different reason: Stripe's signature is
+computed over the exact bytes that arrived, so that body must stay untouched.)
+
+### Deploying
+
+Push to `master`. `.github/workflows/deploy.yml` runs `flyctl deploy
+--remote-only`, passing each `NEXT_PUBLIC_*` value as a `--build-arg` from a
+GitHub Actions Secret or Variable; it also checks the required ones by name and
+stops with a readable message before building anything. `workflow_dispatch` lets
+you deploy from the Actions tab without pushing. The app name and region come
+from `fly.toml`, so there is one place to change them. The exact list of GitHub
+Secrets and Variables is in `SETUP.md` Step 5d.
 
 ## The catalogue comes from your spreadsheet
 
@@ -316,7 +457,16 @@ npx tsc --noEmit # typecheck
 
 ./scripts/verify-sql.sh          # schema + seed + assertions on local Postgres 16
 node scripts/replay-checkout.mjs # replay the real client baskets at /api/checkout
+
+fly status -a bamstudio-shop     # is the machine up, and where
+fly logs -a bamstudio-shop       # what the server is saying
+fly secrets list -a bamstudio-shop   # names only, never values
 ```
+
+Deploys are automatic on push to `master`. To run one by hand you must pass
+every `NEXT_PUBLIC_*` value as a `--build-arg` — they are not read from
+`.env.local` — so prefer the workflow; `SETUP.md` Step 5d has the full command
+for the cases where you cannot.
 
 Neither script is optional after a change to checkout or the schema, and
 neither reads the way you expect: in the checkout replay **HTTP 502 is the
@@ -327,9 +477,23 @@ fails), and its last case is a negative control that must be **rejected with
 
 ## Known limitation worth reading before launch
 
-`lib/rate-limit.ts` is in-memory and per-instance, and `clientKey()` trusts
-`x-forwarded-for`. It is now the **only** thing in front of `/api/track`, which
-returns a customer's postal address for an order number plus the matching email
-— and order numbers are a sequence plus four hex characters. Move it to Vercel
-KV or Upstash before launch; the call sites do not change. `WORKLOG.md` §6 has
-the rest of the open list.
+`lib/rate-limit.ts` is in-memory and per-process. It is now the **only** thing
+in front of `/api/track`, which returns a customer's postal address for an order
+number plus the matching email — and order numbers are a sequence plus four hex
+characters. Move it to Upstash/Redis before launch; the call sites do not
+change. `WORKLOG.md` §6 has the rest of the open list.
+
+**What is no longer true of it:** `clientKey()` used to take the *first*
+`x-forwarded-for` value. That was safe on Vercel, whose proxy overwrites the
+header, and unsafe on Fly, whose proxy **appends** to whatever the caller sent —
+so the first value was simply a string the client chose, and rotating it bought
+unlimited attempts against the endpoint that hands back a postal address. It now
+prefers **`Fly-Client-IP`**, gated on `FLY_APP_NAME` (set by the Machines
+runtime, never by a request) so the header cannot be forged off-Fly, and falls
+back to the **last** `x-forwarded-for` hop — the one value the caller could not
+write — for hosts that are not Fly. Per Fly's docs the last hop *on Fly* is the
+app's own shared address, identical for every caller, which is why
+`Fly-Client-IP` is preferred there rather than XFF. So the limiter now reads the
+right identity; it is still in one process's memory, and that is the part still
+outstanding. Putting another proxy in front of Fly (Cloudflare, say) would
+collapse every visitor into one bucket and means revisiting the function.

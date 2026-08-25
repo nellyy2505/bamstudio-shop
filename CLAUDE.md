@@ -14,7 +14,14 @@ writing code — `01-app/02-guides/upgrading/version-16.md` covers both changes.
 The storefront for Bam Studio, a **pre-revenue Australian sole trader** selling
 3D-printed fidget clickers, charms and a build-your-own name charm. Next.js 16
 (App Router, React 19, TypeScript) · Tailwind v4 · Supabase (Postgres + Auth) ·
-Stripe Checkout · Vercel. All money is **integer cents (AUD)**.
+Stripe Checkout · **Fly.io** (Docker, one always-on 512 MB machine in `syd`).
+All money is **integer cents (AUD)**.
+
+The hosting moved off Vercel to Fly.io — Vercel's Hobby plan forbids commercial
+use and Pro is US$20/dev/month, while Fly is ~A$6/month, has a Sydney region and
+keeps a long-lived Node process this app depends on. **Anything you were about
+to assume from a Vercel-shaped mental model is probably wrong here**; the
+deployment section below is the short version and `README.md` has the reasoning.
 
 `WORKLOG.md` is the source of truth for project state: what was built, six
 rounds of review findings, what is deliberately still open, and — in **§0** —
@@ -350,19 +357,35 @@ Don't send it from anywhere else.
 respects RLS; `createAdminClient()` uses the service-role key and bypasses RLS
 entirely. The admin client belongs only in trusted server paths that a request
 body cannot steer. `proxy.ts` refreshes the auth cookie on every request and
-guards `/account` — it deliberately skips `api/webhooks`, which must receive an
-untouched raw body for Stripe's signature check.
+guards `/account` — it deliberately skips **`api/webhooks`**, which must receive
+an untouched raw body for Stripe's signature check, and **`api/health`**,
+because every matched request runs `supabase.auth.getUser()` and Fly polls that
+endpoint every 15 seconds forever. The matcher is a single negative lookahead of
+prefixes with no leading slash; get one wrong and nothing errors — the exclusion
+silently widens and the `/account` guard quietly stops guarding. After any edit,
+re-check `/account`, `/account/orders`, `/api/health` and `/api/webhooks/stripe`
+against the pattern.
 
-**Rate limiting** (`lib/rate-limit.ts`) is in-memory and per-instance — a speed
-bump, not a guarantee, and `clientKey()` trusts `x-forwarded-for`. It used to
-be decorative in front of `/api/track` because `lookup_order` was granted to
-`anon` and could be called straight over PostgREST with the public key,
-bypassing every route-level throttle. That grant is now `service_role` only, so
-**the throttle is the only thing left in front of a customer's postal
-address** — order numbers are a sequence plus four hex characters. It should
-move to Vercel KV or Upstash before launch; the call sites don't change. The
-general rule survives the fix: never let this be the only thing protecting
-data, and never grant a data-returning Postgres function to `anon`.
+**Rate limiting** (`lib/rate-limit.ts`) is in-memory and per-process — a speed
+bump, not a guarantee. It used to be decorative in front of `/api/track` because
+`lookup_order` was granted to `anon` and could be called straight over PostgREST
+with the public key, bypassing every route-level throttle. That grant is now
+`service_role` only, so **the throttle is the only thing left in front of a
+customer's postal address** — order numbers are a sequence plus four hex
+characters. It should move to Upstash/Redis before launch; the call sites don't
+change. The general rule survives the fix: never let this be the only thing
+protecting data, and never grant a data-returning Postgres function to `anon`.
+
+**`clientKey()` no longer reads the first `x-forwarded-for` value — do not put
+that back.** Vercel's proxy overwrote the header; **Fly's proxy appends to it**,
+so the first value was whatever the caller sent, and rotating it bought
+unlimited attempts against the endpoint that returns a postal address. It now
+prefers `Fly-Client-IP`, gated on `FLY_APP_NAME` (set by the Machines runtime,
+never by a request, so the header cannot be believed off-Fly), and falls back to
+the **last** XFF hop — the one value a caller cannot write — for non-Fly hosts.
+On Fly the last XFF hop is the app's own shared address, the same string for
+every caller, which is why `Fly-Client-IP` is preferred there. The function's
+own comment records the caveats; read it before changing the header logic.
 
 **Guest order visibility.** RLS on `orders` is `auth.uid() = user_id`, so a
 guest can read nothing — which is why `/order/confirmed` goes through
@@ -379,6 +402,83 @@ until someone widens the route too.
 `.origin`. Prefix checks like `startsWith("/")` are not sufficient — the URL
 parser strips tab/CR/LF *after* such a check, so `/<TAB>//evil.com` reads as
 protocol-relative by the time a browser sees it.
+
+## Deployment — constraints a code change can break
+
+Four committed files describe the deployment: `Dockerfile`, `fly.toml`,
+`.dockerignore`, `.github/workflows/deploy.yml`. Each carries its reasoning in
+comments at the line it applies to. Read the file before changing it; what
+follows is what a *code* change has to respect.
+
+**Build and run are separated by memory.** `next build` peaks at ~1.6 GB RSS —
+it cannot build on the 512 MB app machine, and not reliably on 1 GB either. The
+running server is ~150 MB. Builds run on Fly's remote builder
+(`fly deploy --remote-only`, which CI uses); the machine only runs the finished
+server. `output: "standalone"` (in `next.config.ts`) gives ~72 MB of deployable
+tree, ~24 MB gzipped, against 629 MB of `node_modules`. A dependency that
+inflates the traced tree, or a build step that needs more memory, is a
+deployment problem before it is a performance one. The build stage also needs
+outbound network — `next/font/google` fetches Poppins and Nunito Sans.
+
+**The standalone server reads no `.env` file.** `.env.local` is local
+development only. Config arrives as real env vars, two ways:
+
+- **Build args** — every `NEXT_PUBLIC_*`. Inlined by `next build`; changing one
+  needs a **rebuild**, never a restart.
+- **Fly secrets** — `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`,
+  `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`. Read per request.
+
+**Never move a secret into a build arg** — build args are recorded in image
+history. And never advise the owner to set a `NEXT_PUBLIC_*` value as a Fly
+secret: it does nothing.
+
+**`NEXT_PUBLIC_SITE_URL` is constant-folded, and this is measured, not assumed.**
+Turbopack inlines it into the server bundle: in the built tree `siteUrl()`
+compiles to `function(){ return "https://…".replace(/\/$/,"") }` inside
+`.next/server/chunks/lib_stripe_ts_*.js`, with the `process.env` read and the
+throw branch both gone. Booting the built server with a different value emits
+the value it was built with; booting it with the variable removed does not throw.
+Consequences to hold on to:
+
+- **Changing the shop's domain is a rebuild and redeploy.** Not an env change
+  and a restart.
+- The `siteUrl()` throw fires **at build time only** (via `metadataBase` in
+  `app/layout.tsx`). That, plus the Dockerfile's `test -n` guard, is what keeps
+  a bad image from existing. **Keep both** — the guard fails in a second with a
+  message naming the fix, the throw is the actual protection. The Dockerfile
+  comment explains why neither is redundant.
+- The value is **not** in `.next/static`, so nothing leaks to the browser. Do
+  not call `siteUrl()` from a client component.
+- Contrast: `getStripe()` in the same file keeps its `process.env` read in the
+  compiled output. Secrets genuinely are runtime reads.
+- The `NODE_ENV !== "development"` guard in `siteUrl()` must never be rewritten
+  as `=== "production"`; Turbopack was measured folding exactly that comparison
+  in this repo.
+
+**`fly.toml`'s always-on settings are correctness, not cost.**
+`auto_stop_machines = "off"`, `auto_start_machines = false`,
+`min_machines_running = 1`. The order-confirmation email runs in `after()`,
+i.e. after the response is flushed, and the rate limiter is an in-process `Map`.
+A machine that stops drops both; `suspend` keeps the memory but resumes with
+dead sockets, which breaks the in-flight Resend request specifically. **If you
+ever make the app scale to zero, both have to be fixed first** — a durable queue
+for the email, shared storage for the limiter. `kill_timeout = "30s"` is the
+same concern's drain window. (`min_machines_running` is strictly inert while
+autostop is off; it is a second lock, not a duplicate.)
+
+**`app/api/health/route.ts` must stay dependency-free.** No Supabase, no Stripe,
+no network, no filesystem. Fly polls it every 15s for the life of the machine,
+and a check that fails when a *dependency* fails is a readiness check wearing a
+liveness check's clothes — Fly would restart a healthy machine because Supabase
+blinked, which restarting cannot fix. The shop is designed to browse with no
+database at all, so "Supabase is down" must not read as "this container is
+dead". A dependency probe, if ever wanted, belongs at its own path, polled far
+less often, wired to alerting rather than to Fly's restart policy.
+
+**One stale reference you cannot fix from a docs pass:** `getStripe()` in
+`lib/stripe.ts` still throws `"STRIPE_SECRET_KEY is not set. Add it in
+.env.local (and in Vercel)."` The advice is wrong now — deployed, it is a Fly
+secret. Fix the string next time you are editing that file for another reason.
 
 ## Conventions
 

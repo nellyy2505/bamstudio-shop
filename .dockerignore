@@ -1,0 +1,46 @@
+# What must never enter the build context. Two reasons for anything here:
+# it would leak, or it would be copied only to be thrown away.
+
+# Secrets. `.env.local` holds live keys and, since standalone does not read
+# .env files anyway, shipping it would be pure risk for zero benefit — every
+# runtime value arrives as a real process env var from a Fly secret.
+.env
+.env.*
+
+# No `!.env.example` exemption. It was here so the template travelled with the
+# context, but nothing in the build reads it — Next loads .env, .env.local and
+# .env.<NODE_ENV>, never .env.example — so its only effect was to punch a hole
+# in the `.env.*` rule and leave a file named like a secret sitting in an image
+# layer, one careless `COPY` away from the runtime stage. It stays in git,
+# which is where a template belongs. Verified: the build succeeds without it.
+
+# Installed and built locally on a developer's machine, with that machine's
+# libc and that machine's env baked in. The image builds both itself.
+node_modules
+.next
+out
+build
+coverage
+
+.git
+.gitignore
+.vercel
+*.pem
+*.tsbuildinfo
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Deploy definitions describe the image; they are not part of it.
+Dockerfile
+.dockerignore
+fly.toml
+.github
+
+# Docs, database migrations and one-off scripts. None of them are imported by
+# anything `next build` compiles, so they would only pad the context.
+*.md
+supabase
+scripts

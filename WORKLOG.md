@@ -3,8 +3,9 @@
 Everything a new session needs to pick this up: what was built, what was found
 wrong and fixed, what is deliberately still open, and how to verify any of it.
 
-Last updated: 25 August 2026. Branch: `master`; the §0 remediation is in
-the working tree, not yet committed — see §7.
+Last updated: 25 August 2026. Branch: `master`; the §0 remediation **and the
+round-8 move from Vercel to Fly.io** are both in the working tree, not yet
+committed — see §7.
 
 ---
 
@@ -37,9 +38,11 @@ the status column literally rather than the number of ticks.
 | 10 | **Closed** | "Free shipping" was stated unqualified but only ever applied to standard post. Qualified everywhere, and the cart now derives the claim from `shippingCost()` for the **selected** method, so it can no longer say "Free shipping unlocked" while Express is selected and charged $14.50 |
 
 Lower-severity items from round 5 (uncapped "Only N ready to ship", no quantity
-cap in the cart, empty `next.config.ts` with no CSP, inert `revalidate`, the
-recovery cookie keyed on `next` rather than the flow) are still open and still
-not launch-blocking.
+cap in the cart, **no CSP**, inert `revalidate`, the recovery cookie keyed on
+`next` rather than the flow) are still open and still not launch-blocking. That
+list used to say "empty `next.config.ts`" — it is no longer empty, it sets
+`output: "standalone"` for the Fly image (§5 round 8), but it still declares no
+security headers.
 
 ### What is verified by execution, and what is only verified by reasoning
 
@@ -87,8 +90,12 @@ green check is least able to tell you.
   silently degrades to the name fallback** — which is the ambiguous path it
   exists to replace. Check it with the first real test order.
 - Real Resend delivery, and whether `EMAIL_FROM`'s domain is verified.
-- `after()`'s behaviour on Vercel specifically — whether the task reliably runs
-  before the instance freezes.
+- **`after()`'s behaviour on the deployed Fly machine** — whether the queued
+  confirmation email reliably completes. The hosting move (round 8) changed the
+  shape of this risk rather than removing it: there is no longer a serverless
+  instance that freezes, but a machine that stopped or suspended would drop the
+  send in exactly the same way, which is why `fly.toml` pins the machine on. The
+  first real order is what tests it.
 - Grants on a **hosted** Supabase project. The migration is the only thing that
   has been tested; a project where someone has since granted something in the
   dashboard is outside what `verify.sql` was run against.
@@ -102,7 +109,9 @@ The online shop for Bam Studio, a pre-revenue Australian sole trader selling
 and costing live in `../Documents/3D_Planner.xlsx`.
 
 **Stack:** Next.js 16 (App Router, React 19, TypeScript), Tailwind v4,
-Supabase (Postgres + Auth incl. Google), Stripe Checkout, deployed to Vercel.
+Supabase (Postgres + Auth incl. Google), Stripe Checkout, **deployed as a Docker
+image on Fly.io** — one always-on 512 MB machine in `syd`, ~A$6/month. It was on
+Vercel until round 8; §5 round 8 records why it moved and what was measured.
 All money is integer cents (AUD).
 
 **Design source:** `../shop-design/v2/` — the 27 approved screens as
@@ -179,6 +188,15 @@ itemised confirmation has no dependency on the studio mailbox.
 **`formsReachStudio` additionally needs `NEXT_PUBLIC_SUPPORT_EMAIL`**, because
 the contact form and the newsletter box deliver *by emailing* it. Anding the
 two into one test is the round-7 defect.
+
+**Deployment is a Docker image on one always-on Fly machine**, built on Fly's
+remote builder because `next build` needs ~1.6 GB and the machine has 512 MB.
+`output: "standalone"` means the server **reads no `.env` file**: every
+`NEXT_PUBLIC_*` value is a build arg baked into the bundles (rebuild to change),
+everything secret is a Fly secret read per request (restart to change).
+`fly.toml`'s always-on settings are a correctness constraint, not a cost
+setting. Round 8 in §5 has the numbers and the reasoning; `README.md` has the
+architecture and `SETUP.md` the runbook.
 
 **Nothing declares `export const dynamic`** except `force-dynamic` on the
 Stripe webhook route, and that is for the raw body. The claim-making pages are
@@ -350,11 +368,14 @@ regressions.
 
 ## 5. Review history
 
-Seven rounds. Each was an independent full-codebase pass, then fixes, then
-re-verification. Round 6 is the remediation of §0 and the adversarial pass over
-those fixes; **round 7 is the adversarial pass over round 6, and it found that
-the §0.1 email fix had reproduced the defect class it was closing.** If you
-read only one, read 7 — its closing paragraph is the design rule.
+Seven review rounds, then a hosting migration. Rounds 1–7 were each an
+independent full-codebase pass, then fixes, then re-verification. Round 6 is the
+remediation of §0 and the adversarial pass over those fixes; **round 7 is the
+adversarial pass over round 6, and it found that the §0.1 email fix had
+reproduced the defect class it was closing.** If you read only one, read 7 — its
+closing paragraph is the design rule. **Round 8 is not a review**: it is the
+move from Vercel to Fly.io, recorded here because three of its findings are
+constraints on future code.
 
 ### Round 1 — first full review
 
@@ -574,6 +595,120 @@ capability. A claim and the capability behind it have to be the same
 expression, or nothing keeps them true together. That is the design rule; the
 rest of this section is its evidence.
 
+### Round 8 — the hosting migration: Vercel → Fly.io
+
+Not a review round. A move, forced by a licence term and then measured rather
+than assumed. It is recorded here because three of its findings are constraints
+on future code, not deployment trivia.
+
+**Why it moved.** Vercel's Hobby plan forbids commercial use, and its own
+example of commercial usage is "any method of requesting or processing payment
+from visitors of the site" — which is the entire purpose of this repo. The
+compliant option there is Pro at US$20/developer/month. Fly.io in the `syd`
+region on a 512 MB machine is about **A$6/month**, is the only managed option
+with a **Sydney** region, and keeps a **long-lived Node process** — which this
+app needs for two reasons that are both in this log already: the confirmation
+email is sent from `after()`, and the rate limiter is an in-process `Map`.
+
+**New and changed files:** `Dockerfile`, `fly.toml`, `.dockerignore`,
+`.github/workflows/deploy.yml`, `app/api/health/route.ts` are new;
+`next.config.ts`, `lib/stripe.ts`, `lib/rate-limit.ts` and `proxy.ts` changed.
+
+**The measured numbers.**
+
+| What | Measured |
+|---|---|
+| `next build` peak | **~1.6 GB RSS** — cannot build on the 512 MB app VM, and not reliably on 1 GB |
+| Running server | **~150 MB RSS** — comfortable in 512 MB |
+| Standalone tree | **~72 MB on disk, ~24 MB gzipped** (`tar \| gzip` measured 23.9 MB) |
+| `node_modules` | **629 MB** — which is what `output: "standalone"` exists to avoid shipping |
+
+So builds run on Fly's remote builder (`fly deploy --remote-only`, which the CI
+workflow uses) and the machine only ever runs the finished server.
+
+**`NEXT_PUBLIC_SITE_URL` does not behave the way its name suggests — and this
+contradicts an earlier note in this repo.** Measured, three ways:
+
+- Turbopack **constant-folds** it into the server bundle. In the built tree
+  `siteUrl()` compiles to `function(){ return "https://…".replace(/\/$/,"") }`
+  inside `.next/server/chunks/lib_stripe_ts_*.js` — the `process.env` read and
+  the throw branch are both gone from the compiled output.
+- At runtime the variable is **ignored**. The built server booted with a
+  *different* value still emitted the value it was built with; booted with the
+  variable *removed* it did **not** throw — it served the baked one.
+- It is **not** in `.next/static`, so nothing leaks to the browser.
+
+The consequence is the one to carry forward: **changing the shop's domain
+requires a rebuild and redeploy, not an env change and a restart.** Setting it
+as a Fly secret does nothing. The `siteUrl()` throw therefore fires **at build
+time only** (`metadataBase` calls it at module scope); that, plus the
+Dockerfile's `test -n` guard, is what prevents a bad image existing at all.
+
+**Two security-relevant changes.**
+
+1. **`clientKey()` read the wrong IP, and on Fly that was exploitable.** It took
+   the **first** `x-forwarded-for` value. Vercel's proxy *overwrites* that
+   header; **Fly's proxy appends to it**, so on Fly the first value was just a
+   string the caller chose — send one, get a bucket; send another, get another.
+   Unlimited attempts, dressed as a rate limit. That matters because this
+   limiter is the only protection on `/api/track`, which returns a customer's
+   postal address to anyone holding an order number and the matching email.
+   It now prefers **`Fly-Client-IP`**, gated on `FLY_APP_NAME` (set by the
+   Machines runtime, never by a request, so the header cannot be believed
+   off-Fly), and falls back to the **last** XFF hop — the only value a caller
+   cannot write. Per Fly's docs the last XFF hop *on Fly* is the app's own
+   shared address, identical for every caller, which is why `Fly-Client-IP` is
+   used there rather than XFF. **This fixes which value identifies the caller.
+   It does not make the limiter durable** — see §6.
+2. **`/api/health` is new, and `proxy.ts` excludes it.** The endpoint is
+   deliberately dependency-free: no Supabase, no Stripe, no network, no
+   filesystem. `fly.toml` health-checks it every 15s for the life of the
+   machine, so anything hung off it would be permanent background load — and a
+   check that fails when a *dependency* fails would have Fly restart a healthy
+   machine because Supabase blinked, which restarting cannot fix. The matcher in
+   `proxy.ts` now excludes `api/health` alongside `api/webhooks`, because every
+   matched request runs `supabase.auth.getUser()`; leaving it matched would
+   spend Supabase free-tier request budget continuously on a request that
+   carries no cookies and can never be signed in.
+
+**One `fly.toml` decision that is a correctness constraint, not a cost setting.**
+`auto_stop_machines = "off"`, `auto_start_machines = false`,
+`min_machines_running = 1`. Two things live only in the machine's memory: the
+`after()` email task, which by definition runs after the response has been
+flushed and which Fly's proxy cannot see (Fly documents this trap in as many
+words), and the rate limiter's `Map`, which a stop resets — handing an attacker
+their full retry budget back for free. **`suspend` is not a middle ground**: it
+snapshots RAM, so the limiter would survive, but the machine resumes believing
+sockets are live that the other end has abandoned — which is exactly the
+in-flight Resend request. It keeps the state and breaks the socket. If this app
+ever needs to scale to zero, both problems must be fixed first: a durable queue
+for the email, shared storage for the limiter. `kill_timeout = "30s"` (against a
+5s default) is the drain window for the same in-flight send.
+(`min_machines_running` is strictly inert while autostop is `"off"` — Fly
+defines it only for `"stop"`/`"suspend"` — and is kept as a second lock.)
+
+**Deployment is now automatic.** Push to `master` runs
+`.github/workflows/deploy.yml`, which checks the required GitHub settings by
+name, then runs `flyctl deploy --remote-only` passing each `NEXT_PUBLIC_*` value
+as a `--build-arg`. `workflow_dispatch` allows a manual run. The exact Secrets
+and Variables the owner must create are in `SETUP.md` Step 5d. Nothing builds on
+the GitHub runner.
+
+**Documentation cleanup that came with it.** `.env.example` documented a
+`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` that **no code in this repo reads** —
+checkout is redirect-based, so the browser never needs a publishable key. It has
+been removed, with the reason written where it stood. `@stripe/stripe-js` is
+likewise a dependency nothing imports; it is recorded in §6 as a cleanup
+candidate and `package.json` was deliberately left alone.
+
+**Not verified.** Nothing in this round was run against a real Fly account. The
+memory figures, the constant-folding and the standalone sizes were measured
+locally against a real build; the deploy path, the health check firing, the
+`Fly-Client-IP` header actually being set by Fly's proxy, and `after()`
+completing on a real machine are all first proved by the owner's first deploy.
+`lib/rate-limit.ts`'s own comment records the caveat that Fly's docs *recommend*
+`Fly-Client-IP` without promising the proxy overwrites a client-supplied one.
+
 ## 6. Open items
 
 ### Top follow-up — do this before anything else in this file
@@ -620,21 +755,33 @@ claim.
 | **Saved addresses don't prefill checkout** | Stripe collects the address fresh. The copy is honest about this. Real prefill needs a Stripe Customer with `shipping`, passed as `customer` on the session. TODO in `app/account/addresses/page.tsx` |
 | **No review UI** | The insert policy was withdrawn. The migration records the shape of a correct one (requires a delivered order, forces `verified`) for when reviews ship |
 | **Promotion codes disabled** | `allow_promotion_codes: false`. Orders have no discount column, so a promo would leave subtotal/shipping/total inconsistent |
+| **No domain is registered** | The first deploy targets `https://bamstudio-shop.fly.dev`. The plan: register the **`.com` now** (no eligibility gate) and add the matching **`.com.au` once the ABN is *issued*** — auDA requires an issued ABN and a pending application does not qualify. Moving to the real domain later is five jobs, and the first is the one people miss: change the `NEXT_PUBLIC_SITE_URL` **build arg and redeploy** (it is baked in — a restart does nothing), then `fly certs add`, update Stripe's webhook endpoint, update Supabase's Site URL and redirect allow-list, and re-verify the sending domain in Resend. `SETUP.md` Step 5f is the runbook |
 
 ### Known limitations
 
-- **Rate limiting is in-memory, per instance, and is now load-bearing.**
+- **Rate limiting is in-memory, per process, and is still load-bearing.**
   `lib/rate-limit.ts` was a decorative speed bump when §0.2 was open, because
   `lookup_order` was callable straight over PostgREST and the throttle could
   simply be walked around. Revoking that grant closed the side door — which
   means the throttle in `/api/track` is now **the only thing** in front of the
   lookup. Order numbers are a public incrementing sequence plus four hex
   characters, so an attacker holding a customer's email address has ~65k
-  guesses standing between them and that customer's street address. Several
-  serverless instances multiply the allowance, a cold start resets it, and
-  `clientKey()` reads `x-forwarded-for`, which is only trustworthy behind a
-  proxy that sets it. **Move it to Vercel KV or Upstash before launch.** The
-  call sites do not change.
+  guesses standing between them and that customer's street address.
+  **Move it to Upstash/Redis before launch.** The call sites do not change.
+
+  **What round 8 fixed, and what it did not.** It is now correct about *which
+  IP it reads*: `clientKey()` used to take the **first** `x-forwarded-for`
+  value, which was safe on Vercel (whose proxy overwrites the header) and
+  outright forgeable on Fly (whose proxy **appends** to it) — a caller could
+  mint a fresh bucket per request and walk straight through. It now prefers
+  `Fly-Client-IP`, gated on `FLY_APP_NAME` so the header cannot be believed
+  off-Fly, and falls back to the **last** XFF hop. **That is identity, not
+  durability.** The counters still live in one process's memory, so a restart or
+  a deploy resets them, and scaling past one machine multiplies the allowance
+  again — which is part of why `fly.toml` pins the app to a single always-on
+  machine (round 8). Running behind another proxy in front of Fly (Cloudflare,
+  say) would collapse every visitor into one bucket and means revisiting the
+  function. The real fix is still shared storage.
 - **The `"unknown"` email sentinel escapes the webhook.** `orders.email` is
   `NOT NULL`, so the Stripe-rebuild path has to write *something* when Stripe
   gave no address, and that something is the truthy string `"unknown"`. The
@@ -684,6 +831,19 @@ claim.
 - **Basket lines saved by an older build** carry a key without the
   personalisation segment, so an identical new line won't merge with them.
   Self-healing; affects nobody but a developer mid-iteration.
+- **`@stripe/stripe-js` is a dependency no file imports.** Checkout is
+  redirect-based — the server creates a Checkout Session and the browser goes to
+  Stripe's hosted page — so no publishable key and no client library are needed.
+  The matching `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` was removed from
+  `.env.example` in round 8; `package.json` was **deliberately left alone**, so
+  this is a cleanup candidate rather than a done thing: remove the dependency
+  and re-run `npm run build` to confirm nothing pulls it in transitively.
+  (`public/vercel.svg` is a leftover of the same kind, unreferenced by any
+  component.)
+- **`getStripe()`'s error message still names Vercel.** `lib/stripe.ts` throws
+  `"STRIPE_SECRET_KEY is not set. Add it in .env.local (and in Vercel)."` The
+  advice has been wrong since round 8 — deployed, it is a Fly secret. Cosmetic,
+  but it is the sentence someone reads at exactly the wrong moment.
 
 ### Cannot be verified without the owner's accounts
 
@@ -697,10 +857,20 @@ because they are what the owner's first real test order is for.
 - That `product_data.metadata.slug` survives the Stripe round trip and comes
   back under `expand: ['data.price.product']`. If it does not, §0.8's fix
   quietly falls back to matching on the non-unique `short_name`.
-- `after()`'s behaviour on Vercel — whether the queued confirmation email
-  reliably runs before the instance freezes.
+- `after()`'s behaviour on the deployed Fly machine — whether the queued
+  confirmation email reliably completes. `fly.toml` is configured so the machine
+  never stops or suspends underneath it (round 8), but that is a setting, not an
+  observation.
 - Grants on a hosted Supabase project, including anything granted in the
   dashboard outside the migration.
+- **The whole Fly deployment.** Nothing in round 8 has been run against a real
+  Fly account: not the deploy, not the health check firing, not a rolling
+  release, and not `Fly-Client-IP` actually arriving on a request. The memory
+  figures, the constant-folding of `NEXT_PUBLIC_SITE_URL` and the standalone
+  sizes *were* measured locally against a real build. Fly's own docs recommend
+  `Fly-Client-IP` without promising the proxy overwrites a client-supplied one —
+  if that promise turns out to be false, the limiter is back to a speed bump and
+  the fix is a real store, not a different header.
 
 ### Only the owner can do these
 
@@ -709,8 +879,11 @@ postal address · return address · a support mailbox
 (`NEXT_PUBLIC_SUPPORT_EMAIL` — **not optional**: without it the contact form
 and the newsletter box have nowhere to deliver, so the shop does not offer
 them) · the Resend keys (`RESEND_API_KEY` and `EMAIL_FROM`, both or neither —
-there is no third flag any more) · the hosting
-provider's name for the privacy page · business bank account · real prices
+there is no third flag any more) · **naming Fly.io as the hosting provider on
+`/legal/privacy`** (the page names its other processors — Stripe, Supabase,
+Resend — and still describes hosting generically; it is Fly.io as of round 8,
+and any draft still saying Vercel is wrong) · a Fly account and a `FLY_API_TOKEN`
+in GitHub · business bank account · real prices
 ("My price" is empty in the workbook, so the shop shows placeholders from
 `PRICE_BY_CATEGORY`) · product photography · legal review of the three
 `/legal/*` drafts, **especially the rewritten contract-formation clause in
@@ -734,8 +907,12 @@ f9745fb Stage orders in the database instead of Stripe metadata
 
 The rounds-6-and-7 remediation of §0 sits on top of that as working-tree
 changes, with `lib/email.ts`, `lib/contact.ts`, `scripts/verify-sql.sh` and
-`scripts/replay-checkout.mjs` new. Run `git status` and `git diff --stat`
-rather than trusting this paragraph — it is the first thing to go stale.
+`scripts/replay-checkout.mjs` new. **The round-8 hosting migration sits on top
+of that again**, also uncommitted: `Dockerfile`, `fly.toml`, `.dockerignore`,
+`.github/workflows/deploy.yml` and `app/api/health/route.ts` new;
+`next.config.ts`, `lib/stripe.ts`, `lib/rate-limit.ts` and `proxy.ts` changed.
+Run `git status` and `git diff --stat` rather than trusting this paragraph — it
+is the first thing to go stale.
 
 `npx tsc --noEmit`, `npx eslint .` and `npm run build` are clean. Verified **by
 execution**: `./scripts/verify-sql.sh` **24/24** against a real PostgreSQL 16
@@ -750,8 +927,14 @@ what it covers so it can be rebuilt.
 
 Verified **by reasoning only**, and worth repeating because the distinction is
 the most useful thing in this file: real Resend delivery, the Stripe
-`product_data.metadata.slug` round trip, `after()`'s behaviour on Vercel, and
-grants on a hosted Supabase project applied outside the migration.
+`product_data.metadata.slug` round trip, `after()` completing on the deployed
+machine, grants on a hosted Supabase project applied outside the migration, and
+**the entire Fly deployment** — no part of round 8 has been run against a real
+Fly account. What round 8 *did* measure, against a real local build: the ~1.6 GB
+build peak and ~150 MB running server, the ~72 MB / ~24 MB-gzipped standalone
+tree against 629 MB of `node_modules`, and the constant-folding of
+`NEXT_PUBLIC_SITE_URL` into `.next/server/chunks/lib_stripe_ts_*.js` with its
+runtime read gone.
 
 **None of that means it is ready.** Every check above passed while all ten §0
 blockers were live, which is the whole reason §4 exists: green checks measure
@@ -766,7 +949,13 @@ the things being watched. What is genuinely left is smaller and named:
   subscriber list** (§0.9, §0.1, §6). Both are honest on the page now; neither
   is built.
 - The `/track` throttle is the only thing in front of a customer's postal
-  address, and it is in-memory and per-instance (§6).
+  address. Round 8 fixed *which IP it reads* — the old first-`x-forwarded-for`
+  read was forgeable on Fly — but it is still one process's memory, and moving
+  it to shared storage is still the top security follow-up (§6).
+- **The shop has no domain and has never been deployed.** The first deploy goes
+  to `bamstudio-shop.fly.dev`; the `.com` can be registered now and the
+  `.com.au` needs an *issued* ABN. Changing to the real domain later is a
+  rebuild, not a setting (§5 round 8, §6, `SETUP.md` Step 5f).
 - The `"unknown"` email sentinel escapes the webhook into three readers that do
   not know about it, and nothing writes `orders.tracking_number` — the status
   progression customers are shown is a manual database edit today (§6).

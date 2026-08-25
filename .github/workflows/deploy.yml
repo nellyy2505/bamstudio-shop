@@ -1,0 +1,143 @@
+# ---------------------------------------------------------------------------
+# Deploy the Bam Studio shop to Fly.io.
+#
+# WHAT THIS DOES
+#   Every push to `master` (and any manual run from the Actions tab) hands the
+#   repo to Fly, which builds the Docker image on its own remote builder and
+#   rolls it out to the app defined in fly.toml — `bamstudio-shop`, region syd.
+#   Nothing is built on this runner; see the --remote-only note further down.
+#
+# WHAT YOU MUST SET UP IN GITHUB FIRST
+#   Repo → Settings → Secrets and variables → Actions
+#
+#   Secrets tab
+#     FLY_API_TOKEN                  `fly tokens create deploy -a bamstudio-shop`
+#     NEXT_PUBLIC_SUPABASE_ANON_KEY  Supabase → Project Settings → API Keys
+#
+#   Variables tab
+#     NEXT_PUBLIC_SITE_URL           https://bamstudioshop.com
+#     NEXT_PUBLIC_SUPABASE_URL       Supabase → Project Settings → API
+#     NEXT_PUBLIC_SUPPORT_EMAIL      optional — needed for the contact form to reach you
+#     NEXT_PUBLIC_ABN                optional — shown in the footer
+#     NEXT_PUBLIC_GST_REGISTERED     optional — "true" only once you actually register
+#     NEXT_PUBLIC_INSTAGRAM_URL      optional
+#     NEXT_PUBLIC_TIKTOK_URL         optional
+#
+#   The anon key is a public value, but it is still a key, so it goes in
+#   Secrets: GitHub masks secrets in build logs, and the rule "anything that
+#   looks like a key goes in Secrets" is easier to follow than a case-by-case
+#   judgement. Everything else here you would happily print on a business card.
+#
+# WHERE THE REAL SECRETS LIVE — NOT HERE
+#   SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
+#   RESEND_API_KEY and EMAIL_FROM are set ONCE, directly on Fly:
+#
+#     fly secrets set STRIPE_SECRET_KEY=sk_live_... -a bamstudio-shop
+#
+#   They must never be added to this workflow. The NEXT_PUBLIC_* values below
+#   are passed as Docker --build-arg, and build args are written into the
+#   image's history — anyone who can pull the image can read them back. A
+#   Stripe key passed that way is a leaked Stripe key.
+#
+#   (Fly secrets only exist at runtime, which is exactly why the NEXT_PUBLIC_*
+#   values can't use them: Next inlines those into the browser bundle during
+#   the build, long before a Fly secret is visible.)
+#
+# Action reference and the deploy command follow Fly's own guide:
+#   https://fly.io/docs/launch/continuous-deployment-with-github-actions/
+# Fly's example uses @master; pinned to the @v1 tag here so a future change to
+# the action can't alter a deploy without you choosing it.
+# ---------------------------------------------------------------------------
+
+name: Deploy to Fly.io
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: # lets you deploy from the Actions tab without pushing
+
+# A newer push supersedes an older one still building — cancel it rather than
+# racing two rollouts onto the same machine.
+concurrency:
+  group: deploy-bamstudio-shop
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+
+    # Read once here, used by both steps below. Referenced as shell variables
+    # rather than pasted into the commands, so an odd character in a value
+    # can't turn into part of the command.
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPPORT_EMAIL: ${{ vars.NEXT_PUBLIC_SUPPORT_EMAIL }}
+      NEXT_PUBLIC_ABN: ${{ vars.NEXT_PUBLIC_ABN }}
+      NEXT_PUBLIC_GST_REGISTERED: ${{ vars.NEXT_PUBLIC_GST_REGISTERED }}
+      NEXT_PUBLIC_INSTAGRAM_URL: ${{ vars.NEXT_PUBLIC_INSTAGRAM_URL }}
+      NEXT_PUBLIC_TIKTOK_URL: ${{ vars.NEXT_PUBLIC_TIKTOK_URL }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Catch a missing setting here, by name, in three lines of log — instead
+      # of thirty screens into a Next build failure. NEXT_PUBLIC_SITE_URL in
+      # particular is read at module scope by app/layout.tsx and throws when
+      # blank, which surfaces as a stack trace blaming the layout file.
+      - name: Check the required settings exist
+        shell: bash
+        run: |
+          missing=0
+          check() { # check <NAME> <Secrets|Variables>
+            if [ -z "${!1}" ]; then
+              echo "MISSING: $1 — add it under Settings → Secrets and variables → Actions → $2"
+              missing=1
+            fi
+          }
+
+          check FLY_API_TOKEN                 Secrets
+          check NEXT_PUBLIC_SUPABASE_ANON_KEY Secrets
+          check NEXT_PUBLIC_SITE_URL          Variables
+          check NEXT_PUBLIC_SUPABASE_URL      Variables
+
+          if [ "$missing" = 1 ]; then
+            echo
+            echo "Deploy stopped: add the setting(s) named above, then re-run this workflow."
+            exit 1
+          fi
+
+          # Optional — blank is a valid choice, just say so out loud.
+          for name in NEXT_PUBLIC_SUPPORT_EMAIL NEXT_PUBLIC_ABN \
+                      NEXT_PUBLIC_GST_REGISTERED NEXT_PUBLIC_INSTAGRAM_URL \
+                      NEXT_PUBLIC_TIKTOK_URL; do
+            [ -n "${!name}" ] || echo "Note: $name is blank — the site runs without it. See .env.example for what each one changes."
+          done
+
+          echo "All required settings are present."
+
+      - uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      # --remote-only builds the image on Fly's builder, not this runner.
+      # `next build` peaks around 1.6 GB, and this is the same path `fly deploy`
+      # takes when you run it by hand — so CI and your laptop build identically.
+      #
+      # The app name and region come from fly.toml, so there is only ever one
+      # place to change them.
+      - name: Deploy
+        run: |
+          flyctl deploy --remote-only \
+            --build-arg NEXT_PUBLIC_SITE_URL="$NEXT_PUBLIC_SITE_URL" \
+            --build-arg NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" \
+            --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" \
+            --build-arg NEXT_PUBLIC_SUPPORT_EMAIL="$NEXT_PUBLIC_SUPPORT_EMAIL" \
+            --build-arg NEXT_PUBLIC_ABN="$NEXT_PUBLIC_ABN" \
+            --build-arg NEXT_PUBLIC_GST_REGISTERED="$NEXT_PUBLIC_GST_REGISTERED" \
+            --build-arg NEXT_PUBLIC_INSTAGRAM_URL="$NEXT_PUBLIC_INSTAGRAM_URL" \
+            --build-arg NEXT_PUBLIC_TIKTOK_URL="$NEXT_PUBLIC_TIKTOK_URL"
