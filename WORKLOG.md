@@ -3,7 +3,34 @@
 Everything a new session needs to pick this up: what was built, what was found
 wrong and fixed, what is deliberately still open, and how to verify any of it.
 
-Last updated: 25 August 2026. Branch: `master`, tree clean at `314ba58`.
+Last updated: 25 August 2026. Branch: `master`, tree clean.
+
+---
+
+## 0. START HERE — this is not ready for customers
+
+A final independent review (round 5, §5) ran after the code was believed
+close to done. It confirmed the two launch blockers from round 4 are properly
+closed, and then found **three security defects and one class of false claims**
+that were not in the code being reviewed. Do these first, in this order.
+
+| # | Severity | What | Where |
+|---|---|---|---|
+| 1 | **Blocker** | **No email is ever sent, and ~12 places say it is.** A guest is told to track their order with "the number from your confirmation email" — there is no path to that number, so the order is untrackable. The terms say a contract forms when the confirmation email is sent, so by the shop's own words no contract ever forms. Contact-form enquiries, including faulty-goods claims, are discarded to a log line | `api/contact`, `api/newsletter`, no `receipt_email` in `api/checkout`; claims in FAQ, `/order/confirmed`, `account/orders/[id]`, terms, refunds, privacy, `EmailPreferences` |
+| 2 | **Blocker** | **`lookup_order` is granted to `anon`**, so it is callable directly with the public anon key and the /track rate limit is decorative. Order numbers are a public incrementing sequence + 4 hex, so with a customer's email an attacker brute-forces the suffix and gets their **street address and phone**. *I introduced this grant* | `supabase/migrations/0001_init.sql` (grant), `app/api/track/route.ts` (throttle lives only here) |
+| 3 | **Blocker** | **Open redirect**, verified empirically: `/login?next=%2F%09%2F%2Fevil.com` survives `safeNext` because the URL parser strips tab/CR/LF *after* the prefix check, landing a genuinely-authenticated user on an attacker's site seconds after a real sign-in | `app/auth/callback/route.ts` and the identical copy in `app/login/page.tsx` |
+| 4 | **High** | **A transient read error strands a paid order, invisibly.** `confirmOrder` discards the staged-row SELECT's error; `staged` reads as `null`, the fresh-insert path runs, hits the unique constraint, and `23505` is swallowed with a 200 — so Stripe never retries and the real row stays `pending` forever. *Same failure class round 4 closed, reached through the front door* | `app/api/webhooks/stripe/route.ts` |
+| 5 | **High** | Stripe keys present + Supabase env missing ⇒ money taken, nothing recorded, and `/order/confirmed` still says "order confirmed". The mirror-image guard exists; this direction doesn't | `app/api/checkout/route.ts` |
+| 6 | **High** | `[HELLO@YOURDOMAIN]` is **hardcoded** in the legal pages, bypassing the `SHOP.hasSupportEmail` guard — and it is the only stated way to start a return or report a fault | `legal/refunds`, `legal/terms`, `legal/privacy`; unguarded interpolation in `account/orders/[id]`, `DeleteAccountCard` |
+| 7 | **Medium** | The `stock_applied` backfill marks every confirmed order applied — **including the stranded ones the repair branch exists to fix**, so their stock never moves | `0001_init.sql` backfill vs `claimStock` |
+| 8 | **Medium** | A repaired order loses what to print: `fillItemsFromStripe` records no variant, colourway or letters (Stripe's `line_item.description` is the product *name*). Fix with `expand: ['data.price.product']`. It can also double-insert items, because the existence probe ignores its own error | `app/api/webhooks/stripe/route.ts` |
+| 9 | **Medium** | Marketing consent is **pre-ticked**, contradicting the shop's own privacy policy; "Delete account" deletes nothing while its copy says it does; contact-form PII goes to the platform log stream | `SignupForm`, `DeleteAccountCard`, `api/contact` |
+| 10 | **Medium** | "Free shipping" is stated unqualified but only applies to standard post — worst in the cart, which shows "Free shipping unlocked" while Express is selected and still charges $14.50 | `Header`, `layout` metadata, `app/page.tsx`, `CartView` |
+
+Lower-severity items (uncapped "Only N ready to ship", no quantity cap in the
+cart, empty `next.config.ts` with no CSP, inert `revalidate`, the recovery
+cookie keyed on `next` rather than the flow) are in round 5's full report and
+are not launch-blocking.
 
 ---
 
@@ -178,13 +205,36 @@ claims in one statement, so it printed `t` without testing the race.
 
 ---
 
+### Round 5 — final verification (the findings in §0)
+
+Confirmed round 4's two blockers are genuinely closed: the repair branch
+terminates without looping, renumbering or double-decrementing, and the
+`stock_applied` backfill was exercised against real PostgreSQL 16 (a shipped
+order is protected, a pending one untouched). Checkout was re-verified for all
+four personalised products across every combination of database-configured,
+query-succeeding and query-erroring; builder pricing cannot be steered by the
+client; the favourites rewrite makes one round trip for many buttons and
+cannot write after sign-out.
+
+It then found what §0 lists. The pattern worth noting: **the serious defects
+were not in the code being fixed.** Rounds 1–4 each reviewed the payment path
+and each found real problems there; round 5 looked wider and found an open
+redirect, a directly-callable Postgres function that leaks home addresses, and
+a dozen user-facing statements that are simply untrue because no email is ever
+sent. None of those would have been caught by testing checkout harder.
+
+Two of the three security defects are in code written during this work
+(`lookup_order`'s `anon` grant, and the swallowed SELECT error), which is the
+argument for the next session starting with a security-focused pass rather
+than a feature.
+
 ## 6. Open items
 
 ### Deliberately not done — decide before launch
 
 | Item | Detail |
 |---|---|
-| **Contact form and newsletter only log** | `app/api/contact/route.ts`, `app/api/newsletter/route.ts`. Enquiries reach nobody. Needs Resend (free tier 3,000/month). TODOs are in place |
+| ~~**Contact form and newsletter only log**~~ | **Promoted to blocker §0.1** — this is not a deferrable gap. It makes a guest's order untrackable and turns roughly a dozen on-site statements into false claims |
 | **Saved addresses don't prefill checkout** | Stripe collects the address fresh. The copy is honest about this. Real prefill needs a Stripe Customer with `shipping`, passed as `customer` on the session. TODO in `app/account/addresses/page.tsx` |
 | **Account deletion is a support request** | The button asks the customer to email. Real deletion needs a server-side admin route. TODO in `DeleteAccountCard.tsx` |
 | **No review UI** | The insert policy was withdrawn. The migration records the shape of a correct one (requires a delivered order, forces `verified`) for when reviews ship |
@@ -235,6 +285,11 @@ f9745fb Stage orders in the database instead of Stripe metadata
 `npx tsc --noEmit`, `npx eslint .` and `npm run build` all clean. 31 routes.
 Schema, seed and `verify.sql` all exercised against PostgreSQL 16.
 
-**A fourth verification pass was still running when this log was written.**
-Check its findings before treating the list above as closed — the last two
-rounds each surfaced something real, and one of them was a launch blocker.
+`npx tsc --noEmit`, `npx eslint .` and `npm run build` are clean, and the
+schema, seed and `verify.sql` have all been exercised against PostgreSQL 16.
+
+**None of that means it is ready.** Every check above passes while a guest
+still cannot track the order they paid for, `lookup_order` still leaks a home
+address to anyone with the anon key, and `/login?next=` still redirects
+off-site. Green checks measured the things that were being watched. Start at
+§0.
