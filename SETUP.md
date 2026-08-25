@@ -10,8 +10,8 @@ reading twice.
 Budget about 90 minutes for the first pass, plus a little longer for Step 5
 now that the shop is deployed with Docker on Fly.io rather than on Vercel.
 
-**What it costs.** Supabase, Resend and GitHub Actions all have free tiers that
-comfortably cover a new shop, and Stripe only charges per sale (1.75% + $0.30
+**What it costs.** Supabase, Resend, the Australia Post postage API and GitHub
+Actions all have free tiers that comfortably cover a new shop, and Stripe only charges per sale (1.75% + $0.30
 for Australian cards, plus GST on the fee). **Hosting is not free**: one 512 MB
 Fly.io machine in Sydney is roughly **A$6 a month**. That is the deliberate
 trade — see the box below.
@@ -44,7 +44,8 @@ the live container as real environment variables, by two different routes:
 history, so anyone who can pull the image can read them back.
 
 The full table of which variable is which is in Step 5c, and `.env.example`
-labels every line.
+labels every line — with one exception: **`AUSPOST_API_KEY` is not in
+`.env.example` yet**, so add that line to `.env.local` by hand (Step 3b).
 
 ---
 
@@ -76,22 +77,34 @@ Go to **Project Settings → API Keys** (and **Data API** for the URL):
 
 ### 1c. Create the tables
 
+> **Your database is still empty — none of this has been run yet.** There are
+> now **two** migration files and they go in order.
+
 1. In Supabase, open **SQL Editor → New query**.
 2. Open `supabase/migrations/0001_init.sql` from this project, copy the whole
    file, paste it in, and click **Run**. It should say "Success".
-3. New query again. Copy all of `supabase/seed.sql`, paste, **Run**. This
+3. New query again. Copy all of **`supabase/migrations/0002_shipping.sql`**,
+   paste, **Run**. This adds the weight and size columns postage is priced
+   from, the postage rate cache, and three columns on `orders` that record how
+   a postage price was arrived at. Like the first file it is safe to re-run.
+4. New query again. Copy all of `supabase/seed.sql`, paste, **Run**. This
    loads your 44 products and 6 colourway collections. No reviews —
    those only ever come from real customers.
-4. Check **Table Editor → products** — you should see the catalogue.
-5. New query once more. Copy all of `supabase/verify.sql`, paste, **Run**.
+5. Check **Table Editor → products** — you should see the catalogue, and each
+   row now has `weight_grams`, `length_mm`, `width_mm`, `thickness_mm` and
+   `letter_eligible`. Hover a column name to see what it is for. **Those
+   numbers are estimates** — see "What only you can supply" for the three
+   weighings that would replace the guesswork.
+6. New query once more. Copy all of `supabase/verify.sql`, paste, **Run**.
    Every row must say `t`. It checks the things that otherwise fail silently
    in production — most importantly that the webhook is allowed to allocate
    order numbers and move stock. Without those grants, customers can pay and
    no order is ever recorded. The script writes two throwaway rows and rolls
    them back, so it is safe to re-run any time.
 
-> The schema file is `supabase/migrations/0001_init.sql` — that one file **is**
-> the schema. It is safe to re-run: if you applied an earlier version, run it
+> The schema is `supabase/migrations/0001_init.sql` plus
+> `supabase/migrations/0002_shipping.sql`, in that order. Both are safe to
+> re-run: if you applied an earlier version, run it
 > again and it adds anything missing rather than starting over, leaving your
 > data alone. It also revokes a grant that an earlier version handed out too
 > widely, so re-running it on an existing database is not optional.
@@ -208,10 +221,26 @@ Supabase's own sign-up and password-reset emails are separate and already work.
 
 ### 3a. Create the account and verify your domain
 
+**Nothing is set up yet, and the plan is two free pieces:** Resend for
+**sending** (3,000 emails a month, custom domains included on the free tier),
+and **Porkbun's free email forwarding** for **receiving** — so a message to
+`hello@bamstudioshop.com` lands in a mailbox you already read. Sending and
+receiving really are two different services; Resend does not receive.
+
+> ⚠️ **`EMAIL_FROM` cannot be a gmail.com address.** It has to be an address on
+> a domain you have verified in Resend — `hello@bamstudioshop.com`, not
+> `something@gmail.com`. Mail claiming to be from Gmail but sent by Resend fails
+> Gmail's own checks and is rejected or binned. Forwarding *to* your Gmail is
+> fine; sending *as* Gmail is not.
+
+> ⚠️ **Delete Porkbun's `*` parking CNAME first** (Step 5f). A wildcard answers
+> for every name you have not set explicitly, so it interferes with the mail
+> records both Resend and the forwarding depend on.
+
 1. Go to **<https://resend.com>** and sign up. The free tier is 3,000 emails a
    month, which is far more than a new shop sends.
-2. **Domains → Add Domain**, enter your domain, and add the DNS records it
-   shows you at your registrar. Verification usually takes a few minutes.
+2. **Domains → Add Domain**, enter `bamstudioshop.com`, and add the DNS records
+   it shows you **at Porkbun**. Verification usually takes a few minutes.
 3. **API Keys → Create API Key**. Copy it — it is shown once.
 
 > You can test with Resend's shared sending domain, but order confirmations
@@ -271,6 +300,51 @@ the page shows contact details instead of a form at all, it is
 
 ---
 
+## Step 3b — Australia Post postage key (free, five minutes, optional)
+
+The shop is being moved off a flat $9.50 postage charge onto **real Australia
+Post prices**, worked out from the weight of what is in the basket. The code
+that does the pricing is written; it is not connected to checkout yet, so
+nothing on the site changes the day you do this. Doing it now means the key is
+already in place when it is.
+
+1. Go to **<https://developers.auspost.com.au>** and register. It is free,
+   self-serve and the key is issued immediately — there is no account manager
+   and no contract.
+2. Add it to `.env.local` on your own computer, as its own line:
+
+   ```
+   AUSPOST_API_KEY=your-key-here
+   ```
+
+   (`.env.example` does not list it yet. Add the line by hand.)
+3. On the live shop it is a **Fly secret**, not a build arg — see Step 5c:
+
+   ```bash
+   fly secrets set AUSPOST_API_KEY='...' -a bamstudio-shop
+   ```
+
+**Without the key nothing breaks.** Postage falls back to a table of real
+Australia Post rates that were read from the live service on 25 August 2026,
+deliberately rounded up one price band. The shop keeps working and quotes
+slightly dear rather than slightly cheap.
+
+**What you should know about the two postage tiers**, because one of them is a
+decision only you can make:
+
+- **Parcel** — about **$10.20**, tracked, and the customer can watch it move.
+- **Large Letter** — **$3.40** for anything under 125 g that fits 260 × 360 mm
+  and is under 20 mm thick, but **untracked and uninsured**. If it goes missing
+  there is nothing to look up and nothing to claim.
+
+Right now **every product is set to go as a parcel**, which costs a little more
+and never costs you a shortfall. Switching a product to Large Letter is a
+checkbox on its row in the Supabase table editor — but it must not be done on
+its own, because the site currently says "tracked" for every delivery method.
+See "What only you can supply" below.
+
+---
+
 ## Step 4 — Run it locally
 
 ```bash
@@ -317,20 +391,30 @@ deploy).
 have a domain yet, and that is fine — Step 5f is how you move to a real one when
 you do.
 
-### 5a. Put the code on GitHub
+### 5a. Put the code on GitHub — already done
+
+The repository exists: **<https://github.com/nellyy2505/bamstudio-shop>**,
+branch **`master`**, which is the branch the deploy workflow watches. It is
+**public**, so treat everything in it as readable by anyone — that is fine for
+the code, and it is why no key of any kind lives in a file here.
+
+For future commits:
 
 ```bash
 cd bamstudio-shop
-git add -A
-git commit -m "Bam Studio shop"
+git status                      # look at this before every commit
+git add <the files you changed> # NOT `git add -A` — see the warning below
+git commit -m "what changed"
+git push
 ```
 
-Then create an empty repo at <https://github.com/new> (private is fine) and
-follow the "push an existing repository" lines it gives you. **Push to a branch
-called `master`** — that is the branch the deploy workflow watches.
+> ⚠️ **Do not use `git add -A` in this project.** About ten files always show as
+> modified because of invisible Windows line-ending differences, not because
+> anything changed in them. `git add -A` sweeps all of that into your commit and
+> makes it impossible to see what you actually did. Add files by name.
 
-> `.env.local` is already git-ignored, so your keys stay off GitHub. Double
-> check with `git status` before pushing.
+> `.env.local` is git-ignored, so your keys stay off GitHub. Check `git status`
+> before pushing anyway.
 
 ### 5b. Create the Fly app
 
@@ -361,12 +445,14 @@ fly secrets set -a bamstudio-shop \
   STRIPE_SECRET_KEY='sk_test_...' \
   STRIPE_WEBHOOK_SECRET='whsec_...' \
   RESEND_API_KEY='re_...' \
-  EMAIL_FROM='Bam Studio <hello@yourdomain.com>'
+  EMAIL_FROM='Bam Studio <hello@yourdomain.com>' \
+  AUSPOST_API_KEY='...'
 ```
 
 (Leave `RESEND_API_KEY` and `EMAIL_FROM` out entirely if you have not done Step
 3 yet — both or neither, never one. You can add them later with the same
-command and it only needs a restart.)
+command and it only needs a restart. `AUSPOST_API_KEY` is the same: leave it
+out and postage quotes from the built-in fallback rates.)
 
 **The whole split, in one table.** This is the thing to get right:
 
@@ -385,6 +471,7 @@ command and it only needs a restart.)
 | `STRIPE_WEBHOOK_SECRET` | **Fly secret** | `fly secrets set` | Restart only |
 | `RESEND_API_KEY` | **Fly secret** | `fly secrets set` | Restart only |
 | `EMAIL_FROM` | **Fly secret** | `fly secrets set` | Restart only |
+| `AUSPOST_API_KEY` | **Fly secret** | `fly secrets set` | Restart only |
 
 Two things that surprise people:
 
@@ -488,12 +575,17 @@ over from the old one.
    Setting a secret restarts the machine by itself. **No rebuild is needed** —
    this one is read at request time.
 
-### 5f. A real domain — buy the `.com` now, the `.com.au` after the ABN
+### 5f. Your domain — registered, and one DNS record to delete first
 
-You do not have a domain yet. The plan, in order:
+**`bamstudioshop.com` is registered, at Porkbun.** Two things remain:
 
-1. **Register the `.com` now.** There is no eligibility gate on it, so you can
-   do this today, and it gives the shop a permanent address.
+1. ⚠️ **Delete Porkbun's parking wildcard before anything else.** The domain
+   still has a `*` CNAME pointing at `uixie.porkbun.com`, which is Porkbun's
+   "for sale / parked" page. A wildcard answers for *every* name you have not
+   set explicitly, so it **shadows your email records** — mail routing and
+   verification records for Resend and for Porkbun's own forwarding will behave
+   unpredictably while it exists. Porkbun → your domain → **DNS**, delete the
+   `*` record. Do this before you set up email or attach the domain to Fly.
 2. **Add the matching `.com.au` once your ABN has been *issued*.** auDA requires
    an **issued** ABN — a pending application does not qualify — so this one has
    to wait, and there is no way to hurry it. Australian registrars: VentraIP,
@@ -560,6 +652,14 @@ builds go to Fly's remote builder.
 
 Do these in order on launch day:
 
+0. **Rotate the Supabase JWT secret** if you have not already — see the box at
+   the top of "What only you can supply". The exposed anon key still works,
+   which means the leaked `service_role` key very likely does too, and that key
+   can read every customer's address. Nothing else on this list matters as much.
+0b. **Check the database has both migrations applied** —
+   `0001_init.sql` *and* `0002_shipping.sql`, then `seed.sql`, then
+   `verify.sql` with every row printing `t` (Step 1c). The project is empty
+   until you do.
 1. **Fill in "My price"** in the workbook for every product, then run
    `node scripts/generate-seed.mjs` and re-run `supabase/seed.sql`.
    Until then the shop uses placeholder prices.
@@ -599,6 +699,9 @@ Do these in order on launch day:
    anywhere, delete it. Then send yourself a contact-form message from the live
    site to confirm — that one also needs `NEXT_PUBLIC_SUPPORT_EMAIL` from step 3
    above, which *is* a rebuild.
+5b. **Set `AUSPOST_API_KEY`** if you have it (Step 3b), and **delete Porkbun's
+   `*` parking CNAME** before you set up email or attach the domain (Step 5f).
+   Neither blocks a launch; both cause confusing failures later if skipped.
 6. **Switch Stripe to live mode**: flip the dashboard toggle, set the live
    `sk_live_` key with `fly secrets set STRIPE_SECRET_KEY=...`, create a *new*
    live-mode webhook endpoint pointing at your live URL, and set its
@@ -621,7 +724,84 @@ Do these in order on launch day:
 
 ## What only you can supply
 
-Nothing here is a bug and nothing here blocks the site from running — the shop
+### Do this first — an outstanding security job
+
+> **Rotate your Supabase JWT secret.**
+>
+> A Supabase anon key and a `service_role` key of yours were exposed in a chat.
+> The check that matters is simple: **the exposed anon key still works.** Keys
+> are signed with the project's JWT secret, and rotating that secret is what
+> makes every old key stop working — so if the old anon key still authenticates,
+> the secret has not been rotated, and the `service_role` key that leaked
+> alongside it is very likely still live.
+>
+> That one matters. `service_role` ignores every access rule in the database: it
+> can read every order, every customer address and every profile, and change or
+> delete any of it.
+>
+> In the Supabase dashboard, rotate the JWT secret, then update the new keys in
+> **all three** places in one sitting — rotating without updating takes the shop
+> offline:
+>
+> 1. `.env.local` on your computer (`NEXT_PUBLIC_SUPABASE_ANON_KEY` and
+>    `SUPABASE_SERVICE_ROLE_KEY`);
+> 2. GitHub → Settings → Secrets and variables → Actions → **Secrets** →
+>    `NEXT_PUBLIC_SUPABASE_ANON_KEY`, then **re-run the deploy** — that one is a
+>    build arg, so a restart will not pick it up;
+> 3. `fly secrets set SUPABASE_SERVICE_ROLE_KEY='...' -a bamstudio-shop`.
+>
+> Your Stripe live key was exposed the same way and **you have already rolled
+> it** — nothing further is needed there. Test keys are what the shop is using
+> today.
+
+### The most useful ten minutes you can spend on postage
+
+> **Weigh three items and write down the real numbers.**
+>
+> One **name charm**, one **clicker keychain**, one **pet bowl** — each one
+> **inside the mailer you actually post it in** — and for each, two numbers:
+>
+> - its **weight in grams** (a kitchen scale is fine);
+> - its **thickness in millimetres** at the thickest point (a ruler is fine).
+>
+> Every weight and size the shop currently uses to price postage is an
+> **educated guess**. They were chosen to err on the expensive side, so you are
+> never out of pocket — but they are guesses, and these three readings would
+> replace the single largest source of error in the whole postage calculation.
+> Australia Post prices a parcel on weight alone, and the 125 g / 20 mm line is
+> what separates a **$3.40** letter from a **$10.20** parcel, so a few grams
+> either way is real money on every small order.
+>
+> Send the six numbers to whoever is next working on the code. They go into
+> `lib/shipping/dimensions.ts` and into each product's row in Supabase.
+
+### A decision only you can make — tracked, or cheap
+
+Small orders can go two ways, and the shop is currently taking the safe one.
+
+| | **Parcel** (what happens today) | **Large Letter** |
+|---|---|---|
+| Price | about **$10.20** | **$3.40** |
+| Tracking | Yes — the customer can follow it | **None** |
+| Insurance | Yes | **None** |
+| Fits | Anything | Under 125 g, 260 × 360 mm, under 20 mm thick |
+
+Every product is set to "parcel" right now, so nothing is ever underpriced. If
+you want small charm orders to go as letters, that is a checkbox per product
+(`letter_eligible`) on its row in Supabase — **but do not tick it and leave it
+there**. The site currently tells customers every delivery method is "tracked",
+which stops being true the moment a letter goes out. Tell whoever is working on
+the code, so the wording and the checkbox change together. It is written up in
+`WORKLOG.md` §6 as a pending decision.
+
+The trade is: a lost parcel can be traced and claimed; a lost letter is gone,
+and you would be reprinting and reposting it at your own cost. On a $9 charm,
+$3.40 versus $10.20 is the difference between postage being an afterthought and
+postage costing more than the item.
+
+---
+
+Nothing in the rest of this section is a bug and none of it blocks the site from running — the shop
 is written to stay truthful while these are missing rather than to print a
 placeholder or make a promise it can't keep. But each one is a real-world
 detail no one else can invent, and the shop is quieter, vaguer or less useful
@@ -637,7 +817,9 @@ until you fill it in.
 | **Support mailbox** — `NEXT_PUBLIC_SUPPORT_EMAIL` | Footer, contact page, legal pages, order pages, account settings | **The largest single gap.** Without it the shop has no mailbox to name, so it tells customers there is currently no way to reach it, contact-form enquiries have nowhere to go, and returns and faults have no starting point |
 | **ABN** — `NEXT_PUBLIC_ABN` | Footer, legal pages, and Stripe's own verification | Hidden wherever it would appear. Stripe will not release money without it |
 | **Hosting provider's name — it is now Fly.io** | `/legal/privacy`, "who we share information with" | Listed generically as "the provider that serves these pages". Accurate, but the privacy page names its other processors (Stripe, Supabase, Resend) and is expected to name this one too. **Edit `app/legal/privacy/page.tsx` to say Fly.io.** It used to be Vercel; do not let an old draft say so |
-| **A domain** | `NEXT_PUBLIC_SITE_URL`, Stripe's webhook URL, Supabase's Site URL and redirect list, the Resend sending domain | Not bought yet. The shop runs at `https://bamstudio-shop.fly.dev`, which works but reads as temporary. Register the `.com` now; the `.com.au` needs an **issued** ABN (a pending application does not qualify). Step 5f is the move, and its first job is a **rebuild**, not a setting change |
+| **The domain, attached** — `bamstudioshop.com` **is registered** (Porkbun) | `NEXT_PUBLIC_SITE_URL`, Stripe's webhook URL, Supabase's Site URL and redirect list, the Resend sending domain | Bought, not yet pointed at anything, and **Porkbun's `*` parking CNAME is still there and must be deleted — it shadows email records**. The shop will first go live at `https://bamstudio-shop.fly.dev`. The `.com.au` needs an **issued** ABN (a pending application does not qualify). Step 5f is the move, and its first job is a **rebuild**, not a setting change |
+| **Australia Post key** — `AUSPOST_API_KEY` | Postage pricing | Free and instant from developers.auspost.com.au (Step 3b). Without it postage is quoted from built-in rates read on 25 August 2026, rounded up one band — the shop works and charges slightly dear |
+| **Three real weights** — one charm, one clicker, one bowl, each in its mailer | `lib/shipping/dimensions.ts`, and each product's row in Supabase | Every weight and size is an estimate today, erring expensive. See the box above — this is the highest-value thing on this page |
 | **Social handles** (optional) — `NEXT_PUBLIC_INSTAGRAM_URL`, `NEXT_PUBLIC_TIKTOK_URL` | Footer, contact, about, and every "message us" fallback | No links shown. They also act as a second channel: with a handle set, pages can still offer a way to reach you even before the mailbox exists |
 | **Email keys** — `RESEND_API_KEY`, `EMAIL_FROM` (both, or neither) | Step 3 | No email of any kind is sent, and no page claims one is coming. Customers still get their order number on screen and can still track an order — that path deliberately does not depend on email |
 | **Market dates** | About page | `[MARKET NAME AND DATE]` placeholder — the one bracketed placeholder left in the site |
@@ -755,6 +937,15 @@ The Supabase build args were missing or wrong when the image was built, so the
 shop is serving its built-in sample catalogue. It is designed to do that rather
 than fail, which is why it looks healthy. Fix
 `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` and **redeploy**.
+
+**Postage looks like a round number, or higher than I expected**
+Postage is quoted from Australia Post's live prices when `AUSPOST_API_KEY` is
+set (Step 3b) and from a built-in table of real rates when it is not — and that
+table deliberately quotes **one price band up**, so it is never short. Small
+orders also all go as tracked parcels today rather than as $3.40 letters; see
+the tracked-or-cheap decision in "What only you can supply". (Note that until
+the postage work is finished in the code, checkout still charges the old flat
+$9.50 / $14.50 regardless.)
 
 **Fly says the machine is unhealthy, or the deploy will not roll over**
 Check `fly logs -a bamstudio-shop`, then

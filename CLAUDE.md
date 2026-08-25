@@ -23,9 +23,15 @@ keeps a long-lived Node process this app depends on. **Anything you were about
 to assume from a Vercel-shaped mental model is probably wrong here**; the
 deployment section below is the short version and `README.md` has the reasoning.
 
-`WORKLOG.md` is the source of truth for project state: what was built, six
-rounds of review findings, what is deliberately still open, and — in **§0** —
-the ten launch blockers with their current status. All ten have been addressed;
+Postage is quoted from **Australia Post** by `lib/shipping/` — built, verified
+against the live API, and **not yet wired into checkout**. See *Postage* below
+before touching anything that mentions shipping, and `WORKLOG.md` §5 round 9 for
+how it was arrived at.
+
+`WORKLOG.md` is the source of truth for project state: what was built, nine
+rounds of findings, what is deliberately still open, and — in **§0** — the ten
+launch blockers with their current status plus **the open list as it stands
+today**. All ten have been addressed;
 two are closed **for the claims they made only**, and §0 also separates what was
 verified by *running* it from what was verified by reading. Start there, not
 here. `SETUP.md` is the owner's deployment runbook.
@@ -39,6 +45,16 @@ npm run lint       # eslint (flat config; `next lint` was removed in 16)
 npx tsc --noEmit   # typecheck
 node scripts/generate-seed.mjs [workbook.xlsx]   # regenerate the catalogue
 ```
+
+`generate-seed.mjs` needs `../Documents/3D_Planner.xlsx`. **That workbook is not
+in this sandbox**, so the seed cannot be regenerated here: `lib/fallback-data.ts`
+and `supabase/seed.sql` had their shipping columns **patched in place** in round
+9, and a real regenerate from the workbook is owed the next time someone has it.
+Note also that the script **text-parses `BUILDER_PRICING` out of `lib/config.ts`
+with a brace-naive regex**, and now carries a hand-transcribed copy of
+`CATEGORY_DEFAULTS` from `lib/shipping/dimensions.ts` — a `.mjs` script cannot
+import a `.ts` module. Nothing enforces that the two agree. Change one, change
+the other.
 
 There is **no test framework**. Verification is done by replaying real payloads
 against a running dev server and by running SQL assertions — see below.
@@ -97,6 +113,13 @@ those grants customers pay and no order is ever recorded), and that
 ```bash
 ./scripts/verify-sql.sh
 ```
+
+> ⚠️ **This is currently broken, and it is a two-line fix.** `verify.sql` is now
+> **29 assertions** and expects `0001_init.sql` **and** `0002_shipping.sql`
+> applied; the script still applies `0001` only, so a run errors on
+> `shipping_rate_cache` and on `products.weight_grams`. 29/29 has never been
+> observed. Teach the script to apply `0002` between the migration and the seed
+> before quoting any SQL result — and before claiming a green run.
 
 One command, self-bootstrapping, exits non-zero if any assertion is not `t`. It
 drives a **locally installed PostgreSQL 16** (`apt install postgresql-16`):
@@ -353,6 +376,54 @@ can prove this delivery did the work — the successful order-number
 compare-and-set in `assignOrderNumber` — which is the whole at-most-once story.
 Don't send it from anywhere else.
 
+**Postage** (`lib/shipping/`, seven files) quotes real Australia Post rates.
+**It is built and nothing imports it yet** — `app/api/checkout/route.ts:499`
+still calls the flat-rate `shippingCost()`. Wiring it is the top open item
+(`WORKLOG.md` §6). The rules that govern it:
+
+- **`quoteBasket(lines, methodId)` in `lib/shipping/quote.ts` is the single
+  entry point, and both the cart and checkout must use it.** Two code paths
+  computing postage is how the price a customer agreed to and the price Stripe
+  charges come to differ — silently, and only for some baskets.
+- **It never throws and never returns zero for a non-empty basket.** Resolution
+  is cache → live PAC → a fallback table that needs no network. A postage lookup
+  happens inside rendering a cart and inside creating a checkout session, and
+  neither may fail because a carrier's API is slow.
+- **Weights come from server-loaded product rows, never from the client.** The
+  browser says which product and how many. A basket that could name its own
+  weight could name its own postage.
+- **No customer address is needed.** Domestic parcel price was verified constant
+  across eight destination postcodes; postcodes affect service *availability*
+  only. This is why a basket can show a real price before anyone types an
+  address, and why nothing here takes one.
+- **Every value rounds toward the shop paying.** Weights up, dimensions up,
+  carrier limits pulled in, the fallback table returns the band *above* the one
+  a basket falls in. Overcharging a dollar is recoverable; undercharging is paid
+  silently by the studio on every order until someone reconciles a postage bill.
+- **Prices are GST-inclusive retail and the shop is not GST-registered**, so the
+  total passes through as a total. Never run `gstComponent()` over a quote.
+- **`transitLabel()` in `lib/config.ts` hardcodes "· tracked".** That is true
+  only while everything ships as a parcel. A Large Letter is **untracked and
+  uninsured**. If you ever enable `letter_eligible` for a product, fix
+  `transitLabel()` **in the same change** — `quoteBasket` returns a `tracked`
+  boolean per quote and the UI must read that, not the label.
+- **The schema default is the wrong way round.** `0002_shipping.sql` declares
+  `letter_eligible boolean not null default true`, while
+  `lib/shipping/weights.ts` treats an absent flag as **false** and the seed
+  writes `false` for all 44 rows. A new row added in the Supabase table editor
+  therefore arrives letter-eligible. Nothing is wrong today; do not make it
+  worse.
+- **`AUSPOST_API_KEY` is a runtime secret** — a Fly secret, never a build arg,
+  and never `NEXT_PUBLIC_`. `isPacConfigured()` throws in the browser rather
+  than answering `false`, the same pattern as `isEmailConfigured()`.
+- **The L2 cache tier is a seam, not an implementation.** If you add it, read
+  the three numbered warnings at the top of `lib/shipping/cache.ts`; the one
+  that matters is that a **fallback price must never be persisted**, or a
+  two-second outage becomes six hours of inflated quotes.
+- **Every physical constant in `lib/shipping/dimensions.ts` is an estimate**,
+  and `select.ts`'s rule 4 (`max` thickness rather than sum) is only legitimate
+  because rule 3 forces a single flat layer. Do not weaken rule 3.
+
 **Supabase clients** (`lib/supabase/`): `createClient()` uses the anon key and
 respects RLS; `createAdminClient()` uses the service-role key and bypasses RLS
 entirely. The admin client belongs only in trusted server paths that a request
@@ -426,7 +497,9 @@ development only. Config arrives as real env vars, two ways:
 - **Build args** — every `NEXT_PUBLIC_*`. Inlined by `next build`; changing one
   needs a **rebuild**, never a restart.
 - **Fly secrets** — `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`,
-  `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`. Read per request.
+  `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, and **`AUSPOST_API_KEY`**
+  (new in round 9; without it postage quotes from the fallback table and the
+  shop still works). Read per request.
 
 **Never move a secret into a build arg** — build args are recorded in image
 history. And never advise the owner to set a `NEXT_PUBLIC_*` value as a Fly
@@ -475,10 +548,40 @@ database at all, so "Supabase is down" must not read as "this container is
 dead". A dependency probe, if ever wanted, belongs at its own path, polled far
 less often, wired to alerting rather than to Fly's restart policy.
 
-**One stale reference you cannot fix from a docs pass:** `getStripe()` in
-`lib/stripe.ts` still throws `"STRIPE_SECRET_KEY is not set. Add it in
-.env.local (and in Vercel)."` The advice is wrong now — deployed, it is a Fly
-secret. Fix the string next time you are editing that file for another reason.
+**`getStripe()`'s error message has been fixed** — it now names `.env.local` for
+local work and `fly secrets set` for the server, and says the key is a runtime
+secret and never a build arg. Earlier versions of this file listed the old
+Vercel wording as a known-stale string; it is gone from the code.
+
+## Traps in this working environment
+
+None of these is about the app. All of them have cost time.
+
+- **Turbopack constant-folds `process.env.NODE_ENV === "production"` comparisons
+  in a production build.** Measured in this repo: a guard written that way was
+  silently made unconditional in the compiled output. Write environment guards
+  as **`!== "development"`**, which survives the optimiser. `siteUrl()` in
+  `lib/stripe.ts` carries the same note at the line.
+
+  **The one existing `=== "production"` guard is deliberate and must stay.**
+  `app/api/checkout/route.ts:275` is scoped that way on purpose, and the fold is
+  harmless there because it folds to the value the guard wants in each mode: on
+  in a production build, off in development, which is exactly what the replay
+  harness (running with no database) depends on. The rule above is about guards
+  where the fold *changes* the meaning. Do not "consistency-fix" line 275.
+- **The device bridge VM has no network access.** `git push`, `fly`, `curl` and
+  anything else that needs egress must be run by the owner. Do not report a
+  push as done because the command exited.
+- **`git` on the mounted Windows folder cannot delete its own lock files.**
+  Clear them by moving them aside — `mv .git/index.lock /tmp/`, and the same for
+  any other `.git/**/*.lock` — rather than `rm`.
+- **Ten files show as permanently modified and it is pure CRLF line-ending
+  noise.** **Never `git add -A`.** Stage the files you actually changed, by
+  name, or a commit becomes unreviewable.
+- **`../Documents/3D_Planner.xlsx` is not in the sandbox**, so
+  `scripts/generate-seed.mjs` cannot be run here. `lib/fallback-data.ts` and
+  `supabase/seed.sql` were patched in place in round 9; a real regenerate is
+  owed.
 
 ## Conventions
 

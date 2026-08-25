@@ -68,6 +68,25 @@ export type Product = {
   personalisation_mode: "builder" | "text" | null;
   /** Field label for "text" mode, e.g. "Pet's name". */
   personalisation_label: string | null;
+  /**
+   * Packed weight in grams — the only input Australia Post prices a domestic
+   * parcel on, so a basket's postage is the sum of these. Non-optional because
+   * the column is `not null` with a charm-sized default: a row nobody has put
+   * on the scales yet is still quotable, rather than a hole in the checkout.
+   */
+  weight_grams: number;
+  /** Packed length in mm. Not priced on, but the API validates it. */
+  length_mm: number;
+  /** Packed width in mm. Not priced on, but the API validates it. */
+  width_mm: number;
+  /** Packed thickness in mm — usually what pushes an item past Large Letter. */
+  thickness_mm: number;
+  /**
+   * Owner's manual override: false forces a parcel quote however small the
+   * measurements look. Bulk is not always a bounding box, and Large Letter is
+   * untracked and uninsured — a lost one is a loss the studio wears.
+   */
+  letter_eligible: boolean;
   active: boolean;
 };
 
@@ -152,6 +171,22 @@ export type Order = {
   gift_note: string | null;
   tracking_number: string | null;
   shipping_address: Address;
+  /**
+   * How the postage on this order was arrived at. Null on every order placed
+   * before postage was quoted — that is "flat rate era", not missing data,
+   * which is why these three are nullable rather than defaulted.
+   *
+   * Stored so a discrepancy found months later (the studio paid parcel rates
+   * on something the customer was charged Large Letter for) is diagnosable,
+   * and so a future label-printing phase can raise the shipment from what was
+   * actually quoted rather than re-deriving it from a basket whose products
+   * may have been re-measured or deactivated since.
+   */
+  shipping_quote_source: "live" | "cache" | "stale" | "fallback" | null;
+  /** Basket weight the quote was priced on. See shipping_quote_source. */
+  quoted_weight_grams: number | null;
+  /** Australia Post service the quote was for — the other half of a label. */
+  quoted_service_code: string | null;
   created_at: string;
   items: OrderItem[];
 };

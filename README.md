@@ -79,10 +79,16 @@ lib/
   contact.ts                  the shared "can a customer reach us, and what do
                               we send them" predicates — import, never re-derive
   rate-limit.ts               in-memory throttle (see the caveat below)
+  shipping/                   Australia Post postage. dimensions · weights ·
+                              select · client · cache · fallback · quote.
+                              `quoteBasket()` is the one entry point — and
+                              nothing imports it yet (see Postage below)
   types.ts  format.ts  stripe.ts  safe-next.ts  supabase/
 supabase/
   migrations/0001_init.sql    THE schema — RLS policies, helper functions,
                               grants. (There is no `schema.sql`.)
+  migrations/0002_shipping.sql  product measurements, the rate cache, and
+                              quote provenance on orders
   seed.sql                    catalogue, generated from the workbook
   verify.sql                  schema smoke test — every row must print `t`
 scripts/
@@ -145,7 +151,7 @@ the root of the only real deployment gotcha here:
 | Kind | Route in | Changing it |
 |---|---|---|
 | Every `NEXT_PUBLIC_*` value | Docker **build arg**, inlined by `next build` | **Rebuild and redeploy** |
-| `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` | **Fly secret**, read at request time | Restart |
+| `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, `AUSPOST_API_KEY` | **Fly secret**, read at request time | Restart |
 
 Never put a secret in a build arg — build args are recorded in image history.
 
@@ -366,6 +372,61 @@ answer gets baked into a page that states what the shop does with customer
 data. If you change the layout's auth read, add `export const dynamic =
 "force-dynamic"` to the pages that make email claims in the same change.
 
+## Postage
+
+`lib/shipping/` quotes real Australia Post rates. **It is built and not yet
+connected**: `app/api/checkout/route.ts` still charges the flat
+`shippingCost()` from `lib/config.ts`. `WORKLOG.md` §5 round 9 is the full
+record; this is the shape.
+
+**`quoteBasket(lines, methodId)` in `lib/shipping/quote.ts` is the only entry
+point, deliberately.** Both the cart and the checkout route have to call it, so
+the price a customer agreed to and the price Stripe charges cannot diverge. It
+resolves **cache → live API → fallback table**, it **never throws**, and it never
+returns zero for a basket with something in it. A postage lookup sits inside
+rendering a cart and inside creating a checkout session; neither may fail
+because a carrier is slow.
+
+Three facts about Australia Post shaped everything, and all three were checked
+against the live API rather than the documentation:
+
+- **Domestic parcel price does not vary by destination postcode** (verified
+  across eight, from Melbourne CBD to Christmas Island). Postcodes change which
+  services are *available*, never what they cost. So postage needs **no customer
+  address** — which is what makes it quotable on the cart page, before Stripe
+  collects an address.
+- **There is no cubic weighting.** Dimensions decide validity and Large Letter
+  eligibility. Weight decides price.
+- **Prices are GST-inclusive retail.** The shop is not GST-registered, so the
+  total passes straight through and no page may show a GST component against it.
+
+**Large Letter is the interesting tier and the reason for the care.** Under
+125 g and 260 × 360 × 20 mm it is **$3.40**, against about **$10.20** for the
+cheapest parcel — but it is **untracked and uninsured**. Every product is
+`letter_eligible: false` today, so everything quotes as a tracked parcel:
+slightly dear, never short. Turning it on is a per-row toggle in Supabase **plus**
+a fix to `transitLabel()` in `lib/config.ts`, which currently hardcodes
+"· tracked"; shipping one without the other would tell customers untracked mail
+is tracked. `quoteBasket` returns a `tracked` boolean per quote for exactly this.
+
+Everything rounds toward the shop paying — weights up, limits pulled in, and the
+fallback table returns the band *above* the one a basket falls in. Overcharging
+a dollar is recoverable and visible; undercharging is paid quietly by the studio
+on every order until someone reconciles a postage bill.
+
+**Label printing and tracking are not automatable at this scale.** Australia
+Post's Shipping & Tracking API needs an eParcel or StarTrack contract (2,000+
+parcels a year, and a credit account wanting $1,000+ a month plus an issued
+ABN); MyPost Business is free and needs no ABN but is **portal-only, with no
+API**. Labels are printed by hand in the portal, and the automation path when
+volume arrives is a third-party platform such as Starshipit or Shippit — not
+Australia Post's own API.
+
+`AUSPOST_API_KEY` (free, self-serve) is a **runtime** value: a Fly secret, never
+a build arg. Without it every quote comes from the fallback table and the shop
+keeps working. It is **not yet listed in `.env.example`** — add the line by hand
+for local work.
+
 ## Business rules live in one file
 
 `lib/config.ts` holds the free-shipping threshold, postage prices, print lead
@@ -456,6 +517,7 @@ npm run lint     # eslint
 npx tsc --noEmit # typecheck
 
 ./scripts/verify-sql.sh          # schema + seed + assertions on local Postgres 16
+                                 # ⚠️ applies 0001 only; verify.sql now needs 0002 too
 node scripts/replay-checkout.mjs # replay the real client baskets at /api/checkout
 
 fly status -a bamstudio-shop     # is the machine up, and where

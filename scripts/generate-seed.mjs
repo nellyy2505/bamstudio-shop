@@ -91,6 +91,76 @@ const PRICE_BY_CATEGORY = {
   "Market offer": 1500,
 };
 
+/**
+ * Packed size and weight per category, and whether a category may be posted as
+ * a Large Letter.
+ *
+ * ⚠️ **Transcribed by hand from `lib/shipping/dimensions.ts`, which is the
+ * source of truth.** That module is TypeScript and this is a `.mjs` script, so
+ * it cannot be imported — the same constraint that makes BUILDER_PRICING a
+ * text-parse below. Nothing enforces that these two agree: **if you change
+ * CATEGORY_DEFAULTS or DEFAULT_DIMENSIONS over there, change them here too and
+ * re-run this script**, or the seeded catalogue will quote postage against
+ * numbers the runtime quoter no longer uses.
+ *
+ * Keys are `Category` values exactly as the workbook spells them, which is
+ * also how `CATEGORY_DEFAULTS` is keyed.
+ *
+ * `letter_eligible` has no counterpart in dimensions.ts — it is a per-row
+ * judgement, not a measurement, so it is decided here and refined by the owner
+ * per row in Supabase afterwards without a deploy. It is `false` for every
+ * category below and for anything unrecognised, deliberately: false quotes the
+ * basket as a parcel, which can only ever overcharge slightly, never
+ * undercharge. dimensions.ts enforces a 16 mm working thickness limit and no
+ * category here is under it, so `true` would be wrong today in any case.
+ */
+const SHIPPING_BY_CATEGORY = {
+  // A steel clicker spring inside a printed shell. 22 mm thick is what rules
+  // these out of Large Letter, and correctly so.
+  "Clicker keychain": {
+    weight_grams: 25,
+    length_mm: 60,
+    width_mm: 60,
+    thickness_mm: 22,
+    letter_eligible: false,
+  },
+  // Phone stands, popsockets, strap charms — small but three-dimensional.
+  "Phone & bag": {
+    weight_grams: 30,
+    length_mm: 90,
+    width_mm: 60,
+    thickness_mm: 20,
+    letter_eligible: false,
+  },
+  // Pet bowls. Solid printed vessels; nothing about these is letter-shaped.
+  Pet: {
+    weight_grams: 180,
+    length_mm: 160,
+    width_mm: 160,
+    thickness_mm: 60,
+    letter_eligible: false,
+  },
+};
+
+/**
+ * Applied to a category missing from the table above — mirrors
+ * `DEFAULT_DIMENSIONS` in `lib/shipping/dimensions.ts`. Heaviest and bulkiest
+ * on purpose: an unrecognised category is an unmeasured product, and an
+ * unmeasured product should quote as a parcel.
+ */
+const DEFAULT_SHIPPING = {
+  weight_grams: 120,
+  length_mm: 150,
+  width_mm: 150,
+  thickness_mm: 50,
+  letter_eligible: false,
+};
+
+/** Packed size, weight and letter eligibility for a workbook row. */
+function shippingFor(row) {
+  return SHIPPING_BY_CATEGORY[row.Category] ?? DEFAULT_SHIPPING;
+}
+
 const BESTSELLERS = new Set(["CLK-027", "CLK-001", "CLK-01", "CLK-023"]);
 const NEW_ITEMS = new Set(["CLK-018", "CLK-019", "CLK-046", "PHB-001"]);
 /**
@@ -315,6 +385,7 @@ const values = rows.map((row) => {
   const price = priceFor(row);
   const colours = coloursFor(row);
   const isPersonalised = PERSONALISED.has(sku);
+  const shipping = shippingFor(row);
 
   const details = [
     { title: "Item details", body: describe(row) },
@@ -358,6 +429,18 @@ const values = rows.map((row) => {
     isPersonalised,
     q(PERSONALISATION[sku]?.mode ?? null),
     q(PERSONALISATION[sku]?.label ?? null),
+    // Written explicitly rather than left to the column defaults in
+    // 0002_shipping.sql. Those defaults are a single charm-sized guess
+    // (12 g, 60×60×8 mm, letter_eligible true) that exists so the migration
+    // needs no backfill — they are not the per-category values, and
+    // letter_eligible would arrive `true`, which is the undercharging
+    // direction. Emitting them keeps a seeded database quoting the same
+    // postage as lib/fallback-data.ts.
+    shipping.weight_grams,
+    shipping.length_mm,
+    shipping.width_mm,
+    shipping.thickness_mm,
+    shipping.letter_eligible,
   ].join(", ")})`;
 });
 
@@ -384,7 +467,8 @@ insert into public.products (
   slug, sku, name, short_name, category, theme, description, price,
   art, tint, gallery, colours, attachments, details,
   rating, review_count, stock_on_hand, is_bestseller, is_new, is_personalised,
-  personalisation_mode, personalisation_label
+  personalisation_mode, personalisation_label,
+  weight_grams, length_mm, width_mm, thickness_mm, letter_eligible
 ) values
 ${values.join(",\n")};
 
@@ -449,6 +533,9 @@ const fallbackProducts = rows.map((row, index) => {
     is_personalised: isPersonalised,
     personalisation_mode: PERSONALISATION[sku]?.mode ?? null,
     personalisation_label: PERSONALISATION[sku]?.label ?? null,
+    // Per-category packed size and weight — see SHIPPING_BY_CATEGORY, and keep
+    // it in step with lib/shipping/dimensions.ts.
+    ...shippingFor(row),
     active: true,
   };
 });

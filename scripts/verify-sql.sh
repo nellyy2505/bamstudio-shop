@@ -157,6 +157,12 @@ echo "==> applying supabase/migrations/0001_init.sql"
 # exists. The migration IS the schema; that is what gets applied here.
 psql_run "-d $DBNAME -q -f '$SQL_DIR/migrations/0001_init.sql'" >/dev/null
 
+# 0002 adds the shipping columns and the rate cache. verify.sql asserts against
+# both migrations, so skipping this one makes the harness fail on
+# `products.weight_grams` rather than on anything real.
+echo "==> applying supabase/migrations/0002_shipping.sql"
+psql_run "-d $DBNAME -q -f '$SQL_DIR/migrations/0002_shipping.sql'" >/dev/null
+
 echo "==> applying supabase/seed.sql"
 psql_run "-d $DBNAME -q -f '$SQL_DIR/seed.sql'" >/dev/null
 

@@ -1,8 +1,8 @@
 -- Schema smoke test.
 --
--- Run this in the Supabase SQL editor after applying 0001_init.sql and
--- seed.sql. Every line should print `t`. These are the guarantees that only
--- fail in production — a missing grant here means paid orders are never
+-- Run this in the Supabase SQL editor after applying 0001_init.sql,
+-- 0002_shipping.sql and seed.sql. Every line should print `t`. These are the
+-- guarantees that only fail in production — a missing grant here means paid orders are never
 -- recorded, and you would first hear about it from a customer.
 --
 -- It writes four throwaway orders (and one order item) inside a transaction it
@@ -19,13 +19,29 @@ union all
 select 'personalised products have a mode', count(*) filter (
          where is_personalised and personalisation_mode is null) = 0            from public.products
 union all
-select 'row-level security everywhere',    count(*) = 8 from pg_tables
+-- 9 since 0002_shipping.sql added shipping_rate_cache. A new table that
+-- forgets to enable RLS lands in `public` readable by the anon key, so this
+-- count is deliberately exact rather than `>=`.
+select 'row-level security everywhere',    count(*) = 9 from pg_tables
          where schemaname = 'public' and rowsecurity = true
 union all
 -- A client must never be able to write a review: the old policy let any
 -- signed-in account post one on any product, flagged as a verified purchase.
 select 'no client review inserts',         count(*) = 0 from pg_policies
-         where schemaname = 'public' and tablename = 'reviews' and cmd = 'INSERT';
+         where schemaname = 'public' and tablename = 'reviews' and cmd = 'INSERT'
+union all
+-- Postage is quoted from Australia Post on weight, so a product with no
+-- weight — or one whose default was edited to 0 in the table editor — is a
+-- product that cannot be priced for posting at checkout.
+select 'every product has a weight',       count(*) filter (
+         where weight_grams is null or weight_grams <= 0) = 0                    from public.products
+union all
+-- Dimensions do not set the price, but they decide Large Letter eligibility
+-- and Australia Post rejects a quote whose dimensions are not plausible.
+select 'every product has dimensions',     count(*) filter (
+         where length_mm is null or length_mm <= 0
+            or width_mm is null or width_mm <= 0
+            or thickness_mm is null or thickness_mm <= 0) = 0                    from public.products;
 
 -- The webhook cannot confirm a paid order without these two grants. This is
 -- the check worth caring about: without it the failure is silent until a
@@ -58,7 +74,24 @@ select 'anon cannot read confirmation summary',
        not has_function_privilege('anon', 'public.order_confirmation_summary(text)', 'execute')
 union all
 select 'confirmed page can read its summary',
-       has_function_privilege('service_role', 'public.order_confirmation_summary(text)', 'execute');
+       has_function_privilege('service_role', 'public.order_confirmation_summary(text)', 'execute')
+union all
+-- shipping_rate_cache is internal pricing data — what postage costs the studio
+-- and when we last asked. Supabase grants every new table in `public` to anon
+-- and authenticated by default privilege as it is created, so the revoke in
+-- 0002_shipping.sql is the only thing standing between it and anyone holding
+-- the anon key that ships in the browser bundle. These two rows are the proof
+-- that revoke is there and stays there.
+select 'anon cannot read the rate cache',
+       not has_table_privilege('anon', 'public.shipping_rate_cache', 'select')
+union all
+select 'signed-in cannot read the rate cache',
+       not has_table_privilege('authenticated', 'public.shipping_rate_cache', 'select')
+union all
+-- ...and the counterpart: the server-side quoting path must still be able to
+-- read and write it, or every checkout pays for a fresh API round trip.
+select 'quoting can read the rate cache',
+       has_table_privilege('service_role', 'public.shipping_rate_cache', 'select');
 
 -- Stock can only be claimed once, however many times Stripe retries.
 insert into public.orders

@@ -64,6 +64,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -131,6 +136,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -206,6 +216,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -285,6 +300,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -360,6 +380,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -439,6 +464,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -514,6 +544,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -589,6 +624,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -664,6 +704,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -743,6 +788,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -822,6 +872,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -897,6 +952,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -976,6 +1036,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1055,6 +1120,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1130,6 +1200,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1192,6 +1267,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1254,6 +1334,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1316,6 +1401,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1378,6 +1468,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1453,6 +1548,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1515,6 +1615,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1577,6 +1682,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1639,6 +1749,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1701,6 +1816,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1763,6 +1883,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1825,6 +1950,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1887,6 +2017,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -1949,6 +2084,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2011,6 +2151,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2068,6 +2213,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": true,
     "personalisation_mode": "builder",
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2130,6 +2280,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": true,
     "personalisation_mode": "text",
     "personalisation_label": "Numbers or date to print",
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2192,6 +2347,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2254,6 +2414,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2316,6 +2481,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2378,6 +2548,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2440,6 +2615,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2502,6 +2682,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2564,6 +2749,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2605,6 +2795,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": true,
     "personalisation_mode": "text",
     "personalisation_label": "Pet's name",
+    "weight_grams": 180,
+    "length_mm": 160,
+    "width_mm": 160,
+    "thickness_mm": 60,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2646,6 +2841,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 30,
+    "length_mm": 90,
+    "width_mm": 60,
+    "thickness_mm": 20,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2687,6 +2887,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 30,
+    "length_mm": 90,
+    "width_mm": 60,
+    "thickness_mm": 20,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2739,6 +2944,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 30,
+    "length_mm": 90,
+    "width_mm": 60,
+    "thickness_mm": 20,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2796,6 +3006,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": true,
     "personalisation_mode": "builder",
     "personalisation_label": null,
+    "weight_grams": 30,
+    "length_mm": 90,
+    "width_mm": 60,
+    "thickness_mm": 20,
+    "letter_eligible": false,
     "active": true
   },
   {
@@ -2837,6 +3052,11 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "is_personalised": false,
     "personalisation_mode": null,
     "personalisation_label": null,
+    "weight_grams": 25,
+    "length_mm": 60,
+    "width_mm": 60,
+    "thickness_mm": 22,
+    "letter_eligible": false,
     "active": true
   }
 ];

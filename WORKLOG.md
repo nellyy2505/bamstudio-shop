@@ -3,9 +3,11 @@
 Everything a new session needs to pick this up: what was built, what was found
 wrong and fixed, what is deliberately still open, and how to verify any of it.
 
-Last updated: 25 August 2026. Branch: `master`; the §0 remediation **and the
-round-8 move from Vercel to Fly.io** are both in the working tree, not yet
-committed — see §7.
+Last updated: 25 August 2026. Branch: `master`. Two pieces of work have landed
+since the last docs pass: **round 8**, the move from Vercel to Fly.io, and
+**round 9**, phase 1 of Australia Post postage — built, and deliberately **not
+yet wired into checkout**. §0 has the current open list; §5 rounds 8 and 9 have
+the reasoning; §7 has the commit state and what to distrust in it.
 
 ---
 
@@ -23,6 +25,24 @@ and 7 was in brand-new code written to close a blocker.**
 **Addressed is not the same as finished.** Two items are closed only for the
 *claims* they made; the capability behind the claim is still not built. Read
 the status column literally rather than the number of ticks.
+
+### The open list, as it stands today
+
+This is the short version of §6, and the first thing to read. Nothing below is
+a §0 blocker regression; they are the items a new session or the owner has to
+act on next.
+
+| # | Item | Who | Where |
+|---|---|---|---|
+| A | **Wire `quoteBasket()` into checkout.** `lib/shipping/` is built and verified against the live Australia Post API, and **nothing imports it** — `app/api/checkout/route.ts:499` still calls the flat-rate `shippingCost()`. Until it is wired, postage is the old flat $9.50 / $14.50 | agent | §5 round 9, §6 |
+| B | **`scripts/verify-sql.sh` applies only `0001_init.sql`, and `verify.sql` now asserts against `0002_shipping.sql`.** So the SQL harness **cannot pass as it stands** — the run would error on `shipping_rate_cache` and on the new product columns. Fix the script before trusting any SQL claim | agent | §4 |
+| C | **Weigh three items and give the real numbers** — one name charm, one clicker keychain, one pet bowl, each in the mailer actually used: grams, and thickness in mm. **Every** weight and dimension in `lib/shipping/dimensions.ts` and in the seed is a reasoned estimate today. These three readings are the single highest-value input to postage accuracy | **owner** | §6 backlog |
+| D | **Decide: cheap-untracked or dearer-tracked.** Every product is `letter_eligible: false`, so everything quotes as a tracked parcel — which overcharges slightly and never undercharges. Large Letter is $3.40 against ~$10.20, and is **untracked and uninsured**. Enabling it is a per-row toggle in Supabase **plus** the `transitLabel()` fix in item E. This is a business decision, not a code one | **owner** | §6 |
+| E | **`transitLabel()` in `lib/config.ts` hardcodes "· tracked".** True only while everything ships as a parcel. It **must** be fixed in the same change that ever enables Large Letter, or the site tells customers untracked mail is tracked | agent | §6 |
+| F | **The Supabase JWT secret does not appear to have been rotated.** The previously-exposed anon key still authenticates, so the leaked `service_role` key is very likely still live. **Outstanding security action** | **owner** | §6 |
+| G | **`AUSPOST_API_KEY` is a new runtime secret** — free, self-serve, instant from developers.auspost.com.au. It is a **Fly secret, never a build arg**. Without it postage still works: it falls through to the deliberately pessimistic fallback table | **owner** | §6, `SETUP.md` |
+| H | **Delete the Porkbun parking wildcard.** `bamstudioshop.com` is registered, but DNS still carries `*` CNAME → `uixie.porkbun.com`, which shadows email records | **owner** | `SETUP.md` Step 5f |
+| I | **The rate limiter is still one process's memory.** Round 8 fixed *which IP it reads*; it did not make it durable. Still the only thing in front of `/api/track` | agent | §6 |
 
 | # | Status | What it was, and where it stands now |
 |---|---|---|
@@ -56,6 +76,15 @@ green check is least able to tell you.
   `t`**, including the five grant assertions (three for `lookup_order`, two for
   the confirmation lookup) and the §0.7 backfill predicate, exercised over a
   seeded stranded order and a seeded finished one.
+
+  **That 24/24 is now historical, and the harness is currently broken.**
+  `verify.sql` has grown to **29 assertions** — the two new product-measurement
+  checks and three rate-cache grant checks came with `0002_shipping.sql` — but
+  `scripts/verify-sql.sh` still applies `0001_init.sql` only (`grep -n 0002
+  scripts/verify-sql.sh` returns nothing). A run today errors on
+  `shipping_rate_cache` and on `products.weight_grams` rather than printing a
+  table. **29/29 has never been observed.** Teaching the script to apply `0002`
+  after `0001` is the whole fix, and it is item B in the list above.
 - **The anon-privilege denial, against real Postgres.** `permission denied for
   function lookup_order` for both `anon` and `authenticated`; a row returned
   for `service_role`. Run on a fresh database *and* on a simulated
@@ -189,6 +218,22 @@ itemised confirmation has no dependency on the studio mailbox.
 the contact form and the newsletter box deliver *by emailing* it. Anding the
 two into one test is the round-7 defect.
 
+**Postage is quoted from Australia Post, in `lib/shipping/` — and nothing
+imports it yet.** Seven modules, one entry point: `quoteBasket(lines, methodId)`
+in `lib/shipping/quote.ts`, resolving cache → live API → a pessimistic fallback
+table, never throwing and never returning zero for a non-empty basket. The
+supporting facts, all verified against the live API on 25 August 2026:
+**domestic parcel price does not vary by destination postcode** (checked across
+eight postcodes — postcode affects service *availability* only), so a basket can
+be priced on page one with **no customer address at all**; there is **no cubic
+weighting**, so dimensions decide validity and Large Letter eligibility, never
+price; prices are **GST-inclusive retail** and the shop is not GST-registered, so
+the total passes through and no GST component may ever be shown against it.
+`supabase/migrations/0002_shipping.sql` adds five product columns, the
+`shipping_rate_cache` table (revoked from `anon` and `authenticated`) and three
+quote-provenance columns on `orders`. **The wiring into `app/api/checkout/route.ts`
+is not done** — §5 round 9 has the full record and §6 the remaining work.
+
 **Deployment is a Docker image on one always-on Fly machine**, built on Fly's
 remote builder because `next build` needs ~1.6 GB and the machine has 512 MB.
 `output: "standalone"` means the server **reads no `.env` file**: every
@@ -308,6 +353,14 @@ must print `t`. Paste it into the Supabase SQL editor after setup, and locally:
 ```bash
 ./scripts/verify-sql.sh
 ```
+
+> ⚠️ **The script is currently out of step with the file it runs.**
+> `verify.sql` is now **29 assertions** and its header says to apply
+> `0001_init.sql`, `0002_shipping.sql` *and* `seed.sql`. `scripts/verify-sql.sh`
+> still applies `0001` only, so a run today errors on `shipping_rate_cache` and
+> on `products.weight_grams` instead of printing a table. **29/29 has never been
+> observed.** Teach the script to apply `0002` between the migration and the
+> seed before you trust — or report — any SQL result.
 
 One command, self-bootstrapping. It drives a **locally installed PostgreSQL
 16** (`apt install postgresql-16`) — `initdb`s a disposable cluster outside the
@@ -709,9 +762,197 @@ completing on a real machine are all first proved by the owner's first deploy.
 `lib/rate-limit.ts`'s own comment records the caveat that Fly's docs *recommend*
 `Fly-Client-IP` without promising the proxy overwrites a client-supplied one.
 
+### Round 9 — Australia Post postage, phase 1: built, and not wired
+
+Not a review round either. The owner asked for real Australia Post rates
+instead of the flat $9.50 / $14.50 in `lib/config.ts`. What follows was
+researched against the **live** Postage Assessment Calculator (PAC), not against
+the documentation, because the documentation is wrong about several of these.
+
+**The finding that shaped the whole design: domestic parcel price does not vary
+by destination postcode.** Verified across eight destinations, from 3000
+(Melbourne CBD) to 6798 (Christmas Island): the price was identical every time.
+Postcodes affect which services are *available*, never what they cost. So
+quoting needs **no customer address**, which deletes the problem that made this
+look hard — Stripe collects the shipping address *after* the price is fixed, and
+that no longer matters. A basket can carry a real postage figure on page one.
+
+**Second finding: there is no cubic weighting.** Dimensions never move the
+price at any weight tested — a 100 × 60 × 20 mm parcel and a 220 × 160 × 70 mm
+parcel at the same weight quote identically. Dimensions decide **validity** and
+Large Letter eligibility, and nothing else.
+
+**Response traps, all observed rather than inferred.** They are why
+`lib/shipping/client.ts` is 570 lines for what is a handful of GETs:
+
+- `costs.cost`, `services.service` and `options.option` are a **bare object for
+  one entry and an array for several** — sometimes both in one document.
+  Anything that indexes `[0]` without normalising crashes on a quiet basket.
+- **Money comes back as a string** (`"10.20"`, never `10.2`). Parsed to integer
+  cents digit-by-digit; `parseFloat("10.20") * 100` is `1020.0000000000001` on
+  this runtime and the same expression produces `1019.9999999999999` elsewhere.
+- **An error is not signalled by the status.** The documented behaviour is a
+  **200** carrying `{"error":{"errorMessage":…}}`; what this environment
+  actually returns for the same bad requests is a **404** carrying the same
+  body. Both happen, so neither is trusted — the body is parsed first and
+  `error.errorMessage` is the authority, whatever the status line says.
+- The letter endpoint's third dimension parameter is **`thickness`, not
+  `height`** (sending `height` gets "Please enter Thickness."), and it takes no
+  postcodes — domestic letters are flat-rate nationally.
+
+**Prices are GST-inclusive retail.** The shop is not GST-registered, so it
+passes the total through and never displays or computes a GST component from it.
+That would claim a tax the shop does not collect.
+
+**The money finding: Large Letter.** ≤125 g, ≤260 × 360 mm, ≤20 mm thick is
+**$3.40** — but **untracked and uninsured**. The cheapest parcel is **$10.20**.
+Quoted live on 25 August 2026: 1 charm **$3.40**, 4 charms **$3.40**, 12 charms
+**$11.70** (weight tips it into a parcel), 1 pet bowl **$10.20**. On a basket of
+two keycap charms that is the difference between postage costing more than the
+charms and postage being an afterthought.
+
+> **`transitLabel()` in `lib/config.ts` hardcodes "· tracked".** That is true
+> today only because everything ships as a parcel. It **must** be fixed in the
+> same change that ever enables Large Letter for a product, or the site tells
+> customers that untracked mail is tracked. `lib/shipping/quote.ts` returns a
+> `tracked` boolean per quote for exactly this reason; the UI must read that,
+> not the label.
+
+**Label printing and tracking APIs are not available to this business — do not
+re-research this.** Australia Post's Shipping & Tracking API requires an
+eParcel or StarTrack contract. eParcel needs **2,000+ parcels a year**, and the
+Business Credit Account behind it wants **$1,000+ a month** in parcel spend plus
+an **issued ABN**. MyPost Business is free and needs no ABN, but is
+**portal-only — there is no API**. So at this scale: labels are printed by hand
+in the MyPost Business portal, and the automation path when volume actually
+arrives is a **third-party platform (Starshipit, Shippit) on a MyPost Business
+account**, not Australia Post's own API.
+
+**What was built** — `lib/shipping/`, seven files, each verified against the
+live API:
+
+| File | What it is |
+|---|---|
+| `dimensions.ts` | Every tunable: carrier limits, the margins held back from them, per-category fallbacks, packaging, rounding. One rule governs all of it — **round toward the shop paying** |
+| `weights.ts` | Basket roll-up from **server-loaded product rows**. The browser says which product and how many, never how heavy |
+| `select.ts` | Letter or parcel, on four rules evaluated together so a surprising verdict can be explained. Rule 4 (`max` thickness, not sum) is legitimate **only because** rule 3 forces a single flat layer — the two must not be separated |
+| `client.ts` | The PAC HTTP layer. 2.5 s timeout, one retry on a network error only, **never throws** |
+| `cache.ts` | L1 in-process `Map` with a 6 h TTL, and a marked **L2 seam** for the `shipping_rate_cache` table. `lookupRate`/`storeRate` are async purely so adding L2 changes this file and nothing else |
+| `fallback.ts` | The pessimistic rate table, rates read live **2026-08-25** (`RATES_VERIFIED_ON`). It returns **the band above** the one a basket falls in — overcharging a dollar is recoverable, undercharging silently is not |
+| `quote.ts` | `quoteBasket(lines, methodId)` — **the single entry point both cart and checkout must use**, so the price a customer agreed to and the price Stripe charges cannot diverge |
+
+`supabase/migrations/0002_shipping.sql` adds `weight_grams`, `length_mm`,
+`width_mm`, `thickness_mm` and `letter_eligible` to `products` (each with a
+default, so no backfill), the `shipping_rate_cache` table with RLS on, no
+policies and an explicit `revoke` from `anon`/`authenticated`, and three
+nullable quote-provenance columns on `orders` (`shipping_quote_source`,
+`quoted_weight_grams`, `quoted_service_code`) so a discrepancy found months
+later is diagnosable. `verify.sql` grew from 24 to **29 assertions**.
+
+**What is NOT done.** Phase 1 is the quoting engine; none of it is reachable
+from the site:
+
+- **Nothing imports `lib/shipping/`.** `app/api/checkout/route.ts:499` still
+  calls the flat-rate `shippingCost()`. That is the wiring job.
+- No `POST /api/shipping/quote` route, no cart UI, no copy changes.
+- `scripts/verify-sql.sh` applies only `0001_init.sql`, so the SQL harness
+  cannot run the 29 assertions (§4).
+- The L2 cache tier is a documented seam, not an implementation.
+- **Every physical constant in `dimensions.ts` is an estimate.** See §6's
+  backlog item — three real weighings is the highest-value input there is.
+
+**New environment variable: `AUSPOST_API_KEY`** — free, self-serve and instant
+from developers.auspost.com.au. It is a **runtime** value, so it is a **Fly
+secret, never a build arg**. Without it the client reports "not configured"
+once per process and every quote falls through to the fallback table, which
+still works. (The API does answer unauthenticated today; that is undocumented,
+unpromised, and not something to build on.)
+
+**Verified by execution:** the live PAC quotes above, the object-vs-array and
+string-money shapes, the 200-vs-404 error behaviour, the postcode invariance
+across eight destinations, and the absence of cubic weighting. **Verified by
+reasoning only:** that the packing model matches how the studio actually packs
+(single flat layer, items beside each other and never stacked — `select.ts`
+depends on this and it is a packing-bench convention, not a measurement), and
+every gram and millimetre in `dimensions.ts`.
+
 ## 6. Open items
 
-### Top follow-up — do this before anything else in this file
+### Postage — the half phase 1 did not do, and it comes first
+
+`lib/shipping/` is built, documented and verified against the live carrier API
+(§5 round 9). **Nothing imports it.** Until the list below is done the shop
+still charges the flat $9.50 / $14.50 from `lib/config.ts`, which is a made-up
+number that happens to be roughly right for a parcel and badly wrong for a
+letter.
+
+1. **Wire `quoteBasket()` into `app/api/checkout/route.ts`**, replacing the
+   `shippingCost()` call at **line 499**. `quoteBasket` answers what the post
+   office charges; `SHIPPING.freeThreshold` / `shippingCost()` still decides
+   *who pays it* — the free-shipping rule is about the basket subtotal and is
+   deliberately not inside the quoter. Stamp the three provenance columns
+   (`shipping_quote_source`, `quoted_weight_grams`, `quoted_service_code`) on
+   the order while you are there; `0002` added them for this.
+2. **Add `POST /api/shipping/quote`** so the cart can price a basket without
+   creating a checkout session. It must call `quoteBasket` and nothing else —
+   two code paths computing postage is exactly how the cart price and the
+   Stripe charge come to differ for some baskets and not others.
+3. **Cart UI and copy.** Show the real figure, and label a `source:
+   "fallback"` quote as an estimate if you show anything at all.
+4. **Fix `scripts/verify-sql.sh` to apply `0002_shipping.sql`** — see §4. The
+   29 assertions have never been run.
+5. **The L2 cache tier** is a marked seam in `lib/shipping/cache.ts`, not an
+   implementation. Read the three numbered warnings in that file first; the
+   important one is that **a fallback price must never be persisted**, or a
+   two-second outage becomes six hours of deliberately-inflated quotes.
+
+**A trap in the schema, worth knowing before you touch a product row.**
+`0002_shipping.sql` declares `letter_eligible boolean not null default true`,
+while `lib/shipping/weights.ts` treats an absent flag as **false** and the seed
+writes `false` for all 44 products. The two disagree in the expensive
+direction: **a new product row added in the Supabase table editor arrives
+letter-eligible**, and would quote at Large Letter rates for something nobody
+has measured. Either flip the column default to `false` in a follow-up
+migration, or make adding a row a checklist item that includes setting it.
+Nothing is wrong today — every existing row is explicitly `false` — but the
+default is the wrong way round.
+
+### Backlog — the owner's input, and the thing that would help most
+
+> **Weigh three items and give the real numbers.**
+>
+> One name charm, one clicker keychain, one pet bowl — each **in the mailer
+> actually used** — and for each: **grams**, and **thickness in millimetres**.
+>
+> Every weight and every dimension in `lib/shipping/dimensions.ts` and in the
+> seeded catalogue is a **reasoned estimate**. They were chosen to round toward
+> the shop paying, so nothing undercharges today, but three real readings would
+> replace the largest source of error in the whole postage path — and they are
+> ten minutes with a kitchen scale and a ruler. This is the highest-value input
+> to postage accuracy that exists, and nobody but the owner can supply it.
+> It is repeated in `SETUP.md` under "What only you can supply".
+
+### Pending owner decision — cheap-untracked, or dearer-tracked
+
+Every product is `letter_eligible: false` today, so **everything quotes as a
+tracked parcel**. That overcharges slightly on small baskets and never
+undercharges, which is the safe place to sit while the decision is open.
+
+The decision is a business one:
+
+- **Large Letter** — $3.40 for a basket under 125 g, **untracked and
+  uninsured**. A lost one is a loss the studio wears, and the customer has
+  nothing to look up.
+- **Parcel** — about $10.20, tracked, and the customer can watch it move.
+
+Enabling Large Letter is **two things, and they must ship together**: flipping
+`letter_eligible` to `true` per row in the Supabase table editor (no deploy),
+**and** fixing `transitLabel()` in `lib/config.ts`, which hardcodes
+"· tracked" for both shop methods. Doing the first without the second means the
+site tells customers untracked mail is tracked. `quoteBasket` already returns a
+`tracked` boolean per quote; the UI must read that rather than the label.
+
+### Top follow-up in the app code — the JSX half of the contact dedupe
 
 **The predicates are done. The JSX is not.**
 
@@ -755,7 +996,7 @@ claim.
 | **Saved addresses don't prefill checkout** | Stripe collects the address fresh. The copy is honest about this. Real prefill needs a Stripe Customer with `shipping`, passed as `customer` on the session. TODO in `app/account/addresses/page.tsx` |
 | **No review UI** | The insert policy was withdrawn. The migration records the shape of a correct one (requires a delivered order, forces `verified`) for when reviews ship |
 | **Promotion codes disabled** | `allow_promotion_codes: false`. Orders have no discount column, so a promo would leave subtotal/shipping/total inconsistent |
-| **No domain is registered** | The first deploy targets `https://bamstudio-shop.fly.dev`. The plan: register the **`.com` now** (no eligibility gate) and add the matching **`.com.au` once the ABN is *issued*** — auDA requires an issued ABN and a pending application does not qualify. Moving to the real domain later is five jobs, and the first is the one people miss: change the `NEXT_PUBLIC_SITE_URL` **build arg and redeploy** (it is baked in — a restart does nothing), then `fly certs add`, update Stripe's webhook endpoint, update Supabase's Site URL and redirect allow-list, and re-verify the sending domain in Resend. `SETUP.md` Step 5f is the runbook |
+| **The domain is registered but not attached** | **`bamstudioshop.com` is registered at Porkbun.** DNS still carries Porkbun's parking wildcard (`*` CNAME → `uixie.porkbun.com`), which **must be deleted** — it shadows email records. The first deploy still targets `https://bamstudio-shop.fly.dev`; the matching **`.com.au` needs an *issued* ABN** — auDA requires one and a pending application does not qualify. Moving to the real domain later is five jobs, and the first is the one people miss: change the `NEXT_PUBLIC_SITE_URL` **build arg and redeploy** (it is baked in — a restart does nothing), then `fly certs add`, update Stripe's webhook endpoint, update Supabase's Site URL and redirect allow-list, and re-verify the sending domain in Resend. `SETUP.md` Step 5f is the runbook |
 
 ### Known limitations
 
@@ -840,10 +1081,49 @@ claim.
   and re-run `npm run build` to confirm nothing pulls it in transitively.
   (`public/vercel.svg` is a leftover of the same kind, unreferenced by any
   component.)
-- **`getStripe()`'s error message still names Vercel.** `lib/stripe.ts` throws
-  `"STRIPE_SECRET_KEY is not set. Add it in .env.local (and in Vercel)."` The
-  advice has been wrong since round 8 — deployed, it is a Fly secret. Cosmetic,
-  but it is the sentence someone reads at exactly the wrong moment.
+- ~~`getStripe()`'s error message still names Vercel.~~ **Fixed in the code.**
+  `lib/stripe.ts` now says to add it to `.env.local` locally and to set it with
+  `fly secrets set` on the server, naming it a runtime secret and never a build
+  arg. Recorded here only because `CLAUDE.md` carried this as a known-stale
+  string for a while and someone may remember it that way.
+
+### Outstanding security action — the Supabase JWT secret
+
+**The Supabase JWT secret does not appear to have been rotated.** The anon key
+that was previously exposed in chat **still authenticates**, which is the test
+that matters: rotating the JWT secret invalidates every key signed with the old
+one. If the anon key still works, the old signing secret is still live — and the
+`service_role` key that was leaked alongside it is therefore very likely still
+live too.
+
+That key **bypasses row-level security entirely**. It can read every order, every
+address and every profile in the project, and write anything it likes.
+
+What the owner has to do, in the Supabase dashboard: rotate the JWT secret, take
+the newly issued keys, update `NEXT_PUBLIC_SUPABASE_ANON_KEY` (a **GitHub
+Actions Secret** — it is a build arg, so this needs a **redeploy**, not a
+restart) and `SUPABASE_SERVICE_ROLE_KEY` (`fly secrets set`, restart only), and
+update `.env.local` on her own machine. Rotating and *not* updating both places
+takes the shop down, so do it in one sitting.
+
+The Stripe live key that was exposed in the same way **has been rolled** — the
+owner has confirmed that. Test keys are in use everywhere today.
+
+### The owner's own setup, as at 25 August 2026
+
+Recorded because a new session will otherwise assume more exists than does.
+None of it has been verified from here — it is what the owner reports.
+
+| Thing | State |
+|---|---|
+| Domain | **`bamstudioshop.com` registered at Porkbun.** DNS still on Porkbun's parking wildcard (`*` CNAME → `uixie.porkbun.com`), **which must be deleted** — it shadows email records |
+| GitHub | `https://github.com/nellyy2505/bamstudio-shop`, **public**, branch `master`, pushed |
+| Supabase | Project exists; **the database is still empty — no migration has been run.** `0001_init.sql` *and* `0002_shipping.sql`, then `seed.sql`, then `verify.sql` |
+| Fly | **App not created yet.** No deploy has ever happened |
+| Stripe | **Test** keys in use. The live key exposed in chat has been rolled |
+| Supabase keys | **JWT secret appears not to have been rotated** — see above |
+| Email | **Nothing configured.** Plan: Resend free tier (3,000/month, custom domains included) for sending, Porkbun's free forwarding for receiving. `EMAIL_FROM` **cannot** be a gmail.com address |
+| Australia Post | No `AUSPOST_API_KEY` yet. Free, self-serve, instant |
 
 ### Cannot be verified without the owner's accounts
 
@@ -874,6 +1154,16 @@ because they are what the owner's first real test order is for.
 
 ### Only the owner can do these
 
+**Weigh three items and give the real numbers** (the backlog item above — one
+name charm, one clicker keychain, one pet bowl, in the mailer actually used:
+grams and thickness in mm) · **decide Large Letter vs tracked parcel** (the
+pending decision above) · **rotate the Supabase JWT secret** and update both
+places that hold its keys · **delete Porkbun's `*` parking CNAME** ·
+`AUSPOST_API_KEY` from developers.auspost.com.au (free, self-serve, instant —
+a **Fly secret**, never a build arg; without it postage falls back to the
+pessimistic table and still works) · **run `0001_init.sql`, then
+`0002_shipping.sql`, then `seed.sql`, then `verify.sql`** on the Supabase
+project, which is still empty · create the Fly app ·
 ABN (Stripe needs it to release money) · registered business name · business
 postal address · return address · a support mailbox
 (`NEXT_PUBLIC_SUPPORT_EMAIL` — **not optional**: without it the contact form
@@ -905,17 +1195,34 @@ f9745fb Stage orders in the database instead of Stripe metadata
 71e701f Build the Bam Studio online shop
 ```
 
-The rounds-6-and-7 remediation of §0 sits on top of that as working-tree
-changes, with `lib/email.ts`, `lib/contact.ts`, `scripts/verify-sql.sh` and
-`scripts/replay-checkout.mjs` new. **The round-8 hosting migration sits on top
-of that again**, also uncommitted: `Dockerfile`, `fly.toml`, `.dockerignore`,
-`.github/workflows/deploy.yml` and `app/api/health/route.ts` new;
-`next.config.ts`, `lib/stripe.ts`, `lib/rate-limit.ts` and `proxy.ts` changed.
-Run `git status` and `git diff --stat` rather than trusting this paragraph — it
-is the first thing to go stale.
+The rounds-6-and-7 remediation of §0 sits on top of that, with `lib/email.ts`,
+`lib/contact.ts`, `scripts/verify-sql.sh` and `scripts/replay-checkout.mjs`
+new. **The round-8 hosting migration** added `Dockerfile`, `fly.toml`,
+`.dockerignore`, `.github/workflows/deploy.yml` and `app/api/health/route.ts`,
+and changed `next.config.ts`, `lib/stripe.ts`, `lib/rate-limit.ts` and
+`proxy.ts`. **Round 9** added `lib/shipping/` (seven files) and
+`supabase/migrations/0002_shipping.sql`, and changed `lib/types.ts`,
+`supabase/verify.sql`, `scripts/generate-seed.mjs`, `supabase/seed.sql` and
+`lib/fallback-data.ts`.
 
-`npx tsc --noEmit`, `npx eslint .` and `npm run build` are clean. Verified **by
-execution**: `./scripts/verify-sql.sh` **24/24** against a real PostgreSQL 16
+**Where those changes live is not the same answer everywhere, so check rather
+than assume.** On the owner's device the hosting move is reported as commit
+**`896c08d`, pushed to `master`** at `github.com/nellyy2505/bamstudio-shop`.
+That commit does **not** exist in the sandbox checkout these docs were written
+in (`git log` there shows two synthetic checkpoint commits, and every round-8
+and round-9 file is untracked or modified in the working tree). Both statements
+can be true at once — they are different clones — but it means **`git status`
+and `git diff --stat` are the only trustworthy answer to "what is committed",
+and this paragraph is the first thing in the file to go stale.**
+
+Round 9 is **not** committed anywhere as far as anything here can tell.
+
+`npx tsc --noEmit`, `npx eslint .` and `npm run build` were clean as of round 8.
+**They have not been re-run since round 9 landed**, and round 9 changed
+`lib/types.ts` — `Product` gained five non-optional fields — so a typecheck is
+the first thing a new session should run. Verified **by
+execution**, at the time each was run: `./scripts/verify-sql.sh` **24/24**
+against a real PostgreSQL 16
 from an empty database (including the anon-privilege denial, on a fresh
 database and on a simulated already-deployed one);
 `node scripts/replay-checkout.mjs` **7/7** with the negative control; the
@@ -924,6 +1231,17 @@ configuration states with zero failed assertions; the `safeNext`
 re-verification, 41 payloads plus ~192,000 fuzz cases. **The webhook harness
 lives in `/tmp/webhook-harness/` and will not survive this session** — §4 says
 what it covers so it can be rebuilt.
+
+**The SQL number above is stale and the harness is currently broken**:
+`verify.sql` is now **29 assertions** and asserts against `0002_shipping.sql`,
+while `scripts/verify-sql.sh` still applies `0001` only. 29/29 has never been
+observed (§4, §6).
+
+Round 9's own verification was **against the live Australia Post API** — the
+quotes, the response shapes, the 200-vs-404 error behaviour, the postcode
+invariance across eight destinations and the absence of cubic weighting were all
+observed. Nothing in `lib/shipping/` has been exercised through the app, because
+nothing in the app calls it.
 
 Verified **by reasoning only**, and worth repeating because the distinction is
 the most useful thing in this file: real Resend delivery, the Stripe
@@ -952,10 +1270,19 @@ the things being watched. What is genuinely left is smaller and named:
   address. Round 8 fixed *which IP it reads* — the old first-`x-forwarded-for`
   read was forgeable on Fly — but it is still one process's memory, and moving
   it to shared storage is still the top security follow-up (§6).
-- **The shop has no domain and has never been deployed.** The first deploy goes
-  to `bamstudio-shop.fly.dev`; the `.com` can be registered now and the
-  `.com.au` needs an *issued* ABN. Changing to the real domain later is a
-  rebuild, not a setting (§5 round 8, §6, `SETUP.md` Step 5f).
+- **The shop has never been deployed, and the database is still empty.** The Fly
+  app has not been created; no migration has been run on the Supabase project.
+  `bamstudioshop.com` **is** registered (Porkbun), but DNS still carries the
+  parking wildcard that shadows email records, and the `.com.au` needs an
+  *issued* ABN. Changing to the real domain later is a rebuild, not a setting
+  (§5 round 8, §6, `SETUP.md` Step 5f).
+- **Postage is built and not connected.** `lib/shipping/` quotes real Australia
+  Post rates and nothing imports it; checkout still charges the flat rate. The
+  wiring, the `transitLabel()` trap and the owner's three weighings are all in
+  §6, and they are the first work a new session should pick up.
+- **The Supabase JWT secret appears not to have been rotated**, so the leaked
+  `service_role` key is very likely still live (§6). That is the one item on
+  this page that is a live security exposure rather than a missing feature.
 - The `"unknown"` email sentinel escapes the webhook into three readers that do
   not know about it, and nothing writes `orders.tracking_number` — the status
   progression customers are shown is a manual database edit today (§6).
@@ -966,6 +1293,7 @@ the things being watched. What is genuinely left is smaller and named:
   no code ever sent, which meant no contract ever formed. It is the most
   load-bearing sentence on the site and it needs a professional eye.
 
-Start at §0, then §5 round 7 — the design rule it ends on is the one thing in
-this file that will stop the same defect being written a third time — then §6's
-top follow-up.
+Start at §0 and its open list, then §5 round 7 — the design rule it ends on is
+the one thing in this file that will stop the same defect being written a third
+time — then §5 round 9 and §6's postage section, which is where the actual work
+is.
