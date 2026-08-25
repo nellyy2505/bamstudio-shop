@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LoginForm } from "./LoginForm";
+import { safeNext } from "@/lib/safe-next";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -12,16 +13,6 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function one(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
-}
-
-/**
- * `next` comes from the URL, so anything that could leave the origin
- * (absolute URLs, `//host`, `/\host`) falls back to the account area.
- */
-function safeNext(value: string | undefined): string {
-  if (!value || !value.startsWith("/")) return "/account/orders";
-  if (value.startsWith("//") || value.startsWith("/\\")) return "/account/orders";
-  return value;
 }
 
 export default async function LoginPage({
