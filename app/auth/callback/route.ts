@@ -1,22 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { safeNext } from "@/lib/safe-next";
 
 export const runtime = "nodejs";
 
-const DEFAULT_NEXT = "/account/orders";
-
 /** The one destination that earns a verified-recovery marker. */
 const RECOVERY_NEXT = "/reset-password";
-
-/**
- * `next` is attacker-controllable, so only same-origin paths are allowed.
- * `//host` and `/\host` are protocol-relative to a browser — an open redirect.
- */
-function safeNext(value: string | null): string {
-  if (!value || !value.startsWith("/")) return DEFAULT_NEXT;
-  if (value.startsWith("//") || value.startsWith("/\\")) return DEFAULT_NEXT;
-  return value;
-}
 
 /**
  * Only these codes reach the sign-in page. The provider's own
