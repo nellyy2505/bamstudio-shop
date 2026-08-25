@@ -3,37 +3,95 @@
 Everything a new session needs to pick this up: what was built, what was found
 wrong and fixed, what is deliberately still open, and how to verify any of it.
 
-Last updated: 25 August 2026. Branch: `master`, tree clean.
+Last updated: 25 August 2026. Branch: `master`; the §0 remediation is in
+the working tree, not yet committed — see §7.
 
 ---
 
-## 0. START HERE — this is not ready for customers
+## 0. START HERE — the ten blockers, and exactly where they now stand
 
-A final independent review (round 5, §5) ran after the code was believed
-close to done. It confirmed the two launch blockers from round 4 are properly
-closed, and then found **three security defects and one class of false claims**
-that were not in the code being reviewed. Do these first, in this order.
+A final independent review (round 5, §5) found three security defects and one
+class of false claims. A remediation pass (round 6, §5) addressed all ten
+items, and adversarial verification of that pass found two further defects in
+the fixes themselves. A second adversarial pass (round 7, §5) then found that
+the §0.1 email fix had itself shipped four false statements, rebuilt the email
+contract, and found six more defects on the way. **Both rounds are recorded in
+§5 because the pattern, not the fix, is the lesson: every defect in rounds 6
+and 7 was in brand-new code written to close a blocker.**
 
-**Item 3 is now done** (see the row below). Items 1, 2 and 4 are the live
-blockers — 1 and 2 are the ones a customer or an attacker actually meets.
+**Addressed is not the same as finished.** Two items are closed only for the
+*claims* they made; the capability behind the claim is still not built. Read
+the status column literally rather than the number of ticks.
 
-| # | Severity | What | Where |
-|---|---|---|---|
-| 1 | **Blocker** | **No email is ever sent, and ~12 places say it is.** A guest is told to track their order with "the number from your confirmation email" — there is no path to that number, so the order is untrackable. The terms say a contract forms when the confirmation email is sent, so by the shop's own words no contract ever forms. Contact-form enquiries, including faulty-goods claims, are discarded to a log line | `api/contact`, `api/newsletter`, no `receipt_email` in `api/checkout`; claims in FAQ, `/order/confirmed`, `account/orders/[id]`, terms, refunds, privacy, `EmailPreferences` |
-| 2 | **Blocker** | **`lookup_order` is granted to `anon`**, so it is callable directly with the public anon key and the /track rate limit is decorative. Order numbers are a public incrementing sequence + 4 hex, so with a customer's email an attacker brute-forces the suffix and gets their **street address and phone**. *I introduced this grant* | `supabase/migrations/0001_init.sql` (grant), `app/api/track/route.ts` (throttle lives only here) |
-| 3 | ~~Blocker~~ **DONE** | ~~Open redirect~~ — fixed in `lib/safe-next.ts`, which validates the output as well as the input (the first attempt still leaked on `/..//evil.com`, which normalises to a protocol-relative `//evil.com`). Both call sites use the shared helper. Verified against 20 payloads: tab/CR/LF smuggling, dot-segment collapse, backslash, absolute, protocol-relative, `javascript:`, `data:` — none reaches another origin | `lib/safe-next.ts`, `app/auth/callback/route.ts`, `app/login/page.tsx` |
-| 4 | **High** | **A transient read error strands a paid order, invisibly.** `confirmOrder` discards the staged-row SELECT's error; `staged` reads as `null`, the fresh-insert path runs, hits the unique constraint, and `23505` is swallowed with a 200 — so Stripe never retries and the real row stays `pending` forever. *Same failure class round 4 closed, reached through the front door* | `app/api/webhooks/stripe/route.ts` |
-| 5 | **High** | Stripe keys present + Supabase env missing ⇒ money taken, nothing recorded, and `/order/confirmed` still says "order confirmed". The mirror-image guard exists; this direction doesn't | `app/api/checkout/route.ts` |
-| 6 | **High** | `[HELLO@YOURDOMAIN]` is **hardcoded** in the legal pages, bypassing the `SHOP.hasSupportEmail` guard — and it is the only stated way to start a return or report a fault | `legal/refunds`, `legal/terms`, `legal/privacy`; unguarded interpolation in `account/orders/[id]`, `DeleteAccountCard` |
-| 7 | **Medium** | The `stock_applied` backfill marks every confirmed order applied — **including the stranded ones the repair branch exists to fix**, so their stock never moves | `0001_init.sql` backfill vs `claimStock` |
-| 8 | **Medium** | A repaired order loses what to print: `fillItemsFromStripe` records no variant, colourway or letters (Stripe's `line_item.description` is the product *name*). Fix with `expand: ['data.price.product']`. It can also double-insert items, because the existence probe ignores its own error | `app/api/webhooks/stripe/route.ts` |
-| 9 | **Medium** | Marketing consent is **pre-ticked**, contradicting the shop's own privacy policy; "Delete account" deletes nothing while its copy says it does; contact-form PII goes to the platform log stream | `SignupForm`, `DeleteAccountCard`, `api/contact` |
-| 10 | **Medium** | "Free shipping" is stated unqualified but only applies to standard post — worst in the cart, which shows "Free shipping unlocked" while Express is selected and still charges $14.50 | `Header`, `layout` metadata, `app/page.tsx`, `CartView` |
+| # | Status | What it was, and where it stands now |
+|---|---|---|
+| 1 | **Closed for the claims — and the fix itself had to be rebuilt** | No email was ever sent while ~40 places said one was. `lib/email.ts` now posts to the Resend API directly with `fetch` (no npm dependency, 8s timeout, never throws) and the Stripe webhook sends a real itemised confirmation. Round 6 gated the *claims* on a separate public flag, `SHOP.canSendEmail` / `NEXT_PUBLIC_EMAIL_ENABLED`; **that was a defect and round 7 removed it** — two switches for one fact shipped four more false statements (§5 round 7). The single source of truth is now `isEmailConfigured()`, the same condition `sendEmail` checks. **The real remedy is still not the email**: `/order/confirmed` shows the guest their order number, so an order is trackable whether or not mail is configured. Still open behind this: the newsletter has **no subscriber list** (see 9 and §6) |
+| 2 | **Closed** | `lookup_order` was granted to `anon`, so it was callable straight over PostgREST with the public key and `/track`'s throttle was decorative. Revoked from `anon` and `authenticated`, granted to `service_role` only, with an explicit `revoke execute` so the migration also closes the hole on an **already-deployed** database. `/api/track` moved to the admin client and now allow-lists the fields it returns, dropping the customer's `phone` from the wire entirely. Five new grant assertions in `verify.sql` |
+| 3 | **Closed, re-verified** | Open redirect in `lib/safe-next.ts`. Was already fixed; **independently re-verified this session** against the real `safeNext` — 41 named payloads plus ~192,000 fuzz cases, zero bypasses, and `/reset-password` still matches exactly, so the recovery-cookie gate is intact |
+| 4 | **Closed** | A transient read error stranded a paid order invisibly. The staged-row SELECT now binds and checks its error; the `23505` path no longer returns a blanket 200 but re-reads and returns 200 **only** when it can prove the existing order is genuinely finished — past `pending`, numbered, stock claimed, has items. Several other swallowed errors in the same file were closed with it |
+| 5 | **Closed** | Stripe live + Supabase absent took money and recorded nothing. New guard in `app/api/checkout/route.ts`, deliberately scoped to `NODE_ENV === "production"`. **That scoping is load-bearing — §4 says why. Do not make it unconditional** |
+| 6 | **Closed** | `[HELLO@YOURDOMAIN]` was hardcoded in the legal pages, bypassing `SHOP.hasSupportEmail`. Every rendered placeholder is now a gated fallback chain: real mailbox → social handles → a plain statement that no contact address has been published yet |
+| 7 | **Closed** | The `stock_applied` backfill marked *stranded* orders applied, so the repair branch could never move their stock. Predicate narrowed to orders that demonstrably finished (`order_number is not null` **and** has `order_items`). Verified against real PostgreSQL 16 by re-applying the migration over seeded data |
+| 8 | **Closed** | A repaired order lost what to print, and could double-insert items. The existence-probe error is now checked; `listLineItems` uses `expand: ['data.price.product']`; checkout stamps `metadata: { slug }` on the Stripe line because **`short_name` is not unique** and the webhook prefers the slug with a name fallback for older sessions. Recovered variant data is validated against the product's own colour and attachment lists and left **null** when ambiguous, never guessed |
+| 9 | **Partly closed** | Marketing consent is now unticked by default, and PII is out of the contact and newsletter logs. "Delete account" now describes what it actually does — which is nothing: it files a request by hand. **Real account deletion is not built** and needs a service-role admin route, re-authentication and an in-flight-order guard. §6 carries it |
+| 10 | **Closed** | "Free shipping" was stated unqualified but only ever applied to standard post. Qualified everywhere, and the cart now derives the claim from `shippingCost()` for the **selected** method, so it can no longer say "Free shipping unlocked" while Express is selected and charged $14.50 |
 
-Lower-severity items (uncapped "Only N ready to ship", no quantity cap in the
-cart, empty `next.config.ts` with no CSP, inert `revalidate`, the recovery
-cookie keyed on `next` rather than the flow) are in round 5's full report and
-are not launch-blocking.
+Lower-severity items from round 5 (uncapped "Only N ready to ship", no quantity
+cap in the cart, empty `next.config.ts` with no CSP, inert `revalidate`, the
+recovery cookie keyed on `next` rather than the flow) are still open and still
+not launch-blocking.
+
+### What is verified by execution, and what is only verified by reasoning
+
+This distinction matters more than the status column, and it is the thing a
+green check is least able to tell you.
+
+**Run, and observed to pass:**
+
+- `./scripts/verify-sql.sh` — the migration, the seed and `verify.sql` applied
+  to a real local PostgreSQL 16 from an empty database. **24/24 assertions
+  `t`**, including the five grant assertions (three for `lookup_order`, two for
+  the confirmation lookup) and the §0.7 backfill predicate, exercised over a
+  seeded stranded order and a seeded finished one.
+- **The anon-privilege denial, against real Postgres.** `permission denied for
+  function lookup_order` for both `anon` and `authenticated`; a row returned
+  for `service_role`. Run on a fresh database *and* on a simulated
+  already-deployed one, which is what proves the explicit `revoke execute`
+  closes the hole rather than merely not opening it.
+- `node scripts/replay-checkout.mjs` — **7/7**: the six real
+  `CartView.checkout()` baskets plus the negative control, against a running
+  dev server.
+- **The webhook behavioural harness — 43/43.** The real route module against a
+  fake Supabase client and a fake Stripe, asserting on the calls made and the
+  status returned. **It lives in `/tmp/webhook-harness/` and will not survive
+  this session** — see §4 for what it covers, so it can be rebuilt.
+- **An 80-page browser crawl across four configuration states** (no email +
+  no mailbox, email only, mailbox only, both), with zero failed assertions.
+  This is what would have caught the round-7 false statements earlier.
+- `safeNext` (item 3) — 41 named payloads and ~192,000 generated cases, run
+  against the real exported function, not a copy of it.
+- `npx tsc --noEmit`, `npx eslint .`, `npm run build`.
+
+**Reviewed by reading only — believed correct, not demonstrated:**
+
+- **Real Resend delivery.** Nothing here has ever put a message in a mailbox.
+  The 43-scenario harness proves *when* a send is attempted and with what body;
+  it stubs the provider.
+- **A real Stripe session end to end.** The webhook harness feeds the route
+  synthesised events in Stripe's shape, and `recoverVariant` and the rebuild
+  path were exercised against them — but never against a payload a genuine
+  Stripe account produced, because that needs the owner's keys.
+- That `price_data.product_data.metadata.slug` survives the round trip and
+  comes back under `expand: ['data.price.product']`. That is what Stripe
+  documents; it has not been observed here. **If this is wrong, item 8's fix
+  silently degrades to the name fallback** — which is the ambiguous path it
+  exists to replace. Check it with the first real test order.
+- Real Resend delivery, and whether `EMAIL_FROM`'s domain is verified.
+- `after()`'s behaviour on Vercel specifically — whether the task reliably runs
+  before the instance freezes.
+- Grants on a **hosted** Supabase project. The migration is the only thing that
+  has been tested; a project where someone has since granted something in the
+  dashboard is outside what `verify.sql` was run against.
 
 ---
 
@@ -102,6 +160,35 @@ compact `slug:qty` map left in metadata.
 `text` (one free-text line on the product page, priced at the product price).
 Checkout refuses a builder payload on anything that isn't builder mode.
 
+**The email contract — one switch, and the predicates on top of it.**
+`isEmailConfigured()` in `lib/email.ts` is
+`Boolean(RESEND_API_KEY && EMAIL_FROM)`, the same expression `sendEmail` itself
+checks, so a claim on a page and the capability behind it cannot disagree.
+There is no public mirror; `SHOP.canSendEmail` and `NEXT_PUBLIC_EMAIL_ENABLED`
+were removed in round 7 and `lib/config.ts` carries a comment at the spot. It
+**throws in the browser** rather than answering `false` — a hand-rolled
+stand-in for `import "server-only"`, which is not a dependency here — so a
+server component calls it and a client component takes a `canSendEmail`
+boolean prop; `app/account/settings/page.tsx` is the one threading site.
+
+`lib/contact.ts` holds everything built on it, in one definition each:
+`hasStudioMailbox`, `hasSocialAccount`, `canReachStudio`,
+`formsReachStudio(canSendEmail)`, `sendsOrderConfirmation(canSendEmail)`,
+`socialLinks`. **`sendsOrderConfirmation` is the secrets alone**; the webhook's
+itemised confirmation has no dependency on the studio mailbox.
+**`formsReachStudio` additionally needs `NEXT_PUBLIC_SUPPORT_EMAIL`**, because
+the contact form and the newsletter box deliver *by emailing* it. Anding the
+two into one test is the round-7 defect.
+
+**Nothing declares `export const dynamic`** except `force-dynamic` on the
+Stripe webhook route, and that is for the raw body. The claim-making pages are
+rendered per request only because the **root layout awaits `getUser()` →
+`cookies()`**, which opts the whole tree out of static prerendering — the
+build's prerender manifest holds only `/_global-error` and `/favicon.ico`. Each
+of those pages reads its capability at module scope, so the protection is
+incidental: change the layout's auth read and a build-time answer gets baked
+into a legal document.
+
 ## 4. How to verify — do this, don't trust the diff
 
 Three times in this work a *fix* introduced a regression. Two were caught only
@@ -111,6 +198,11 @@ because the real payloads were replayed. The lesson, concretely:
 Both checkout blockers in round 2 passed hand-written API tests and were still
 completely broken, because `CartView` sent a different shape.
 
+Both checks below are now scripts, so there is nothing to reconstruct by hand
+and nothing to get subtly wrong.
+
+### The checkout replay
+
 ```bash
 # 1. Static checks
 npx tsc --noEmit && npx eslint . && npm run build
@@ -118,35 +210,151 @@ npx tsc --noEmit && npx eslint . && npm run build
 # 2. Run it with a dummy Stripe key so validation runs but no charge can occur
 printf 'STRIPE_SECRET_KEY=sk_test_dummy\n' > .env.local && npm run dev
 
-# 3. Replay real client payloads against /api/checkout.
-#    HTTP 502 = validation PASSED and it reached Stripe (success).
-#    HTTP 400/409 = validation rejected it.
-#    Copy the exact JSON shape from CartView.checkout().
+# 3. In a second terminal, replay the payloads the client actually builds
+node scripts/replay-checkout.mjs
 ```
 
-Always check all four personalised products plus an ordinary one plus a mixed
-basket — a validation failure on one line rejects the **whole basket**.
+`scripts/replay-checkout.mjs` POSTs the exact JSON `CartView.checkout()` sends
+— key order and omitted-vs-null included — for seven cases: all four
+personalised products (`custom-name-charm` and `alphabet-bag-charm-on-cord` in
+builder mode, `custom-number-date-chain` and `personalised-bowl-with-pet-s-name`
+in text mode), an ordinary product, a five-line mixed basket, and **a negative
+control**.
 
-**The SQL is testable too.** `supabase/verify.sql` asserts the guarantees that
-otherwise only fail in production. Run it in the Supabase SQL editor after
-setup; every row must print `t`. To exercise it locally:
+**Read the results inverted. HTTP 502 is the pass**: with a dummy Stripe key
+the request is meant to die at Stripe, so 502 means every server-side
+validation accepted the basket. 400/409 mean it was rejected; 503 means the app
+is misconfigured.
+
+**Case 7 is the negative control and it is what makes a green run mean
+anything.** It puts free-text personalisation on an ordinary product, which
+checkout must refuse: it expects **400**. If that case also returns 502, the
+harness is not observing validation at all and every PASS above it is
+worthless — the script says so in as many words. A run without a failing
+negative control is a run that has proved nothing.
+
+The route rate-limits to 10 requests per 60s per IP and the script sends 7, so
+it spaces them by `DELAY_MS` (default 1000) and **aborts on a 429** rather than
+reporting throttling as failures. `BASE_URL` (default `http://localhost:3000`)
+points it at another deployment. Two runs back to back will trip the limit —
+wait a minute or raise `DELAY_MS`.
+
+A validation failure on one line rejects the **whole basket**, which is exactly
+how two previous blockers hid, so the mixed basket is not optional.
+
+### The webhook harness — 43 scenarios, and it is not in this repo
+
+Neither script below touches `app/api/webhooks/stripe/route.ts`, which is the
+highest-consequence file in the project. Round 7 built a behavioural harness
+for it: the real route module loaded against a fake Supabase client with a
+seeded fake database and a fake Stripe, asserting on the calls the route makes
+and the HTTP status it returns. **Last run 43/43.**
+
+**It lived in `/tmp/webhook-harness/` (a loader, a Supabase stub, the
+scenarios, a typecheck) and does not survive the session that wrote it.** If it
+is gone, that is expected — rebuild it rather than assuming the path is
+covered. What it covers:
+
+- every `23505` duplicate-insert path — existing row genuinely finished, still
+  pending/unnumbered/itemless, and the re-read itself erroring;
+- a transient error at each formerly-swallowed site: the staged-row SELECT, the
+  order-items probe, the products lookup, the confirming compare-and-set, the
+  order-number pre-read, the stock claim, both `decrement_stock` RPCs, the
+  rebuild insert, the staged-row delete;
+- duplicate delivery of one event, and a genuine concurrent winner mid-flight
+  (first retry 500, next 200);
+- two rows sharing a `stripe_session_id` (PGRST116 → 500);
+- **zero line items from Stripe** — must not close the event;
+- **unexpanded** line items (`price.product` is an id string) — nothing may be
+  invented, the line still has to be written;
+- **a segment matching both a colour name and an attachment label** — placed as
+  neither;
+- slug-versus-name matching, including a legacy line carrying no
+  `metadata.slug`;
+- the sentinel-email path — order still numbered and stocked, mail task queued,
+  **no send attempted**;
+- **a cancelled order** — not numbered, no stock claim, no decrement RPC, no
+  mail, no writes at all, and still 200; and cancelled-and-itemless;
+- a `confirmed`-but-unfinished and a `confirmed`-but-itemless order, both still
+  repaired — which is what proves the terminal check is scoped to `cancelled`
+  rather than to "anything past pending".
+
+### The SQL
+
+`supabase/verify.sql` asserts the guarantees that otherwise only fail in
+production — most importantly that the webhook may allocate order numbers and
+move stock (without those grants customers pay and **no order is ever
+recorded**), and that `lookup_order` is *not* reachable by `anon`. Every row
+must print `t`. Paste it into the Supabase SQL editor after setup, and locally:
+
+```bash
+./scripts/verify-sql.sh
+```
+
+One command, self-bootstrapping. It drives a **locally installed PostgreSQL
+16** (`apt install postgresql-16`) — `initdb`s a disposable cluster outside the
+repo on first run, starts it on a unix socket, recreates the database from
+empty, applies the Supabase stand-ins the migration needs (the `anon` /
+`authenticated` / `service_role` roles, `auth.users`, `auth.uid()`, `pgcrypto`),
+then applies the migration and the seed, runs `verify.sql`, prints the
+assertion table and **exits non-zero if any row is not `t`** — so it can gate a
+release. It refuses to run on any server that is not 16.
+
+> **The schema file is `supabase/migrations/0001_init.sql`.** There is no
+> `supabase/schema.sql`. This document and `CLAUDE.md` both used to say to pipe
+> `schema.sql`, and that cost someone real time — the migration *is* the
+> schema.
+
+Docker remains the alternative where a local Postgres is not wanted, but note
+that Docker was unavailable in the environment this was last verified in, which
+is why the script exists:
 
 ```bash
 docker run -d --rm --name pg -e POSTGRES_PASSWORD=test postgres:16-alpine
 # create schema auth, auth.users, auth.uid(), and the service_role/anon/
-# authenticated roles first, then pipe schema.sql, seed.sql, verify.sql via
+# authenticated roles first, then pipe supabase/migrations/0001_init.sql,
+# supabase/seed.sql and supabase/verify.sql through
 # docker exec -i pg psql -U postgres
 ```
 
-That is how the `service_role` grant was confirmed — the one where, if it is
-missing, customers pay and **no order is ever recorded**.
+### Why the §0.5 checkout guard is scoped to `NODE_ENV === "production"`
+
+`app/api/checkout/route.ts` refuses checkout when Stripe is configured and
+Supabase is not — otherwise a real charge succeeds, no order row is ever
+written, and `/order/confirmed` still tells the customer their order is
+confirmed. That guard is **deliberately inert outside production**, and the
+scoping is not timidity. It is there because of this:
+
+**The only end-to-end verification this project has runs the app with no
+database at all.** The checkout replay above is a dummy Stripe key, no Supabase
+env, and the real `CartView` payloads against `/api/checkout`. An unconditional
+guard turns all seven of those cases into a 503 that never reaches the
+validation being tested — the harness goes quiet and *looks* fine, because a
+503 is not a crash.
+
+This has already happened twice. §5 round 3 and round 4 are both a "strict"
+guard that could not tell *"the database returned an error"* from *"there is no
+database"*, and both had to be re-fixed. Round 4's rule is the constraint that
+came out of it, and it still holds: **a guard may reject a query error, never
+the absence of a database.** Running with no database is an intended mode
+(§3, `CLAUDE.md`), not a failure mode.
+
+Outside production the key in use is a test key and no real money can move, so
+the trade is one-sided: guard where the charge is real, stay out of the way
+where it is not. The reasoning is repeated in a comment at the guard itself.
+**Do not "tidy" it into an unconditional check.** That would be the fourth
+time, and it would silently disable the one test that has caught three
+regressions.
 
 ---
 
 ## 5. Review history
 
-Four review rounds. Each was an independent full-codebase pass, then fixes,
-then re-verification.
+Seven rounds. Each was an independent full-codebase pass, then fixes, then
+re-verification. Round 6 is the remediation of §0 and the adversarial pass over
+those fixes; **round 7 is the adversarial pass over round 6, and it found that
+the §0.1 email fix had reproduced the defect class it was closing.** If you
+read only one, read 7 — its closing paragraph is the design rule.
 
 ### Round 1 — first full review
 
@@ -238,28 +446,235 @@ Two of the three security defects are in code written during this work
 argument for the next session starting with a security-focused pass rather
 than a feature.
 
+### Round 6 — remediating §0, and an adversarial pass over the remediation
+
+All ten §0 items were worked (statuses and the honest caveats are in §0). The
+part worth keeping is not the fixes; it is what the pass over the fixes found.
+**Both defects below were in brand-new code written to close a blocker, and
+both would have shipped**, because the code they were in reads perfectly well.
+
+1. **A paid order could still finish with nothing to print.** If Stripe
+   returned **zero** line items on the rebuild path, `fillItemsFromStripe`
+   inserted nothing, reported success, and let the caller confirm the order,
+   allocate its number and spend its stock claim — then returned **200**, which
+   tells Stripe to stop retrying. A paid, confirmed, numbered order with no
+   record of what to print, and no further deliveries coming. A paid Checkout
+   Session always has line items, so an empty list is a failed read of Stripe,
+   not an empty basket. It now throws.
+2. **`recoverVariant` invented a product the customer never ordered.** A
+   segment matching **both** a colour name and an attachment label was
+   attributed to the attachment, because the attachment list was tried first.
+   That silently added a finding nobody chose *and* dropped the colour — the
+   wrong thing gets printed and posted. Such a segment is now placed as
+   neither; `variant_label` still holds the raw string, so the packing list
+   shows what was actually bought.
+
+The pattern is the same one round 5 named, one level in: **the defects were not
+in the code being reviewed, they were in the code being written to fix it.**
+Rounds 1–5 each hardened the payment path and each found real problems there;
+round 6's two were reached only by asking what the *new* code does on inputs
+nobody had pictured — Stripe answering with an empty list, and a colour named
+the same as a finding. Neither is exotic; both are one product-catalogue edit
+away.
+
+Also closed in this round, none of them in §0, all found by reading the paths
+the fixes touched: `assignOrderNumber` consumed the order-number sequence on
+every duplicate Stripe delivery (the `await` sat inside the update payload, so
+the number was allocated before the compare-and-set matched nothing) and had no
+`.select()`, so a silent no-op and a real assignment were indistinguishable;
+`decrementStock` logged and continued past a failed decrement with the stock
+claim already spent, making the drift permanent and invisible; the staged-row
+delete discarded its error and fell into the insert that the undeleted row was
+still blocking; and the products lookup on the rebuild path discarded its
+error, defaulting every line to `art: "macaron"`, `tint: "cream"` and a null
+`product_id` — an order that looks complete, links to nothing and prints the
+wrong artwork.
+
+### Round 7 — the round-6 email fix was itself shipping false statements
+
+Round 6 closed §0.1 by gating every email claim on a **public** flag,
+`SHOP.canSendEmail` reading `NEXT_PUBLIC_EMAIL_ENABLED`, kept in step by hand
+with the private `RESEND_API_KEY` / `EMAIL_FROM` capability. §0.1's whole
+subject was a shop saying something it did not do. **The fix reintroduced that,
+one level in.** Two switches for one fact can disagree, and in the launch
+configuration they did:
+
+- the **Terms of Service**, the **Privacy Policy** and the **account settings
+  page** each stated that the shop sends no order emails — while the webhook
+  was sending an itemised confirmation carrying line items, subtotal, postage
+  and total paid;
+- **Resend was disclosed as a data processor only when the support mailbox was
+  also set**, because one predicate (`canSendEmail && hasSupportEmail`) was
+  serving two different questions. In every configuration with the secrets but
+  no mailbox — a realistic partial setup, and the one an owner reaches first —
+  customer names, addresses, order contents and totals went to a US processor
+  the privacy policy did not name. That is not a wording problem.
+
+**The rebuild.** `SHOP.canSendEmail` and `NEXT_PUBLIC_EMAIL_ENABLED` are gone;
+nothing reads the variable. `isEmailConfigured()` is the single source of
+truth, it throws in the browser rather than lying, and client components take
+the answer as a `canSendEmail` prop. `lib/contact.ts` is new and holds the six
+predicates that were previously copy-pasted; crucially it keeps
+`sendsOrderConfirmation` (secrets alone) and `formsReachStudio` (secrets **and**
+mailbox) apart. §3 has the shape.
+
+**Six further defects, found by the same adversarial method and all in code
+written to close a blocker:**
+
+1. **The empty-line-items hole.** If Stripe returned zero line items on the
+   rebuild path, the order was confirmed, numbered, its stock claim spent, and
+   the webhook returned **200** — a paid order with nothing to print, and
+   Stripe told never to retry. A paid Checkout Session always has line items,
+   so an empty list is a failed read of Stripe, not an empty basket. It throws.
+2. **An invented fitting.** A variant segment matching **both** a colour name
+   and an attachment label was attributed to the attachment, inventing a cord
+   the customer never ordered *and* dropping the colour they did. Placed as
+   neither now; `variant_label` still carries the raw string.
+3. **A guard that did not guard.** `orders.email` is `NOT NULL`, so the rebuild
+   path writes the sentinel `"unknown"`. The confirmation-email guard tested
+   `!order.email` — which a truthy sentinel sails straight past, so the shop
+   would have handed `"unknown"` to Resend as a recipient. It tests by name now,
+   through `hasCustomerEmail()`.
+4. **Cancelled orders were being resurrected.** Both `status !== "pending"`
+   repair branches would number, stock-move and (once email existed) confirm a
+   `cancelled` order on a late `async_payment_succeeded` — undoing a decision a
+   person made on purpose. Scoped so **only `cancelled` is terminal**: the later
+   fulfilment states (`printing`/`packed`/`shipped`/`delivered`) must stay
+   repairable, or an interrupted delivery strands a real order. It returns
+   **200 rather than throwing**, because no retry can make a cancelled order
+   eligible and a 500 buys only an unbounded redelivery loop. **The money did
+   arrive, so the refund is a manual job** — it logs at error level naming the
+   order and the session, and `SETUP.md` tells the owner what to do.
+5. **Hanging auth forms.** With no Supabase configured, `/login`, `/signup`,
+   `/forgot-password` and `/reset-password` threw inside their async submit
+   handlers; the rejection was unhandled, the pending state never reset, and the
+   button sat on "Sending…" forever with no error shown — while
+   `/forgot-password` had already told the customer to go and check their spam
+   folder for a mail that was never sent. **All four** client forms now gate on
+   `isSupabaseConfigured()`, disable their controls with an explanation
+   rendered before the customer types anything, and reset pending state in a
+   `finally`, so no path can leave a button stuck. `/reset-password` also
+   gained an honest third branch: unconfigured now says accounts are not open
+   yet, rather than claiming a link "has expired" when no email could ever have
+   sent one. Its recovery-cookie waiver is unchanged and was re-checked by
+   driving a browser with and without the cookie.
+6. **The replay harness had a silent-drift bug.** It hardcoded `fallback-N`
+   product ids, which are **positional** in the generated catalogue, and
+   checkout resolves a line by `slug` while only echoing `product_id` back — so
+   regenerating the catalogue could silently re-point every id and the harness
+   would keep printing PASS while exercising different products than the ones
+   it names. It derives the ids from `lib/fallback-data.ts` at run time by slug
+   and **aborts with exit 3 rather than guessing** if a slug is missing.
+
+**The lesson, stated once.** Round 6's was "the defects were in the code being
+written to fix it". Round 7's is narrower and worse: **the round-6 fix
+reproduced the exact defect class it was closing**, because "gate the claim"
+was implemented as a second switch instead of as a single reading of the
+capability. A claim and the capability behind it have to be the same
+expression, or nothing keeps them true together. That is the design rule; the
+rest of this section is its evidence.
+
 ## 6. Open items
+
+### Top follow-up — do this before anything else in this file
+
+**The predicates are done. The JSX is not.**
+
+The previous entry here asked for the copy-pasted "can the customer reach us"
+tests — three names across the pages, two genuinely different questions — to be
+moved into one module. **That is done.** `lib/contact.ts` now holds
+`hasStudioMailbox`, `hasSocialAccount`, `canReachStudio`,
+`formsReachStudio(canSendEmail)`, `sendsOrderConfirmation(canSendEmail)` and
+`socialLinks`, with one definition each, imported by fifteen files. Doing it is
+what surfaced the round-7 privacy defect: the single old `FORM_DELIVERS` test
+was answering two questions that have different conditions.
+
+**What is still duplicated is the markup.** The "reach us" fallback chain —
+real mailbox → social handles → a plain statement that no contact address has
+been published yet — is written out six times:
+
+- `Reach` in `app/legal/terms/page.tsx`, `app/legal/privacy/page.tsx`,
+  `app/legal/refunds/page.tsx` and `app/account/orders/[id]/page.tsx` — four
+  near-identical copies, each with its own `SocialLinks` and `NO_CHANNEL`;
+- `HowToAsk` in `app/account/settings/DeleteAccountCard.tsx`;
+- `emailChangeHint` in `app/account/settings/ProfileCard.tsx`.
+
+(`ReachUsCard` in `app/contact/page.tsx` is a seventh instance of the same
+branching, but it renders a card rather than a sentence and may honestly stay
+its own component.)
+
+**It wants a `components/contact/Reach.tsx`.** A `.ts` module holds no markup,
+which is exactly why the predicates could move and this could not; a `.tsx`
+component can. Each copy words its fallback slightly differently, so the
+component has to take the wording as props rather than flatten six voices into
+one. The argument is unchanged: what this chain decides is whether a page tells
+a charged customer to "get in touch", so a drift between copies is a false
+claim.
 
 ### Deliberately not done — decide before launch
 
 | Item | Detail |
 |---|---|
-| ~~**Contact form and newsletter only log**~~ | **Promoted to blocker §0.1** — this is not a deferrable gap. It makes a guest's order untrackable and turns roughly a dozen on-site statements into false claims |
+| **The newsletter has no subscriber list** | There is no table, no audience, no unsubscribe mechanism. `/api/newsletter` forwards a *notification* to the studio inbox and the owner adds the address by hand wherever the list eventually lives — it is **not a subscription**, and the footer copy must never promise a newsletter, a welcome email or an unsubscribe link until one exists |
+| **Real account deletion is not built** | §0.9 closed the *claim* only: the card now says a request is filed by hand, which is what happens. Actual deletion needs a server-side admin route holding the service-role key (the browser client uses the anon key and is refused), **re-authentication** before it fires, and a guard for in-flight orders. TODO in `DeleteAccountCard.tsx` |
 | **Saved addresses don't prefill checkout** | Stripe collects the address fresh. The copy is honest about this. Real prefill needs a Stripe Customer with `shipping`, passed as `customer` on the session. TODO in `app/account/addresses/page.tsx` |
-| **Account deletion is a support request** | The button asks the customer to email. Real deletion needs a server-side admin route. TODO in `DeleteAccountCard.tsx` |
 | **No review UI** | The insert policy was withdrawn. The migration records the shape of a correct one (requires a delivered order, forces `verified`) for when reviews ship |
 | **Promotion codes disabled** | `allow_promotion_codes: false`. Orders have no discount column, so a promo would leave subtotal/shipping/total inconsistent |
 
 ### Known limitations
 
+- **Rate limiting is in-memory, per instance, and is now load-bearing.**
+  `lib/rate-limit.ts` was a decorative speed bump when §0.2 was open, because
+  `lookup_order` was callable straight over PostgREST and the throttle could
+  simply be walked around. Revoking that grant closed the side door — which
+  means the throttle in `/api/track` is now **the only thing** in front of the
+  lookup. Order numbers are a public incrementing sequence plus four hex
+  characters, so an attacker holding a customer's email address has ~65k
+  guesses standing between them and that customer's street address. Several
+  serverless instances multiply the allowance, a cold start resets it, and
+  `clientKey()` reads `x-forwarded-for`, which is only trustworthy behind a
+  proxy that sets it. **Move it to Vercel KV or Upstash before launch.** The
+  call sites do not change.
+- **The `"unknown"` email sentinel escapes the webhook.** `orders.email` is
+  `NOT NULL`, so the Stripe-rebuild path has to write *something* when Stripe
+  gave no address, and that something is the truthy string `"unknown"`. The
+  webhook reads it correctly, through `hasCustomerEmail()` — that guard is
+  round 7's item 3. **Nothing outside the webhook knows it exists**: `/track`,
+  the account order pages and `lib/queries.ts` all read the column as though
+  every value were an address. Nothing is known to break today, but it is a
+  sentinel in a column three readers treat as data, and the last one that was
+  reached a paying customer.
+- **Nothing writes `orders.tracking_number`, and there is no admin surface.**
+  `/track` shows customers a `confirmed → printing → packed → shipped`
+  progression that, today, only advances if the owner edits the row by hand in
+  the Supabase table editor. The claim is not false — the states are real and
+  the page reads them — but the shop has no way to move an order along, and no
+  screen anywhere for the person running it. Decide before launch whether that
+  is acceptable for the first few orders or whether an owner view comes first.
+- **`verify.sql`'s backfill assertions test a duplicate, not the migration.**
+  The §0.7 checks (`backfill skips a stranded order`, `backfill marks a
+  finished order`) evaluate a **hand-copied copy** of the backfill's `WHERE`
+  clause from `0001_init.sql`, because the backfill itself is a one-shot
+  `UPDATE` that has already run by the time `verify.sql` executes. Editing the
+  migration's predicate therefore leaves both assertions green while they test
+  the old logic. Exactly the silent-drift class the replay harness was just
+  fixed for (round 7, item 6) — and the fix is the same shape: derive the
+  predicate from the migration rather than restate it.
+- **`public.handle_new_user()` keeps its default `PUBLIC EXECUTE`.** Not
+  exploitable — it is a trigger function and does nothing useful when called
+  directly — but it is the one function in the schema that was not brought
+  under an explicit grant, so it reads as an oversight next to the others.
+  Revoke it for consistency, and to keep the "every function has a deliberate
+  grant" rule true enough to be worth checking.
+- **The `reviews` table is world-readable, including `user_id` and
+  `author_name`.** Nothing is in it (no review UI, insert policy withdrawn), so
+  there is nothing to leak today. It becomes a real disclosure the day reviews
+  ship: `user_id` joins a review to an account. Decide the select policy before,
+  not after.
 - **Sign-up enumeration is closed only while email confirmation is ON** in
   Supabase (it is by default). With it off, a new sign-up gets a session and
   redirects while an existing address lands on the confirm screen — still
   distinguishable. Don't switch confirmation off without revisiting this.
-- **Rate limiting is in-memory, per instance** (`lib/rate-limit.ts`). A speed
-  bump, not a guarantee — several serverless instances multiply the allowance.
-  Move to Vercel KV or Upstash if the shop gets attention. The call sites
-  don't change.
 - **`order_items.colour` is polymorphic**: a product colour for ordinary
   lines, a colourway name for builder lines. Nothing breaks (`reorderLines`
   skips personalised products) but it is worth knowing.
@@ -270,15 +685,40 @@ than a feature.
   personalisation segment, so an identical new line won't merge with them.
   Self-healing; affects nobody but a developer mid-iteration.
 
+### Cannot be verified without the owner's accounts
+
+These are not open *items* — they are things believed correct that no one here
+could put a claim behind. §0 lists them with the reasoning; repeated here
+because they are what the owner's first real test order is for.
+
+- Real Resend delivery, and that `EMAIL_FROM`'s domain is verified. The
+  43-scenario harness proves *when* a send is attempted and with what body; it
+  stubs the provider, so nothing here has put a message in a mailbox.
+- That `product_data.metadata.slug` survives the Stripe round trip and comes
+  back under `expand: ['data.price.product']`. If it does not, §0.8's fix
+  quietly falls back to matching on the non-unique `short_name`.
+- `after()`'s behaviour on Vercel — whether the queued confirmation email
+  reliably runs before the instance freezes.
+- Grants on a hosted Supabase project, including anything granted in the
+  dashboard outside the migration.
+
 ### Only the owner can do these
 
-ABN (Stripe needs it to release money) · business bank account · real prices
+ABN (Stripe needs it to release money) · registered business name · business
+postal address · return address · a support mailbox
+(`NEXT_PUBLIC_SUPPORT_EMAIL` — **not optional**: without it the contact form
+and the newsletter box have nowhere to deliver, so the shop does not offer
+them) · the Resend keys (`RESEND_API_KEY` and `EMAIL_FROM`, both or neither —
+there is no third flag any more) · the hosting
+provider's name for the privacy page · business bank account · real prices
 ("My price" is empty in the workbook, so the shop shows placeholders from
 `PRICE_BY_CATEGORY`) · product photography · legal review of the three
-`/legal/*` drafts · Sydney market dates · deciding whether to enable PayPal /
-Apple Pay / Afterpay in Stripe and adding them to `PAYMENT_BADGES`.
+`/legal/*` drafts, **especially the rewritten contract-formation clause in
+`app/legal/terms/page.tsx`** · Sydney market dates · optional social handles ·
+deciding whether to enable PayPal / Apple Pay / Afterpay in Stripe and adding
+them to `PAYMENT_BADGES`. `SETUP.md` is the runbook for all of it.
 
-## 7. State at last commit
+## 7. State now
 
 ```
 314ba58 Clear the last two launch blockers, and the quality items behind them
@@ -292,14 +732,51 @@ f9745fb Stage orders in the database instead of Stripe metadata
 71e701f Build the Bam Studio online shop
 ```
 
-`npx tsc --noEmit`, `npx eslint .` and `npm run build` all clean. 31 routes.
-Schema, seed and `verify.sql` all exercised against PostgreSQL 16.
+The rounds-6-and-7 remediation of §0 sits on top of that as working-tree
+changes, with `lib/email.ts`, `lib/contact.ts`, `scripts/verify-sql.sh` and
+`scripts/replay-checkout.mjs` new. Run `git status` and `git diff --stat`
+rather than trusting this paragraph — it is the first thing to go stale.
 
-`npx tsc --noEmit`, `npx eslint .` and `npm run build` are clean, and the
-schema, seed and `verify.sql` have all been exercised against PostgreSQL 16.
+`npx tsc --noEmit`, `npx eslint .` and `npm run build` are clean. Verified **by
+execution**: `./scripts/verify-sql.sh` **24/24** against a real PostgreSQL 16
+from an empty database (including the anon-privilege denial, on a fresh
+database and on a simulated already-deployed one);
+`node scripts/replay-checkout.mjs` **7/7** with the negative control; the
+webhook behavioural harness **43/43**; an 80-page browser crawl across four
+configuration states with zero failed assertions; the `safeNext`
+re-verification, 41 payloads plus ~192,000 fuzz cases. **The webhook harness
+lives in `/tmp/webhook-harness/` and will not survive this session** — §4 says
+what it covers so it can be rebuilt.
 
-**None of that means it is ready.** Every check above passes while a guest
-still cannot track the order they paid for, `lookup_order` still leaks a home
-address to anyone with the anon key, and `/login?next=` still redirects
-off-site. Green checks measured the things that were being watched. Start at
-§0.
+Verified **by reasoning only**, and worth repeating because the distinction is
+the most useful thing in this file: real Resend delivery, the Stripe
+`product_data.metadata.slug` round trip, `after()`'s behaviour on Vercel, and
+grants on a hosted Supabase project applied outside the migration.
+
+**None of that means it is ready.** Every check above passed while all ten §0
+blockers were live, which is the whole reason §4 exists: green checks measure
+the things being watched. What is genuinely left is smaller and named:
+
+- The shop cannot send anything until the owner sets `RESEND_API_KEY` and
+  `EMAIL_FROM` — both, or neither — see `SETUP.md`. There is no third flag to
+  keep in step any more, and that is deliberate: the shop now works out what it
+  can do and says only that. `NEXT_PUBLIC_SUPPORT_EMAIL` is separate and is
+  **not optional** if the contact form or the newsletter box is to work.
+- **Real account deletion does not exist**, and the newsletter has **no
+  subscriber list** (§0.9, §0.1, §6). Both are honest on the page now; neither
+  is built.
+- The `/track` throttle is the only thing in front of a customer's postal
+  address, and it is in-memory and per-instance (§6).
+- The `"unknown"` email sentinel escapes the webhook into three readers that do
+  not know about it, and nothing writes `orders.tracking_number` — the status
+  progression customers are shown is a manual database edit today (§6).
+- The legal pages have never been read by a lawyer, and the
+  contract-formation clause in `app/legal/terms/page.tsx` was **rewritten**
+  during this pass — it now keys on payment succeeding and the order number
+  being allocated, because the old wording keyed on a confirmation email that
+  no code ever sent, which meant no contract ever formed. It is the most
+  load-bearing sentence on the site and it needs a professional eye.
+
+Start at §0, then §5 round 7 — the design rule it ends on is the one thing in
+this file that will stop the same defect being written a third time — then §6's
+top follow-up.
