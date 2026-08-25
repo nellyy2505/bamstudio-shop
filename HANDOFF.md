@@ -7,6 +7,17 @@ named by file and section.
 
 ---
 
+> ⚠️ **This file is stale as of round 10 (25 August 2026). Read `WORKLOG.md` §0
+> and §5 round 10 before believing anything below.** In particular: the round-9
+> postage work **is** committed (`36a33d5`, unpushed, not "not committed
+> anywhere"); `scripts/verify-sql.sh` **does** apply `0002_shipping.sql` and the
+> harness runs **29/29**; `quoteBasket()` **is** wired into checkout, the cart
+> and `POST /api/shipping/quote`; `shippingCost()` has been **deleted**; and
+> `transitLabel()` now takes `tracked` as a required argument. Nine files show
+> as CRLF-modified, not ten. The rest of this file — how to work, the
+> verification protocol, the hard business rules, the traps, and the owner's
+> outstanding steps — still stands.
+
 You are the **orchestrator** for pre-launch work on the Bam Studio online shop
 at `bamstudio-shop/`. It is a real Australian sole trader's shop, it takes real
 card payments, and a real customer will use it. Treat every change as

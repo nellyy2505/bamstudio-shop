@@ -23,10 +23,10 @@ keeps a long-lived Node process this app depends on. **Anything you were about
 to assume from a Vercel-shaped mental model is probably wrong here**; the
 deployment section below is the short version and `README.md` has the reasoning.
 
-Postage is quoted from **Australia Post** by `lib/shipping/` — built, verified
-against the live API, and **not yet wired into checkout**. See *Postage* below
-before touching anything that mentions shipping, and `WORKLOG.md` §5 round 9 for
-how it was arrived at.
+Postage is quoted from **Australia Post** by `lib/shipping/`, and as of round 10
+it **is** wired: `quoteBasket()` prices every basket in checkout and in the cart.
+See *Postage* below before touching anything that mentions shipping, and
+`WORKLOG.md` §5 rounds 9 and 10 for how it was arrived at.
 
 `WORKLOG.md` is the source of truth for project state: what was built, nine
 rounds of findings, what is deliberately still open, and — in **§0** — the ten
@@ -114,12 +114,23 @@ those grants customers pay and no order is ever recorded), and that
 ./scripts/verify-sql.sh
 ```
 
-> ⚠️ **This is currently broken, and it is a two-line fix.** `verify.sql` is now
-> **29 assertions** and expects `0001_init.sql` **and** `0002_shipping.sql`
-> applied; the script still applies `0001` only, so a run errors on
-> `shipping_rate_cache` and on `products.weight_grams`. 29/29 has never been
-> observed. Teach the script to apply `0002` between the migration and the seed
-> before quoting any SQL result — and before claiming a green run.
+> **29/29, observed.** The script applies `0001_init.sql`, then
+> `0002_shipping.sql`, then the seed. Three documents used to say it applied
+> `0001` only; that was already false.
+>
+> ⚠️ **Its Supabase stand-in must keep installing pgcrypto into an `extensions`
+> schema, not into `public`.** It used to do the latter, which put
+> `gen_random_bytes` on the default search path and made the harness print 29/29
+> while `0001_init.sql` **could not be applied to a real Supabase project at
+> all** (`next_order_number()` pins `search_path` and could not resolve it). A
+> stand-in has to reproduce the hosted platform's *shape*, not just its API.
+> `WORKLOG.md` §5 round 10.
+>
+> ⚠️ **`verify.sql` returns one table of 29 rows and must stay that way.** It was
+> eight separate statements, and the Supabase SQL editor shows only the last —
+> so the owner saw two rows, both `true`, and could not check her own database
+> with the tool the runbook names. Count rows as well as ticks: 24 rows all `t`
+> would be green without ever looking at the shipping schema.
 
 One command, self-bootstrapping, exits non-zero if any assertion is not `t`. It
 drives a **locally installed PostgreSQL 16** (`apt install postgresql-16`):
@@ -284,8 +295,8 @@ never advertise a price the builder cannot charge, and the script throws if it
 cannot find the literal. After
 editing the workbook, re-run the script *and* re-run `seed.sql`.
 
-**Business rules live in `lib/config.ts`** — shipping prices and the free
-threshold, print lead time, builder bundle pricing, personalisation limits,
+**Business rules live in `lib/config.ts`** — the free-postage threshold (but
+**not** postage prices, which come from Australia Post via `lib/shipping/`), print lead time, builder bundle pricing, personalisation limits,
 payment badges, the GST and support-email flags. Change a number there and it
 propagates to every page, the basket and the Stripe session together. Never
 inline one of these values in a component.
@@ -376,10 +387,10 @@ can prove this delivery did the work — the successful order-number
 compare-and-set in `assignOrderNumber` — which is the whole at-most-once story.
 Don't send it from anywhere else.
 
-**Postage** (`lib/shipping/`, seven files) quotes real Australia Post rates.
-**It is built and nothing imports it yet** — `app/api/checkout/route.ts:499`
-still calls the flat-rate `shippingCost()`. Wiring it is the top open item
-(`WORKLOG.md` §6). The rules that govern it:
+**Postage** (`lib/shipping/`) quotes real Australia Post rates, and is wired
+into checkout, into `POST /api/shipping/quote`, and into the cart. There is no
+flat rate anywhere any more: `shippingCost()` is **deleted** and `SHIPPING` has
+no `price` field. The rules that govern it:
 
 - **`quoteBasket(lines, methodId)` in `lib/shipping/quote.ts` is the single
   entry point, and both the cart and checkout must use it.** Two code paths
@@ -402,11 +413,26 @@ still calls the flat-rate `shippingCost()`. Wiring it is the top open item
   silently by the studio on every order until someone reconciles a postage bill.
 - **Prices are GST-inclusive retail and the shop is not GST-registered**, so the
   total passes through as a total. Never run `gstComponent()` over a quote.
-- **`transitLabel()` in `lib/config.ts` hardcodes "· tracked".** That is true
-  only while everything ships as a parcel. A Large Letter is **untracked and
-  uninsured**. If you ever enable `letter_eligible` for a product, fix
-  `transitLabel()` **in the same change** — `quoteBasket` returns a `tracked`
-  boolean per quote and the UI must read that, not the label.
+- **`transitLabel(methodId, tracked)` takes tracking as a required argument.**
+  It used to hardcode "· tracked", which was true only while everything shipped
+  as a parcel — and `letter_eligible` is a checkbox in the Supabase table
+  editor, so one tick with no deploy would have armed the lie. Pass
+  `quoteBasket()`'s `tracked`; **never pass a literal**, which is the hardcode
+  again, just moved. A page with no basket to ask uses `transitRangeLabel()` and
+  makes no tracking claim at all.
+- **`isFreeShipping(subtotal, methodId)` decides who pays; `quoteBasket()`
+  decides how much.** Never merge them. `shippingCost()` was deleted rather than
+  deprecated — a second function still shaped like a price is one a future call
+  site reaches for by mistake.
+- **Both surfaces build their lines with `toShippingLines()`
+  (`lib/shipping/lines.ts`) over rows from `loadProductsBySlug()`
+  (`lib/queries.ts`).** One builder, one loader. If you add a third postage
+  surface, use both — do not re-derive either.
+- **A dropped line is not an empty basket.** `toShippingLines()` skips a slug it
+  has no row for, and a basket that loses every line quotes at zero, which is
+  correct for nothing and wrong for a basket. `/api/shipping/quote` returns 409
+  when any line was dropped. This shipped as a live $0.00-postage bug in round
+  10 before it was caught.
 - **The schema default is the wrong way round.** `0002_shipping.sql` declares
   `letter_eligible boolean not null default true`, while
   `lib/shipping/weights.ts` treats an absent flag as **false** and the seed
