@@ -235,11 +235,48 @@ export async function POST(request: Request) {
     );
   }
 
-  // With a database configured but no service-role key, checkout would take
-  // money and the webhook would 500 on every delivery, recording nothing.
-  // Refuse up front rather than discovering it in the Stripe dashboard.
+  // The next two guards are a matched pair, and they enforce one rule: never
+  // take money for an order that cannot be recorded. Stripe is configured by
+  // the time we get here (getStripe() succeeded above), so each guard only has
+  // to ask whether the *database* half is whole. (a) covers half-configured;
+  // (b) covers not configured at all.
+
+  // (a) Database configured but no service-role key: checkout would take money
+  // and the webhook would 500 on every delivery, recording nothing. Refuse up
+  // front rather than discovering it in the Stripe dashboard.
   if (isDatabaseConfigured() && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     console.error("SUPABASE_SERVICE_ROLE_KEY is missing — refusing checkout.");
+    return NextResponse.json(
+      { error: "Checkout is temporarily unavailable. Please try again later." },
+      { status: 503 },
+    );
+  }
+
+  // (b) The mirror of (a): live Stripe, no database at all. savePendingOrder()
+  // returns ok early when the database is unconfigured, so nothing downstream
+  // catches this — the charge succeeds, no order row is ever written, and
+  // /order/confirmed still tells the customer their order is confirmed. Money
+  // taken, nothing to print, nothing to track.
+  //
+  // The NODE_ENV check is deliberate and load-bearing. DO NOT "tidy" it away
+  // into an unconditional guard — that has already been done, and re-fixed,
+  // twice (WORKLOG §5 rounds 3 and 4), and round 4's rule is the constraint: a
+  // guard may reject a query *error*, never the *absence* of a database.
+  // Running with no database at all is an intended mode (CLAUDE.md), and it is
+  // exactly what the only verification flow this project has depends on: a
+  // dummy Stripe key, no Supabase env, and the real CartView payloads replayed
+  // against this route (scripts/replay-checkout.mjs), where 502 — reached
+  // Stripe — is the pass. An unconditional guard turns every one of those
+  // cases into a 503 that never reaches the validation being tested, and three
+  // previous regressions were caught only by that replay. Outside production
+  // the key in use is a test key and no real money can move, so the trade is
+  // one-sided: guard where the charge is real, stay out of the way where it
+  // is not.
+  if (process.env.NODE_ENV === "production" && !isDatabaseConfigured()) {
+    console.error(
+      "Supabase is not configured in production — refusing checkout: a real " +
+        "charge would leave no order record and nothing to print.",
+    );
     return NextResponse.json(
       { error: "Checkout is temporarily unavailable. Please try again later." },
       { status: 503 },
@@ -270,7 +307,11 @@ export async function POST(request: Request) {
     price_data: {
       currency: string;
       unit_amount: number;
-      product_data: { name: string; description?: string };
+      product_data: {
+        name: string;
+        description?: string;
+        metadata: { slug: string };
+      };
     };
     quantity: number;
   }[] = [];
@@ -420,6 +461,17 @@ export async function POST(request: Request) {
         product_data: {
           name: product.short_name,
           ...(description ? { description } : {}),
+          // `short_name` is NOT unique in the schema — only `slug` and `sku`
+          // are (supabase/migrations/0001_init.sql). The webhook's rebuild
+          // path, used when the database was unreachable here and no order was
+          // staged, has to map each Stripe line back to a product row, and
+          // matching on the name silently linked the wrong row whenever two
+          // products share a short name: wrong product_id, wrong artwork,
+          // wrong thing printed and posted. The slug is the unique key, and
+          // this is the only place it can be attached to a line so that Stripe
+          // hands it back (metadata on the inline product survives the
+          // `expand: ['data.price.product']` the webhook already does).
+          metadata: { slug: product.slug },
         },
       },
       quantity: line.quantity,
