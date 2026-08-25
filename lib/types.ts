@@ -179,8 +179,56 @@ export type Address = {
   suburb: string;
   state: string;
   postcode: string;
-  phone: string | null;
+  /**
+   * Optional because it is not always sent to the client. The public /track
+   * endpoint allow-lists the address it returns and drops the phone number
+   * (app/api/track/route.ts) — anyone with an order number and an email can
+   * reach that page. The Stripe webhook still *stores* it (the studio may need
+   * to ring about a delivery) and /account/orders/[id], which is behind auth,
+   * still shows it.
+   */
+  phone?: string | null;
   is_default?: boolean;
+};
+
+/**
+ * What the public order-tracking endpoint sends to the browser.
+ *
+ * Deliberately narrower than the stored row: order numbers are a public
+ * sequence plus four hex characters, so someone holding a customer's email can
+ * try suffixes. The response therefore carries only what
+ * app/track/TrackForm.tsx renders. Adding a field here is deciding that a
+ * brute-forcer may have it too.
+ */
+export type PublicTrackedAddress = {
+  first_name: string;
+  last_name: string;
+  line1: string;
+  line2: string | null;
+  suburb: string;
+  state: string;
+  postcode: string;
+  /** No `phone`: stored, never published. */
+};
+
+export type PublicTrackedItem = {
+  product_name: string;
+  variant_label: string | null;
+  art: ArtKey;
+  tint: Tint;
+  unit_price: number;
+  quantity: number;
+};
+
+export type PublicTrackedOrder = {
+  order_number: string;
+  status: OrderStatus;
+  total: number;
+  shipping_method: string;
+  tracking_number: string | null;
+  created_at: string;
+  shipping_address: PublicTrackedAddress | null;
+  items: PublicTrackedItem[];
 };
 
 export const AU_STATES = [

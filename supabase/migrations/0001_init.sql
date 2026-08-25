@@ -253,8 +253,27 @@ alter table public.orders
 -- Run this file during a quiet moment: a webhook mid-flight at exactly this
 -- instant would have its pending claim marked applied. That window is far
 -- narrower than the redelivery risk it removes.
-update public.orders set stock_applied = true
- where status <> 'pending' and stock_applied = false;
+--
+-- The predicate was once only `status <> 'pending'`, which over-applied. It
+-- also marked the *stranded* orders — confirmed, but with no order number
+-- and/or no rows in order_items, because an earlier webhook delivery died
+-- part-way through confirming them. Those orders never moved any stock, and
+-- they are exactly the input the repair branch in
+-- app/api/webhooks/stripe/route.ts exists to fix: on the next Stripe delivery
+-- it refills their items, allocates the number and moves the stock. Marking
+-- them applied makes claimStock's compare-and-set return false for them
+-- forever, so their stock is never moved at all.
+--
+-- So mark only the orders that demonstrably *finished*, using the same two
+-- markers the webhook itself reads to detect an unfinished confirm. Rows with
+-- `order_number is null`, or with no order_items, are deliberately left
+-- `stock_applied = false`: that is not an oversight, it is what keeps the
+-- repair branch able to do its job.
+update public.orders o set stock_applied = true
+ where o.status <> 'pending'
+   and o.stock_applied = false
+   and o.order_number is not null
+   and exists (select 1 from public.order_items oi where oi.order_id = o.id);
 
 -- Order numbers are issued on payment now, so a staged row has none yet.
 alter table public.orders alter column order_number drop not null;
@@ -404,7 +423,57 @@ as $$
 $$;
 
 revoke all on function public.lookup_order(text, text) from public;
-grant execute on function public.lookup_order(text, text) to anon, authenticated;
+-- This was granted to `anon` and `authenticated`, which made it callable
+-- directly over PostgREST by anyone holding the public anon key — so the rate
+-- limit in app/api/track/route.ts, the only throttle there is, was decorative.
+-- An order number is a public incrementing sequence plus four hex characters,
+-- so with a customer's email an attacker could brute-force the suffix offline
+-- and be handed back the shipping_address jsonb: line1, line2 and phone. The
+-- function now runs only for the admin (service-role) client behind /api/track,
+-- which puts the throttle back in front of the only door.
+revoke execute on function public.lookup_order(text, text) from anon, authenticated;
+grant execute on function public.lookup_order(text, text) to service_role;
+
+-- ------------------------------------------- guest order confirmation lookup
+-- A guest who has just paid lands on /order/confirmed?session_id=<stripe id>,
+-- and that page is their only path to their own order number — RLS on orders
+-- is `auth.uid() = user_id`, so a guest reads nothing, and the number they are
+-- later told to quote at /track would otherwise never reach them.
+--
+-- The Stripe session id is an unguessable secret the page already holds, so it
+-- is the whole key; matching on it alone is what makes a guest lookup possible
+-- at all. SECURITY DEFINER because the caller has no RLS identity to read the
+-- row with. Service-role-only *as well*, because the two halves guard
+-- different things and only defence in depth covers both: the grant limits
+-- **who** can ever call this, and the returned column list limits **what** any
+-- caller could ever get out of it. Deliberately no email, address, phone or
+-- total — that column list is the security boundary, and a future caller that
+-- wants more must be made to widen it here, in the open.
+--
+-- `pending` is deliberately NOT filtered out, unlike lookup_order above: a
+-- shopper who has paid regularly arrives ahead of the Stripe webhook, and the
+-- page has to tell "paid, order number still being allocated" apart from "no
+-- such session". order_number is legitimately null for exactly that window.
+create or replace function public.order_confirmation_summary(
+  p_stripe_session_id text
+)
+returns table (
+  order_number text,
+  status text
+)
+language sql
+security definer set search_path = public
+as $$
+  select
+    o.order_number,
+    o.status
+  from public.orders o
+  where o.stripe_session_id = p_stripe_session_id
+  limit 1;
+$$;
+
+revoke all on function public.order_confirmation_summary(text) from public, anon, authenticated;
+grant execute on function public.order_confirmation_summary(text) to service_role;
 
 -- ------------------------------------------------------------ search helper
 -- The old body ORed the full-text match with `name ilike '%' || q || '%'` and
