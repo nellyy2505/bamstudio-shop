@@ -23,6 +23,8 @@ browse, search and build a name charm immediately. Checkout needs real Stripe
 keys.
 
 Full step-by-step credentials and deployment guide: **[SETUP.md](SETUP.md)**.
+History of what was built, what reviews found, and what is deliberately still
+open: **[WORKLOG.md](WORKLOG.md)** — read it before picking this up.
 
 ## Project layout
 
