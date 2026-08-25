@@ -1,9 +1,14 @@
 -- Schema smoke test.
 --
 -- Run this in the Supabase SQL editor after applying 0001_init.sql,
--- 0002_shipping.sql and seed.sql. Every line should print `t`. These are the
--- guarantees that only fail in production — a missing grant here means paid orders are never
--- recorded, and you would first hear about it from a customer.
+-- 0002_shipping.sql and seed.sql. It returns ONE table of 29 rows and every
+-- `pass` must be `t`. These are the guarantees that only fail in production —
+-- a missing grant here means paid orders are never recorded, and you would
+-- first hear about it from a customer.
+--
+-- Count the rows as well as the ticks. 29 rows means both migrations are
+-- applied; 24 rows all `t` would be a green result that never looked at the
+-- shipping schema at all.
 --
 -- It writes four throwaway orders (and one order item) inside a transaction it
 -- rolls back, so it is safe to run against a live database, though quiet hours
@@ -11,7 +16,24 @@
 
 begin;
 
+-- Assertions are collected here rather than printed one statement at a time.
+--
+-- The Supabase SQL editor shows only the result of the LAST statement it runs.
+-- This file used to be eight separate assertion statements, so pasting it into
+-- the editor displayed two rows and silently hid the other twenty-seven: the
+-- owner could not check her own database with the tool the runbook tells her to
+-- use, and two ticks out of two looks like a pass. One table and one final
+-- select gives all 29 rows in the editor and in psql alike.
+--
+-- Rolled back with everything else below, so it leaves nothing behind.
+create temp table _checks (
+  ord        serial primary key,
+  check_name text not null,
+  pass       boolean
+);
+
 -- The catalogue loaded, and carries no invented review history.
+insert into _checks (check_name, pass)
 select 'products loaded'            as check, count(*) > 0                      as pass from public.products
 union all
 select 'no fabricated ratings',            count(*) filter (where rating > 0) = 0        from public.products
@@ -46,6 +68,7 @@ select 'every product has dimensions',     count(*) filter (
 -- The webhook cannot confirm a paid order without these two grants. This is
 -- the check worth caring about: without it the failure is silent until a
 -- customer asks where their order went.
+insert into _checks (check_name, pass)
 select 'webhook can allocate order numbers' as check,
        has_function_privilege('service_role', 'public.next_order_number()', 'execute') as pass
 union all
@@ -107,6 +130,7 @@ values
 update public.orders set stock_applied = true
  where stripe_session_id = 'cs_verify_claim' and stock_applied = false;
 
+insert into _checks (check_name, pass)
 select 'first claim takes the row' as check, count(*) = 1 as pass
   from public.orders
  where stripe_session_id = 'cs_verify_claim' and stock_applied = true;
@@ -114,6 +138,7 @@ select 'first claim takes the row' as check, count(*) = 1 as pass
 update public.orders set stock_applied = true
  where stripe_session_id = 'cs_verify_claim' and stock_applied = false;
 
+insert into _checks (check_name, pass)
 select 'second claim moves nothing' as check, count(*) = 0 as pass
   from public.orders
  where stripe_session_id = 'cs_verify_claim' and stock_applied = false;
@@ -125,6 +150,7 @@ insert into public.orders
 values
   ('BS-VERIFY-0001', 'verify@example.test', 'pending', 900, 0, 900, '{}'::jsonb, 'cs_verify_pending');
 
+insert into _checks (check_name, pass)
 select 'pending orders are not trackable' as check,
        (select count(*) from public.lookup_order('BS-VERIFY-0001', 'verify@example.test')) = 0 as pass
 union all
@@ -136,6 +162,7 @@ select 'wrong email finds nothing',
 -- who has paid arrives ahead of the webhook, and the page must be able to say
 -- "paid, order number on its way" rather than "no such session", so unlike
 -- lookup_order this one must find it.
+insert into _checks (check_name, pass)
 select 'confirmation summary finds a pending order' as check,
        (select count(*) from public.order_confirmation_summary('cs_verify_pending')) = 1 as pass
 union all
@@ -177,6 +204,7 @@ select o.id, 'Verify clicker', 'clicker', 'sky', 1500, 1
 -- 0001_init.sql, scoped to one row at a time. The backfill itself is a
 -- one-time statement that has already run by the time this file executes, so
 -- what is asserted is the predicate, not the UPDATE.
+insert into _checks (check_name, pass)
 select 'backfill skips a stranded order' as check,
        (select count(*) from public.orders o
          where o.stripe_session_id = 'cs_verify_stranded'
@@ -194,10 +222,14 @@ select 'backfill marks a finished order',
            and exists (select 1 from public.order_items oi where oi.order_id = o.id)) = 1;
 
 -- Search is bounded: a lone wildcard must not match the whole catalogue.
+insert into _checks (check_name, pass)
 select 'search rejects a bare wildcard' as check,
        (select count(*) from public.search_products('%')) = 0 as pass
 union all
 select 'search ignores empty input',
        (select count(*) from public.search_products('   ')) = 0;
+
+-- Every assertion, in one result set. `pass` must be `t` on all 29 rows.
+select check_name as check, pass from _checks order by ord;
 
 rollback;
