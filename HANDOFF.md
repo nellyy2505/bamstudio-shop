@@ -52,15 +52,18 @@ of `WORKLOG.md` into your own context.
 
 ## Check the ground truth before you start
 
-**Another agent session has been editing this repository concurrently.** Run
-`git log --oneline -5` and `git status` first and reconcile against what the
-docs claim. Two things to know:
+**Another agent session has been editing this repository concurrently**, and
+may still be. Run `git log --oneline -6` and `git status` first, and reconcile
+against what the docs claim rather than assuming this file is current.
 
-- Commit `9d7552a` has the message "Point the design reference at the local
-  files, not a dead link" but actually contains three files — the WORKLOG edit
-  *plus* an unrelated open-redirect fix that was in flight at the time. Do not
-  trust commit messages here as a description of contents.
-- `WORKLOG.md` §0 is **out of date on item 3**. See below.
+One artefact of that: commit `9d7552a` is messaged "Point the design reference
+at the local files, not a dead link" but contains three files — the WORKLOG
+edit *plus* an unrelated open-redirect fix that was in flight at the time.
+(`8e09042` acknowledges and corrects this.) Don't trust a commit message here
+as a complete description of its contents; check the stat.
+
+If a second session is still active, agree file ownership with me before you
+dispatch subagents — two agents editing the same file will clobber each other.
 
 ## Where the work actually stands
 
@@ -73,10 +76,10 @@ against `/<TAB>//evil.com`, `//evil.com`, `/\evil.com`, `https://evil.com`,
 origin-check fix, because it resolves same-origin but *normalises* to a
 protocol-relative path, so the returned path must be re-checked too. Legit
 paths including `/reset-password` (which gates the recovery cookie) still pass.
-Uncommitted at handoff. **First task: commit it on its own with an honest
-message.**
+Committed as `8e09042`, and `WORKLOG.md` §0 item 3 is marked done.
 
-Everything else in §0 is open: **items 1, 2, 4, 5, 6, 7, 8, 9, 10.**
+Everything else in §0 is open: **items 1, 2, 4, 5, 6, 7, 8, 9, 10.** Items 1,
+2 and 4 are the ones a customer or an attacker actually meets — start there.
 
 ## Decisions already taken — proceed on these unless you can show they're wrong
 
