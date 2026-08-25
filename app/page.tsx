@@ -4,7 +4,13 @@ import { ProductGrid } from "@/components/product/ProductCard";
 import { ButtonLink, Icon, Pill, SectionHead } from "@/components/ui";
 import { KeycapWord } from "@/components/builder/Keycap";
 import { getCollections, getProducts } from "@/lib/queries";
-import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitDays } from "@/lib/config";
+import {
+  PRINT_LEAD_TIME,
+  SHIPPING,
+  SHOP,
+  shippingCost,
+  transitDays,
+} from "@/lib/config";
 import { money } from "@/lib/format";
 import type { ArtKey, Tint } from "@/lib/types";
 
@@ -47,21 +53,51 @@ const CATEGORY_TILES: { label: string; art: ArtKey; tint: Tint; href: string }[]
   ];
 
 /**
+ * §0.10: free postage is the standard rate only — shippingCost() charges
+ * express at every basket size — so nothing here may promise "free shipping"
+ * flat. Which method goes free (and which stay paid) is asked of
+ * shippingCost() rather than named here, so the copy tracks the pricing.
+ */
+const FREE_RATE_METHOD = SHIPPING.methods.find(
+  (option) => shippingCost(SHIPPING.freeThreshold, option.id) === 0,
+);
+const PAID_METHOD_LABELS = SHIPPING.methods
+  .filter((option) => option.id !== FREE_RATE_METHOD?.id)
+  .map((option) => option.label.toLowerCase())
+  .join(" and ");
+const PAID_METHOD_COUNT = SHIPPING.methods.length - (FREE_RATE_METHOD ? 1 : 0);
+
+/**
  * Things that are actually true of a pre-revenue, print-to-order shop. No
  * ratings or review counts live here until customers have written some.
  */
 const HERO_FACTS = [
   { icon: "pin" as const, label: `Printed to order in ${SHOP.city}` },
   { icon: "heart" as const, label: "Designed by the family" },
-  {
-    icon: "truck" as const,
-    label: `Free shipping from ${money(SHIPPING.freeThreshold)}`,
-  },
+  ...(FREE_RATE_METHOD
+    ? [
+        {
+          icon: "truck" as const,
+          label: `Free ${FREE_RATE_METHOD.label.toLowerCase()} post from ${money(SHIPPING.freeThreshold)}`,
+        },
+      ]
+    : []),
   { icon: "sparkle" as const, label: "Original designs only" },
 ];
 
 /** Carrier transit for standard post — quoted separately from printing. */
 const [STANDARD_MIN, STANDARD_MAX] = transitDays("standard");
+
+/**
+ * Print lead time and carrier transit stay separate here — "2–4 business days"
+ * is printing only — and the free rate is named for the method it applies to.
+ */
+const DELIVERY_PROMISE = FREE_RATE_METHOD
+  ? `That's printing time, not delivery — ${FREE_RATE_METHOD.label.toLowerCase()} post adds ${FREE_RATE_METHOD.transitDays[0]}–${FREE_RATE_METHOD.transitDays[1]} business days and is free from ${money(SHIPPING.freeThreshold)}` +
+    (PAID_METHOD_COUNT > 0
+      ? `; ${PAID_METHOD_LABELS} ${PAID_METHOD_COUNT === 1 ? "is" : "are"} always charged.`
+      : ".")
+  : `That's printing time, not delivery — standard post adds ${STANDARD_MIN}–${STANDARD_MAX} business days.`;
 
 const PROMISES = [
   {
@@ -72,7 +108,7 @@ const PROMISES = [
   {
     icon: "truck" as const,
     title: `Dispatched in ${PRINT_LEAD_TIME.label}`,
-    body: `That's printing time, not delivery — standard post adds ${STANDARD_MIN}–${STANDARD_MAX} business days. Free from ${money(SHIPPING.freeThreshold)}.`,
+    body: DELIVERY_PROMISE,
   },
   {
     icon: "shield" as const,

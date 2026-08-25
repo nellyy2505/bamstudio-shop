@@ -128,6 +128,27 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
 
   const shipping = shippingCost(subtotal, method);
   const total = subtotal + shipping;
+  /**
+   * §0.10: the free rate applies to standard post only — shippingCost() bills
+   * Express in full at every subtotal — yet the basket used to say "Free
+   * shipping unlocked" off the subtotal alone, while charging Express. A price
+   * claim must never be derived from the subtotal on its own, so work out
+   * which method actually goes free by asking shippingCost() (rather than
+   * naming a method here), and qualify the message with the method selected.
+   */
+  const freeRateMethod = SHIPPING.methods.find(
+    (option) => shippingCost(SHIPPING.freeThreshold, option.id) === 0,
+  );
+  const freeRateLabel = freeRateMethod?.label.toLowerCase() ?? "";
+  const freeRateReached =
+    freeRateMethod !== undefined &&
+    shippingCost(subtotal, freeRateMethod.id) === 0;
+  const selectedMethodLabel =
+    SHIPPING.methods.find((option) => option.id === method)?.label ??
+    "your delivery";
+  // Both the wording and the figure shown come from shippingCost() for the
+  // selected method, so the claim cannot drift from what is actually charged.
+  const selectedIsFree = shipping === 0;
   const progress = Math.min(
     100,
     Math.round((subtotal / SHIPPING.freeThreshold) * 100),
@@ -264,27 +285,45 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
         <div className="card p-6 lg:sticky lg:top-28">
           <b className="font-display text-[17px]">Order summary</b>
 
-          <div className="mt-4 mb-1">
-            <div className="mb-2 flex justify-between text-[12.5px]">
-              <span className="flex items-center gap-1.5 text-muted">
-                <Icon name="truck" size={14} />
-                {freeShippingRemaining === 0
-                  ? "Free shipping unlocked"
-                  : `Free shipping at ${money(SHIPPING.freeThreshold)}`}
-              </span>
-              <b className={freeShippingRemaining === 0 ? "text-good" : "text-muted"}>
-                {freeShippingRemaining === 0
-                  ? "$0.00 to go"
-                  : `${money(freeShippingRemaining)} to go`}
-              </b>
+          {freeRateMethod ? (
+            <div className="mt-4 mb-1">
+              <div className="mb-2 flex justify-between gap-3 text-[12.5px]">
+                <span className="flex items-start gap-1.5 text-muted">
+                  <Icon name="truck" size={14} className="mt-0.5 shrink-0" />
+                  <span>
+                    {!freeRateReached
+                      ? `Free ${freeRateLabel} shipping at ${money(SHIPPING.freeThreshold)}`
+                      : selectedIsFree
+                        ? `Free ${freeRateLabel} shipping unlocked`
+                        : `Free ${freeRateLabel} shipping unlocked — ${selectedMethodLabel} is still charged`}
+                  </span>
+                </span>
+                <b
+                  className={cx(
+                    "shrink-0",
+                    selectedIsFree ? "text-good" : "text-muted",
+                  )}
+                >
+                  {freeRateReached
+                    ? selectedIsFree
+                      ? "FREE"
+                      : money(shipping)
+                    : `${money(freeShippingRemaining)} to go`}
+                </b>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-line">
+                <div
+                  className={cx(
+                    "h-2 rounded-full transition-[width]",
+                    // Green only when the selected method really is free — a
+                    // full green bar beside an Express charge reads as "free".
+                    selectedIsFree ? "bg-good" : "bg-accent",
+                  )}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-line">
-              <div
-                className="h-2 rounded-full bg-good transition-[width]"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
+          ) : null}
 
           <fieldset className="mt-5">
             <legend className="mb-2.5 text-[13.5px] font-extrabold">

@@ -5,8 +5,23 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { CartProvider } from "@/components/cart/CartProvider";
 import { getUser } from "@/lib/supabase/server";
-import { SHOP } from "@/lib/config";
+import { SHIPPING, SHOP, shippingCost } from "@/lib/config";
+import { money } from "@/lib/format";
 import { siteUrl } from "@/lib/stripe";
+
+/**
+ * §0.10: the description promised "Free Australian shipping from $49" — both
+ * unqualified (shippingCost() only waives the standard rate; express is always
+ * charged) and with the threshold typed out by hand. Both now come from
+ * SHIPPING, and the method is found by asking shippingCost() which one goes
+ * free rather than naming it here.
+ */
+const FREE_RATE_METHOD = SHIPPING.methods.find(
+  (option) => shippingCost(SHIPPING.freeThreshold, option.id) === 0,
+);
+const FREE_SHIPPING_SENTENCE = FREE_RATE_METHOD
+  ? ` Free ${FREE_RATE_METHOD.label.toLowerCase()} post across Australia from ${money(SHIPPING.freeThreshold)}.`
+  : "";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -29,7 +44,8 @@ export const metadata: Metadata = {
     template: `%s · ${SHOP.name}`,
   },
   description:
-    "Fidget clicker keychains, custom name charms and desk pieces, 3D-printed to order in Sydney. Free Australian shipping from $49.",
+    "Fidget clicker keychains, custom name charms and desk pieces, 3D-printed to order in Sydney." +
+    FREE_SHIPPING_SENTENCE,
   openGraph: {
     type: "website",
     siteName: SHOP.name,

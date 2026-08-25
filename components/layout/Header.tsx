@@ -6,8 +6,19 @@ import { useState } from "react";
 import { Icon, cx } from "@/components/ui";
 import { SearchBar } from "./SearchBar";
 import { useCart } from "@/components/cart/CartProvider";
-import { SHIPPING } from "@/lib/config";
+import { SHIPPING, shippingCost } from "@/lib/config";
 import { money } from "@/lib/format";
+
+/**
+ * §0.10: the promo bar used to promise "Free AU shipping from $49" flat, but
+ * shippingCost() only waives the standard rate — express is charged at every
+ * basket size — so the bar names the method. Which method that is is asked of
+ * shippingCost() rather than written here, so the claim cannot outlive a
+ * pricing change; if no method is ever free, the claim is simply not made.
+ */
+const FREE_RATE_METHOD = SHIPPING.methods.find(
+  (option) => shippingCost(SHIPPING.freeThreshold, option.id) === 0,
+);
 
 const NAV = [
   { href: "/shop", label: "All categories" },
@@ -32,11 +43,16 @@ export function Header({ signedIn }: { signedIn: boolean }) {
   return (
     <>
       <div className="bg-ink px-4 py-2.5 text-center text-[13px] font-semibold text-[#F6F2EA]">
-        Free AU shipping from{" "}
-        <b className="text-[#F3C89B]">{money(SHIPPING.freeThreshold)}</b>
-        <span className="hidden sm:inline">
+        {FREE_RATE_METHOD ? (
+          <>
+            Free AU {FREE_RATE_METHOD.label.toLowerCase()} post from{" "}
+            <b className="text-[#F3C89B]">{money(SHIPPING.freeThreshold)}</b>
+            <span className="hidden sm:inline"> ·</span>
+          </>
+        ) : null}
+        <span className={FREE_RATE_METHOD ? "hidden sm:inline" : undefined}>
           {" "}
-          · Every piece 3D-printed to order in Sydney
+          Every piece 3D-printed to order in Sydney
         </span>
       </div>
 
