@@ -8,7 +8,7 @@ import {
   PRINT_LEAD_TIME,
   SHIPPING,
   transitDays,
-  transitLabel,
+  transitRangeLabel,
 } from "@/lib/config";
 import { canReachStudio } from "@/lib/contact";
 import { deliveryWindow, formatDate, money } from "@/lib/format";
@@ -318,7 +318,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
               <>
                 Estimated arrival <b className="text-ink">{eta}</b> — printing
                 ({PRINT_LEAD_TIME.label}) plus{" "}
-                {transitLabel(order.shipping_method) || "carrier transit"}.
+                {transitRangeLabel(order.shipping_method) || "carrier transit"}.
                 Estimates are not guarantees; Australia Post has its own
                 opinions.
               </>

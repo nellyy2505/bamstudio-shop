@@ -1,22 +1,26 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getStripe, siteUrl } from "@/lib/stripe";
-import { createAdminClient, createClient, getUser } from "@/lib/supabase/server";
-import { getCollections, isDatabaseConfigured } from "@/lib/queries";
-import { FALLBACK_PRODUCTS } from "@/lib/fallback-data";
+import { createAdminClient, getUser } from "@/lib/supabase/server";
+import {
+  getCollections,
+  isDatabaseConfigured,
+  loadProductsBySlug,
+} from "@/lib/queries";
 import {
   BUILDER_MAX_LETTERS,
   BUILDER_NO_CHARM_DISCOUNT,
   BUILDER_PRICING,
+  isFreeShipping,
   PERSONALISATION_TEXT_MAX,
   PERSONALISATION_TEXT_PATTERN,
   PRINT_LEAD_TIME,
   SHIPPING,
-  shippingCost,
   transitDays,
 } from "@/lib/config";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
-import type { Product } from "@/lib/types";
+import { toShippingLines } from "@/lib/shipping/lines";
+import { quoteBasket } from "@/lib/shipping/quote";
 
 export const runtime = "nodejs";
 
@@ -49,26 +53,6 @@ const BodySchema = z.object({
   shipping_method: z.enum(["standard", "express"]).default("standard"),
   gift_note: z.string().max(500).optional(),
 });
-
-async function loadProducts(slugs: string[]): Promise<Map<string, Product>> {
-  if (!isDatabaseConfigured()) {
-    return new Map(
-      FALLBACK_PRODUCTS.filter((p) => slugs.includes(p.slug)).map((p) => [
-        p.slug,
-        p,
-      ]),
-    );
-  }
-
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("products")
-    .select("*")
-    .in("slug", slugs)
-    .eq("active", true);
-
-  return new Map(((data ?? []) as Product[]).map((p) => [p.slug, p]));
-}
 
 type SummaryLine = {
   product_id: string;
@@ -131,6 +115,16 @@ async function savePendingOrder(input: {
   shippingMethod: string;
   giftNote: string | null;
   items: SummaryLine[];
+  /**
+   * What was quoted, as opposed to what was charged. `shipping` above can be 0
+   * because of the free-postage promotion while the studio still pays the
+   * carrier — these three are what makes that reconcilable, and what makes a
+   * postage bill checkable against the orders that caused it. Null means the
+   * order predates postage quoting.
+   */
+  quoteSource: string | null;
+  quotedWeightGrams: number | null;
+  quotedServiceCode: string | null;
 }): Promise<{ ok: boolean }> {
   // Nothing to stage when the shop is running on sample data.
   if (!isDatabaseConfigured()) return { ok: true };
@@ -152,6 +146,9 @@ async function savePendingOrder(input: {
         gift_note: input.giftNote,
         shipping_address: {},
         stripe_session_id: input.sessionId,
+        shipping_quote_source: input.quoteSource,
+        quoted_weight_grams: input.quotedWeightGrams,
+        quoted_service_code: input.quotedServiceCode,
       })
       .select("id")
       .single();
@@ -283,7 +280,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const products = await loadProducts(body.lines.map((l) => l.slug));
+  const products = await loadProductsBySlug(body.lines.map((l) => l.slug));
 
   // Personalised lines are priced against a real collection, never the
   // colourway name the client claims.
@@ -496,7 +493,33 @@ export async function POST(request: Request) {
     });
   }
 
-  const shipping = shippingCost(subtotal, body.shipping_method);
+  /*
+   * Postage, from Australia Post, priced on the *server's* copy of the basket.
+   *
+   * `quoteBasket()` is the single entry point and `POST /api/shipping/quote`
+   * — what the cart calls — goes through the same function on the same
+   * server-loaded rows, so the figure shown in the basket and the figure Stripe
+   * charges come from one expression rather than two that agree by coincidence.
+   *
+   * It never throws and never returns zero for a non-empty basket: cache, then
+   * the live carrier API, then a built-in table that needs no network and
+   * deliberately returns the band above the one the basket falls in. A slow or
+   * missing carrier makes postage dearer, never free, and never blocks a sale.
+   *
+   * Who pays it is a separate question, and deliberately so:
+   * `isFreeShipping()` is the shop's own promotion over the subtotal, while
+   * `quoteBasket()` is what the post office wants. Waiving the charge must not
+   * change what was quoted — the provenance columns staged below record the
+   * real weight and service even on a free-postage order, which is the only way
+   * to reconcile a carrier bill later.
+   */
+  const quote = await quoteBasket(
+    toShippingLines(body.lines, products),
+    body.shipping_method,
+  );
+  const shipping = isFreeShipping(subtotal, body.shipping_method)
+    ? 0
+    : quote.amountCents;
   const method = SHIPPING.methods.find((m) => m.id === body.shipping_method)!;
 
   const user = await getUser().catch(() => null);
@@ -564,6 +587,12 @@ export async function POST(request: Request) {
       shippingMethod: body.shipping_method,
       giftNote: body.gift_note ?? null,
       items: summary,
+      quoteSource: quote.source,
+      quotedWeightGrams: quote.weightGrams,
+      // Empty only for an empty basket, which cannot reach here — checkout
+      // requires at least one line. Stored as null rather than "" so a reader
+      // cannot mistake a missing service for a real one.
+      quotedServiceCode: quote.serviceCode || null,
     });
 
     if (!staged.ok) {

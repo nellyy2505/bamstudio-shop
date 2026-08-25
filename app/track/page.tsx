@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Breadcrumbs, Icon } from "@/components/ui";
 import { TrackForm } from "./TrackForm";
-import { PRINT_LEAD_TIME, SHIPPING, transitLabel } from "@/lib/config";
+import { PRINT_LEAD_TIME, transitRangeLabel } from "@/lib/config";
 import { canReachStudio, sendsOrderConfirmation } from "@/lib/contact";
 import { isEmailConfigured } from "@/lib/email";
-import { money } from "@/lib/format";
 
 /**
  * Rendered on every request, never baked at build time.
@@ -44,7 +43,10 @@ const NOTES = [
   {
     icon: "truck" as const,
     title: "Then the post",
-    body: `Standard post is ${money(SHIPPING.methods[0].price)} (${transitLabel("standard")}); express is ${money(SHIPPING.methods[1].price)} (${transitLabel("express")}).`,
+    // Postage is quoted per basket from Australia Post, so no fixed price
+    // belongs on this page — and tracking depends on the service the quote
+    // picks, which a general explainer cannot know. Transit ranges only.
+    body: `Postage is worked out from the weight of your basket at Australia Post's current rates and shown before you pay. After dispatch, standard post takes ${transitRangeLabel("standard")} and express takes ${transitRangeLabel("express")}.`,
   },
   {
     icon: "lock" as const,

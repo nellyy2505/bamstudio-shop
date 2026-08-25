@@ -8,7 +8,7 @@ import {
   PRINT_LEAD_TIME,
   SHIPPING,
   SHOP,
-  shippingCost,
+  isFreeShipping,
   transitDays,
 } from "@/lib/config";
 import { money } from "@/lib/format";
@@ -59,7 +59,7 @@ const CATEGORY_TILES: { label: string; art: ArtKey; tint: Tint; href: string }[]
  * shippingCost() rather than named here, so the copy tracks the pricing.
  */
 const FREE_RATE_METHOD = SHIPPING.methods.find(
-  (option) => shippingCost(SHIPPING.freeThreshold, option.id) === 0,
+  (option) => isFreeShipping(SHIPPING.freeThreshold, option.id),
 );
 const PAID_METHOD_LABELS = SHIPPING.methods
   .filter((option) => option.id !== FREE_RATE_METHOD?.id)

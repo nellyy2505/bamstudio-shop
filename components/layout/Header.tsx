@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Icon, cx } from "@/components/ui";
 import { SearchBar } from "./SearchBar";
 import { useCart } from "@/components/cart/CartProvider";
-import { SHIPPING, shippingCost } from "@/lib/config";
+import { isFreeShipping, SHIPPING } from "@/lib/config";
 import { money } from "@/lib/format";
 
 /**
@@ -17,7 +17,7 @@ import { money } from "@/lib/format";
  * pricing change; if no method is ever free, the claim is simply not made.
  */
 const FREE_RATE_METHOD = SHIPPING.methods.find(
-  (option) => shippingCost(SHIPPING.freeThreshold, option.id) === 0,
+  (option) => isFreeShipping(SHIPPING.freeThreshold, option.id),
 );
 
 const NAV = [

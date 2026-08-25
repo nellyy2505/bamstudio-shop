@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ProductArt } from "@/components/ProductArt";
 import { ProductGrid } from "@/components/product/ProductCard";
 import {
@@ -16,13 +16,15 @@ import {
 } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
 import {
+  isFreeShipping,
   PAYMENT_BADGES,
   PRINT_LEAD_TIME,
   SHIPPING,
   SHOP,
-  shippingCost,
   transitLabel,
+  transitRangeLabel,
 } from "@/lib/config";
+import type { QuotableLine } from "@/lib/shipping/lines";
 import { gstComponent, money, pluralise } from "@/lib/format";
 import type { CartLine, Product, Tint } from "@/lib/types";
 
@@ -34,6 +36,26 @@ const TINT_BG: Record<Tint, string> = {
   lilac: "bg-lilac",
   cream: "bg-cream",
 };
+
+/** One method's postage, as `POST /api/shipping/quote` returns it. */
+type MethodQuote = {
+  amountCents: number;
+  tracked: boolean;
+  weightGrams: number;
+  estimated: boolean;
+};
+
+/**
+ * Postage, or a placeholder — never a guess.
+ *
+ * `null` means the quote has not arrived, and it must render as words rather
+ * than as a number. Falling back to 0, or to a flat rate, would put a figure in
+ * front of a customer that checkout will not charge; showing that the amount is
+ * still being worked out is honest and self-correcting.
+ */
+function postageText(cents: number | null): string {
+  return cents === null ? "Calculated at checkout" : money(cents);
+}
 
 function LineRow({ line }: { line: CartLine }) {
   const { setQuantity, remove } = useCart();
@@ -126,29 +148,106 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const shipping = shippingCost(subtotal, method);
-  const total = subtotal + shipping;
   /**
-   * §0.10: the free rate applies to standard post only — shippingCost() bills
-   * Express in full at every subtotal — yet the basket used to say "Free
-   * shipping unlocked" off the subtotal alone, while charging Express. A price
-   * claim must never be derived from the subtotal on its own, so work out
-   * which method actually goes free by asking shippingCost() (rather than
-   * naming a method here), and qualify the message with the method selected.
+   * The last quote received, tagged with the basket it was for.
+   *
+   * Held together rather than as a bare quote plus a "stale" flag so that
+   * "which basket is this price for" is one value and cannot get out of step.
+   * `quotes` below is derived from it: a quote whose signature no longer
+   * matches the basket is simply not a quote for this basket, so the summary
+   * falls back to "calculated at checkout" without anything having to
+   * remember to clear it.
    */
-  const freeRateMethod = SHIPPING.methods.find(
-    (option) => shippingCost(SHIPPING.freeThreshold, option.id) === 0,
+  const [quoted, setQuoted] = useState<{
+    signature: string;
+    quotes: Record<string, MethodQuote> | null;
+  } | null>(null);
+
+  /*
+   * Postage is quoted by the server from the server's own product rows. The
+   * browser sends slugs and quantities and nothing else — it never sends a
+   * weight, and the price it gets back is for display only: checkout re-quotes
+   * through the same `quoteBasket()` on the same rows, so this is a preview of
+   * that calculation rather than an input to it. A basket that could name its
+   * own weight could name its own postage.
+   *
+   * Serialised rather than passed as an array so the effect re-runs on a
+   * genuine basket change and not on every render's new array identity.
+   */
+  const basketSignature = JSON.stringify(
+    lines.map((line) => ({
+      slug: line.slug,
+      quantity: line.quantity,
+      attachment_id: line.attachment_id ?? null,
+      custom: line.custom
+        ? { letters: line.custom.letters, with_charm: line.custom.with_charm }
+        : null,
+    })),
+  );
+
+  useEffect(() => {
+    const payload = JSON.parse(basketSignature) as QuotableLine[];
+    if (payload.length === 0) return;
+
+    let stale = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/shipping/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lines: payload }),
+        });
+        const data = await res.json();
+        // A basket edited twice in quick succession must not let the older
+        // response land last and price the newer basket.
+        if (stale) return;
+        setQuoted({
+          signature: basketSignature,
+          quotes: res.ok && data?.quotes ? data.quotes : null,
+        });
+      } catch {
+        // The route cannot really fail — quoteBasket() does not throw and falls
+        // back to a table that needs no network — so this is a dead browser
+        // connection. Recording null keeps the words instead of a wrong price.
+        if (!stale) setQuoted({ signature: basketSignature, quotes: null });
+      }
+    })();
+
+    return () => {
+      stale = true;
+    };
+  }, [basketSignature]);
+
+  // Derived, not stored: a quote for a basket the customer has since changed is
+  // not a quote for this basket.
+  const quotes =
+    quoted?.signature === basketSignature ? quoted.quotes : null;
+  const selectedQuote = quotes?.[method] ?? null;
+  /**
+   * §0.10: the free rate applies to standard post only — express is billed at
+   * every subtotal — yet the basket once said "Free shipping unlocked" off the
+   * subtotal alone while charging express. A price claim must never be derived
+   * from the subtotal on its own, so ask isFreeShipping() which method actually
+   * goes free rather than naming one here, and qualify the message with the
+   * method the customer has selected.
+   */
+  const selectedIsFree = isFreeShipping(subtotal, method);
+  /** null = not quoted yet. Never 0, which would read to a customer as free. */
+  const shipping: number | null = selectedIsFree
+    ? 0
+    : (selectedQuote?.amountCents ?? null);
+  const total: number | null = shipping === null ? null : subtotal + shipping;
+
+  const freeRateMethod = SHIPPING.methods.find((option) =>
+    isFreeShipping(SHIPPING.freeThreshold, option.id),
   );
   const freeRateLabel = freeRateMethod?.label.toLowerCase() ?? "";
   const freeRateReached =
-    freeRateMethod !== undefined &&
-    shippingCost(subtotal, freeRateMethod.id) === 0;
+    freeRateMethod !== undefined && isFreeShipping(subtotal, freeRateMethod.id);
   const selectedMethodLabel =
     SHIPPING.methods.find((option) => option.id === method)?.label ??
     "your delivery";
-  // Both the wording and the figure shown come from shippingCost() for the
-  // selected method, so the claim cannot drift from what is actually charged.
-  const selectedIsFree = shipping === 0;
   const progress = Math.min(
     100,
     Math.round((subtotal / SHIPPING.freeThreshold) * 100),
@@ -307,7 +406,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                   {freeRateReached
                     ? selectedIsFree
                       ? "FREE"
-                      : money(shipping)
+                      : postageText(shipping)
                     : `${money(freeShippingRemaining)} to go`}
                 </b>
               </div>
@@ -331,7 +430,11 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
             </legend>
             <div className="flex flex-col gap-2.5">
               {SHIPPING.methods.map((option) => {
-                const cost = shippingCost(subtotal, option.id);
+                const optionQuote = quotes?.[option.id] ?? null;
+                const optionFree = isFreeShipping(subtotal, option.id);
+                const cost: number | null = optionFree
+                  ? 0
+                  : (optionQuote?.amountCents ?? null);
                 const on = method === option.id;
                 return (
                   <button
@@ -353,11 +456,26 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                     <span className="flex-1">
                       <b className="text-[14px]">{option.label}</b>
                       <span className="block text-xs text-muted">
-                        {transitLabel(option.id)}
+                        {/* Tracking is read off the quote, never asserted. A
+                            Large Letter is untracked and uninsured, and
+                            `letter_eligible` is a checkbox on a product row —
+                            so the only honest source for this word is the
+                            service the quote actually picked. Until it lands,
+                            the range is stated without a tracking claim. */}
+                        {optionQuote
+                          ? transitLabel(option.id, optionQuote.tracked)
+                          : transitRangeLabel(option.id)}
+                        {optionQuote?.estimated ? " · estimated" : ""}
                       </span>
                     </span>
-                    <b className={cx("text-sm", cost === 0 && "text-good")}>
-                      {cost === 0 ? "FREE" : money(cost)}
+                    <b
+                      className={cx(
+                        "text-sm",
+                        cost === 0 && "text-good",
+                        cost === null && "text-[11px] font-normal text-faint",
+                      )}
+                    >
+                      {cost === 0 ? "FREE" : postageText(cost)}
                     </b>
                   </button>
                 );
@@ -372,11 +490,16 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
             </div>
             <div className="flex justify-between">
               <span className="text-muted">Delivery</span>
-              <span className={shipping === 0 ? "font-extrabold text-good" : ""}>
-                {shipping === 0 ? "FREE" : money(shipping)}
+              <span
+                className={cx(
+                  shipping === 0 && "font-extrabold text-good",
+                  shipping === null && "text-[12.5px] text-faint",
+                )}
+              >
+                {shipping === 0 ? "FREE" : postageText(shipping)}
               </span>
             </div>
-            {SHOP.gstRegistered ? (
+            {SHOP.gstRegistered && total !== null ? (
               <div className="flex justify-between text-[12.5px] text-faint">
                 <span>Includes GST</span>
                 <span>{money(gstComponent(total))}</span>
@@ -384,7 +507,13 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
             ) : null}
             <div className="flex justify-between border-t border-line pt-3.5 text-lg">
               <b>Total</b>
-              <b>{money(total)} AUD</b>
+              {/* Postage not yet quoted: show what is known and say the rest is
+                  still coming, rather than a total that omits postage. */}
+              <b>
+                {total === null
+                  ? `${money(subtotal)} + postage`
+                  : `${money(total)} AUD`}
+              </b>
             </div>
           </div>
 

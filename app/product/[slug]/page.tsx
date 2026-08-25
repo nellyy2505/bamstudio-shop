@@ -188,8 +188,10 @@ export default async function ProductPage({ params }: { params: Params }) {
               <Icon name="truck" size={18} className="mt-0.5 shrink-0" />
               <span>
                 <b>Estimated delivery {deliveryWindow(...transitDays("standard"))}</b> ·{" "}
-                Standard{" "}
-                {money(SHIPPING.methods[0].price)}, free from{" "}
+                {/* Postage is priced per basket by weight, so no per-product
+                    figure can be right. The free threshold is the shop's own
+                    promotion and is true on every product page. */}
+                Standard post by weight, free from{" "}
                 {money(SHIPPING.freeThreshold)}
               </span>
             </p>

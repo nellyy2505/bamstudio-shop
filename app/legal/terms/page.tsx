@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { LegalShell } from "../LegalShell";
-import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitLabel } from "@/lib/config";
+import {
+  PRINT_LEAD_TIME,
+  SHIPPING,
+  SHOP,
+  transitRangeLabel,
+} from "@/lib/config";
 import {
   formsReachStudio,
   hasSocialAccount,
@@ -242,10 +247,17 @@ export default function TermsPage() {
 
       <h2>Delivery</h2>
       <p>
-        We post within Australia through Australia Post. Standard post is{" "}
-        {money(SHIPPING.methods[0].price)} ({transitLabel("standard")})
-        and express is {money(SHIPPING.methods[1].price)} (
-        {transitLabel("express")}), both measured from dispatch, not from
+        {/* This clause named a flat $9.50 / $14.50 until postage moved to live
+            Australia Post quoting, at which point it would have been a stated
+            price the shop does not charge — in the contract itself. It now
+            states the rule rather than a number, which stays true as carrier
+            rates move. The free-postage threshold is the shop's own promotion,
+            is unchanged, and is still stated as a figure because it is one. */}
+        We post within Australia through Australia Post. Postage is calculated
+        from the weight of your order at Australia Post&rsquo;s current rates,
+        and the exact amount is shown to you before you pay. Standard post takes{" "}
+        {transitRangeLabel("standard")} and express takes{" "}
+        {transitRangeLabel("express")}, both measured from dispatch, not from
         when you order. Standard post is free on orders of{" "}
         {money(SHIPPING.freeThreshold)} or more.
       </p>

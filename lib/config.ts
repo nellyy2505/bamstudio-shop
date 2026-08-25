@@ -55,6 +55,21 @@ export const SHOP = {
  */
 export const PAYMENT_BADGES: string[] = ["VISA", "MASTERCARD", "AMEX"];
 
+/**
+ * The shop's delivery options.
+ *
+ * There is deliberately **no `price` here any more.** Each method used to carry
+ * a flat rate — 950 and 1450 — and the terms of sale, the FAQ, the tracking
+ * page and every product page printed it. Postage is now quoted per basket from
+ * Australia Post by `lib/shipping/quoteBasket()`, which for a real basket
+ * returns anything from about 340 to well over 2000, so every one of those
+ * pages was about to state a price the shop does not charge — in the contract,
+ * in one case. The field is gone rather than left unread: a number sitting here
+ * called `price` is one a future page will print.
+ *
+ * What belongs here is what the *shop* decides — its promotion and its service
+ * names. What the carrier charges belongs to `lib/shipping/`.
+ */
 export const SHIPPING = {
   /** Free standard shipping at or above this basket subtotal. */
   freeThreshold: 4900,
@@ -64,23 +79,48 @@ export const SHIPPING = {
       label: "Standard",
       /** Carrier transit only — printing happens before this starts. */
       transitDays: [3, 7],
-      price: 950,
     },
     {
       id: "express",
       label: "Express",
       transitDays: [1, 3],
-      price: 1450,
     },
   ],
 } as const;
 
-/** "3–7 business days · tracked", derived so the numbers can't drift. */
-export function transitLabel(methodId: string): string {
+/**
+ * "3–7 business days" — the carrier's transit range alone, with no claim about
+ * tracking.
+ *
+ * Pages that describe postage in general cannot know whether a given basket
+ * will go as a tracked parcel or as an untracked Large Letter, so they must not
+ * say. Use this there. Where a real quote is in hand, use transitLabel().
+ */
+export function transitRangeLabel(methodId: string): string {
   const method = SHIPPING.methods.find((m) => m.id === methodId);
   if (!method) return "";
   const [min, max] = method.transitDays;
-  return `${min}–${max} business days · tracked`;
+  return `${min}–${max} business days`;
+}
+
+/**
+ * "3–7 business days · tracked", derived so the numbers can't drift.
+ *
+ * `tracked` is required and deliberately not defaulted. This function used to
+ * hardcode the word "tracked", which was accurate only while every product
+ * shipped as a parcel — and `letter_eligible` is a checkbox on a product's row
+ * in the Supabase table editor, so a single tick, with no deploy and no code
+ * review, would have had the shop telling customers that untracked, uninsured
+ * mail is tracked. Making it a required argument means the compiler asks the
+ * question at every call site.
+ *
+ * `quoteBasket()` returns the answer as `tracked` on each quote. Pass that.
+ * Never pass a literal — a literal is the hardcode again, just moved.
+ */
+export function transitLabel(methodId: string, tracked: boolean): string {
+  const method = SHIPPING.methods.find((m) => m.id === methodId);
+  if (!method) return "";
+  return `${transitRangeLabel(methodId)} · ${tracked ? "tracked" : "untracked"}`;
 }
 
 /** Transit range for a method, defaulting to standard. */
@@ -143,9 +183,27 @@ export const BUILDER_ATTACHMENTS = [
   { id: "strap", label: "Phone strap", price_delta: 0 },
 ] as const;
 
-export function shippingCost(subtotal: number, methodId: string): number {
+/**
+ * Who pays the postage — never how much the postage is.
+ *
+ * This is the shop's own free-standard-post promotion, and it is deliberately
+ * separate from what the carrier charges. `quoteBasket()` in `lib/shipping/`
+ * answers "what does Australia Post want to carry this basket"; this answers
+ * "does the customer pay it". Keeping them apart is what lets the threshold
+ * move without touching postage, and postage move without touching the
+ * threshold.
+ *
+ * The cart and checkout both run this same expression against the same
+ * subtotal, so the two surfaces cannot disagree about who is charged.
+ *
+ * It replaced `shippingCost()`, which returned a flat per-method price. That
+ * function is gone rather than deprecated: once postage is quoted per basket, a
+ * second function still shaped like a price is a thing a future call site will
+ * reach for by mistake, and the wrong postage is money out of the studio's
+ * pocket on every order until someone reconciles a bill.
+ */
+export function isFreeShipping(subtotal: number, methodId: string): boolean {
   const method = SHIPPING.methods.find((m) => m.id === methodId);
-  if (!method) return 0;
-  if (method.id === "standard" && subtotal >= SHIPPING.freeThreshold) return 0;
-  return method.price;
+  if (!method) return false;
+  return method.id === "standard" && subtotal >= SHIPPING.freeThreshold;
 }

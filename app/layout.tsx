@@ -5,7 +5,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { CartProvider } from "@/components/cart/CartProvider";
 import { getUser } from "@/lib/supabase/server";
-import { SHIPPING, SHOP, shippingCost } from "@/lib/config";
+import { isFreeShipping, SHIPPING, SHOP } from "@/lib/config";
 import { money } from "@/lib/format";
 import { siteUrl } from "@/lib/stripe";
 
@@ -17,7 +17,7 @@ import { siteUrl } from "@/lib/stripe";
  * free rather than naming it here.
  */
 const FREE_RATE_METHOD = SHIPPING.methods.find(
-  (option) => shippingCost(SHIPPING.freeThreshold, option.id) === 0,
+  (option) => isFreeShipping(SHIPPING.freeThreshold, option.id),
 );
 const FREE_SHIPPING_SENTENCE = FREE_RATE_METHOD
   ? ` Free ${FREE_RATE_METHOD.label.toLowerCase()} post across Australia from ${money(SHIPPING.freeThreshold)}.`

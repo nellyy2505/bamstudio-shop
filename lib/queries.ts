@@ -14,6 +14,44 @@ export function isDatabaseConfigured(): boolean {
   );
 }
 
+/**
+ * Load active product rows by slug, keyed by slug.
+ *
+ * Checkout and the cart's postage quote both need the *server's* copy of a
+ * basket's products — for prices in one case and for weights in the other — and
+ * they must agree about which rows exist. This lived privately inside
+ * `app/api/checkout/route.ts` until postage needed it too; a second copy would
+ * have been a second answer to "is this product still buyable", and a basket
+ * that quotes on one set of rows and is charged against another is exactly the
+ * class of drift `quoteBasket()` being the single entry point is meant to stop.
+ *
+ * `active` is filtered here, not by the caller, because forgetting it is silent:
+ * a retired product would still be weighed and still be priced.
+ */
+export async function loadProductsBySlug(
+  slugs: string[],
+): Promise<Map<string, Product>> {
+  if (slugs.length === 0) return new Map();
+
+  if (!isDatabaseConfigured()) {
+    return new Map(
+      FALLBACK_PRODUCTS.filter((p) => slugs.includes(p.slug)).map((p) => [
+        p.slug,
+        p,
+      ]),
+    );
+  }
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("products")
+    .select("*")
+    .in("slug", slugs)
+    .eq("active", true);
+
+  return new Map(((data ?? []) as Product[]).map((p) => [p.slug, p]));
+}
+
 export type ProductFilters = {
   category?: string;
   theme?: string;

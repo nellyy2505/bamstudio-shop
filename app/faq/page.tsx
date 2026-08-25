@@ -3,7 +3,12 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Breadcrumbs, ButtonLink, Icon } from "@/components/ui";
 import type { IconName } from "@/components/ui";
-import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitLabel } from "@/lib/config";
+import {
+  PRINT_LEAD_TIME,
+  SHIPPING,
+  SHOP,
+  transitRangeLabel,
+} from "@/lib/config";
 import {
   hasSocialAccount,
   hasStudioMailbox,
@@ -100,10 +105,17 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
             : "We do not email order confirmations, dispatch notices or tracking numbers, so this page is where to look."}
         </p>
         <p>
-          After dispatch: {standard.label.toLowerCase()} post is{" "}
-          {money(standard.price)} ({transitLabel(standard.id)}) and express is{" "}
-          {money(express.price)} ({transitLabel(express.id)}). Standard shipping is
-          free once your order reaches{" "}
+          {/* No flat price and no tracking claim here on purpose. Postage is
+              quoted per basket from Australia Post (lib/shipping/), so a fixed
+              figure on this page would be wrong for most baskets, and whether a
+              parcel is tracked depends on the service the quote picks — which
+              this page has no basket to ask about. The free threshold below is
+              the shop's own promotion and is a fact this page does know. */}
+          After dispatch: {standard.label.toLowerCase()} post takes{" "}
+          {transitRangeLabel(standard.id)} and express takes{" "}
+          {transitRangeLabel(express.id)}. Postage is worked out from the weight
+          of your basket at Australia Post&rsquo;s current rates, and shown in
+          full before you pay. Standard shipping is free once your order reaches{" "}
           {money(SHIPPING.freeThreshold)}. Express speeds up the post, not the
           printing — the print time still applies.
         </p>
