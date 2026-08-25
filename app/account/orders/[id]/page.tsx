@@ -4,6 +4,14 @@ import { notFound } from "next/navigation";
 import { ProductImage } from "@/components/ProductArt";
 import { Alert, ButtonLink, Icon, Pill, cx } from "@/components/ui";
 import { SHIPPING, SHOP } from "@/lib/config";
+import {
+  formsReachStudio,
+  hasSocialAccount,
+  hasStudioMailbox,
+  sendsOrderConfirmation,
+  socialLinks,
+} from "@/lib/contact";
+import { isEmailConfigured } from "@/lib/email";
 import { formatDate, money, pluralise } from "@/lib/format";
 import {
   ORDER_STATUS_FLOW,
@@ -40,6 +48,81 @@ const STEP_LABEL_TEXT = {
   current: "text-good",
   todo: "text-faint",
 } as const;
+
+/**
+ * Whether the shop can send at all, read once from the server-side secrets.
+ * This is a server component, so `isEmailConfigured()` is safe here and is the
+ * same condition the senders themselves check — no public mirror to drift.
+ */
+const CAN_SEND_EMAIL = isEmailConfigured();
+
+/** Does an enquiry typed into /contact reach a person? See lib/contact.ts. */
+const FORM_DELIVERS = formsReachStudio(CAN_SEND_EMAIL);
+
+/** Does the shop email order confirmations as it is configured now? */
+const SENDS_CONFIRMATION = sendsOrderConfirmation(CAN_SEND_EMAIL);
+
+const LINK = "font-bold underline underline-offset-2";
+
+/**
+ * How to reach the studio, using only channels that exist. `SHOP.supportEmail`
+ * renders the literal string "[HELLO@YOURDOMAIN]" when unset, so it may never
+ * be printed without `hasStudioMailbox`. Same chain as the three legal pages;
+ * the predicates now live in lib/contact.ts, the markup cannot.
+ */
+function Reach({ detail }: { detail: string }) {
+  if (hasStudioMailbox) {
+    return (
+      <>
+        Email{" "}
+        <a href={`mailto:${SHOP.supportEmail}`} className={LINK}>
+          {SHOP.supportEmail}
+        </a>{" "}
+        {detail}.
+        {FORM_DELIVERS ? (
+          <>
+            {" "}
+            The{" "}
+            <Link href="/contact" className={LINK}>
+              contact form
+            </Link>{" "}
+            reaches the same inbox.
+          </>
+        ) : null}
+      </>
+    );
+  }
+
+  if (hasSocialAccount) {
+    const handles = socialLinks;
+
+    return (
+      <>
+        Message us on{" "}
+        {handles.map((handle, index) => (
+          <span key={handle.label}>
+            {index > 0 ? " or " : ""}
+            <a href={handle.href} className={LINK}>
+              {handle.label}
+            </a>
+          </span>
+        ))}{" "}
+        {detail}.
+      </>
+    );
+  }
+
+  return (
+    <>
+      We have not published a contact address yet — any channel we open will be
+      listed on our{" "}
+      <Link href="/contact" className={LINK}>
+        contact page
+      </Link>
+      .
+    </>
+  );
+}
 
 /** Delivered means every step is behind us; a cancelled order has no progress. */
 function stepIndex(status: Order["status"]): number {
@@ -286,8 +369,19 @@ export default async function OrderDetailPage({
               {money(order.total)} AUD paid at checkout. Card details go
               straight to Stripe, so we never see or store them.
             </p>
+            {/* Says where order email GOES, never that any arrived.
+                `SENDS_CONFIRMATION` describes the shop as it is configured
+                right now, and this page renders orders of any age: an order
+                placed before the Resend secrets were set got no confirmation,
+                and even a send made after them is queued with `after()` and can
+                fail without anything here knowing. So the gated half is a
+                standing fact about the address, and there is no "check your
+                inbox" on either branch. */}
             <p className="mt-2 text-[13px] text-faint">
-              Receipt sent to {order.email}
+              Order contact: {order.email}
+              {SENDS_CONFIRMATION
+                ? " — any order email we send goes to this address."
+                : ""}
             </p>
           </section>
 
@@ -306,9 +400,19 @@ export default async function OrderDetailPage({
       {order.status === "cancelled" ? null : (
         <div className="mt-6">
           <Alert tone="info">
-            {printingStarted
-              ? `Printing has already started on this order, so it can no longer be changed here — email ${SHOP.supportEmail} and we'll see what's possible.`
-              : `Need to change something? Orders can be edited or cancelled right up until printing starts — email ${SHOP.supportEmail}.`}
+            {printingStarted ? (
+              <>
+                Printing has already started on this order, so it can no longer
+                be changed here.{" "}
+                <Reach detail="and we'll see what's possible" />
+              </>
+            ) : (
+              <>
+                Need to change something? Orders can be edited or cancelled right
+                up until printing starts.{" "}
+                <Reach detail="with your order number" />
+              </>
+            )}
           </Alert>
         </div>
       )}

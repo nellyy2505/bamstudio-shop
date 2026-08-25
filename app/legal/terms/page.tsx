@@ -1,7 +1,16 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { LegalShell } from "../LegalShell";
 import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitLabel } from "@/lib/config";
+import {
+  formsReachStudio,
+  hasSocialAccount,
+  hasStudioMailbox,
+  sendsOrderConfirmation,
+  socialLinks,
+} from "@/lib/contact";
+import { isEmailConfigured } from "@/lib/email";
 import { money } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -9,6 +18,108 @@ export const metadata: Metadata = {
   description:
     "The terms you agree to when you order from Bam Studio: ordering, pricing, made-to-order lead times, personalisation, delivery, design ownership and your consumer rights.",
 };
+
+/**
+ * Rendered on every request, never baked at build time.
+ *
+ * The email sentences below are derived from `isEmailConfigured()`, which
+ * reads the RESEND_API_KEY / EMAIL_FROM secrets at render time. Prerendered,
+ * that answer is frozen into the HTML at build: an owner who adds the two
+ * secrets to the host without triggering a rebuild gets order-confirmation
+ * emails going out from the Stripe webhook while this page still says none
+ * are sent. A stale bake would turn a term of the contract into a false
+ * statement; a legal document nobody loads in bulk can afford the render.
+ */
+export const dynamic = "force-dynamic";
+
+/**
+ * Whether the shop can send at all, read once from the server-side secrets.
+ * This is a server component, so `isEmailConfigured()` is safe here and is the
+ * same condition the senders themselves check — no public mirror to drift.
+ */
+const CAN_SEND_EMAIL = isEmailConfigured();
+
+/** Does an enquiry typed into /contact reach a person? See lib/contact.ts. */
+const FORM_DELIVERS = formsReachStudio(CAN_SEND_EMAIL);
+
+/** Does paying trigger an automatic order email? Gates the sentence below. */
+const SENDS_CONFIRMATION = sendsOrderConfirmation(CAN_SEND_EMAIL);
+
+const LINK = "font-bold text-accent underline underline-offset-2";
+
+function SocialLinks() {
+  return (
+    <>
+      {socialLinks.map((link, index) => (
+        <span key={link.label}>
+          {index > 0 ? " or " : ""}
+          <a href={link.href} className={LINK}>
+            {link.label}
+          </a>
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
+ * One sentence telling the reader how to reach us, using only channels that
+ * exist. `SHOP.supportEmail` renders the literal string "[HELLO@YOURDOMAIN]"
+ * when unset, so it may never be printed without `hasSupportEmail`.
+ *
+ * Same chain as the privacy and refund pages. The *predicates* it branches on
+ * now live in lib/contact.ts; the JSX itself still cannot, because a .ts module
+ * holds no markup and each page words the fallback differently.
+ */
+function Reach({
+  detail,
+  unavailable,
+}: {
+  detail: string;
+  unavailable: ReactNode;
+}) {
+  if (hasStudioMailbox) {
+    return (
+      <>
+        Email{" "}
+        <a href={`mailto:${SHOP.supportEmail}`} className={LINK}>
+          {SHOP.supportEmail}
+        </a>{" "}
+        {detail}.
+        {FORM_DELIVERS ? (
+          <>
+            {" "}
+            Our{" "}
+            <Link href="/contact" className={LINK}>
+              contact form
+            </Link>{" "}
+            reaches the same inbox.
+          </>
+        ) : null}
+      </>
+    );
+  }
+
+  if (hasSocialAccount) {
+    return (
+      <>
+        Message us on <SocialLinks /> {detail}.
+      </>
+    );
+  }
+
+  return <>{unavailable}</>;
+}
+
+const NO_CHANNEL = (
+  <>
+    We have not published a contact address yet. Until one appears on our{" "}
+    <Link href="/contact" className={LINK}>
+      contact page
+    </Link>
+    , there is no way to reach us about an order.
+  </>
+);
 
 export default function TermsPage() {
   return (
@@ -18,20 +129,50 @@ export default function TermsPage() {
       updated="25 August 2026"
     >
       <h2>About these terms</h2>
+      {/* The registered business name and postal address are the owner's own
+          details and cannot be invented here, so the sentence is written to be
+          true without them. Both still have to be added before launch. */}
       <p>
-        This website is operated by [REGISTERED BUSINESS NAME], ABN [ABN], a sole
-        trader based in {SHOP.city}, {SHOP.country}, trading as {SHOP.name}. By
-        placing an order you agree to these terms. If you do not agree with them,
-        please do not order.
+        This website is operated by a sole trader based in {SHOP.city},{" "}
+        {SHOP.country}, trading as {SHOP.name}
+        {SHOP.abn ? <>, ABN {SHOP.abn}</> : null}. By placing an order you agree
+        to these terms. If you do not agree with them, please do not order.
       </p>
 
       <h2>Ordering</h2>
+      {/* Contract formation must key on something the software actually does.
+          Checkout stages the order as `pending`; the Stripe webhook confirms it
+          and allocates the order number once payment succeeds. The confirmation
+          email is sent AFTER that, only when the Resend secrets are set, and it
+          can fail silently — so the contract cannot hang off it, which is why
+          the old "when we send you an order confirmation email" was wrong even
+          now that one is sent. FLAGGED FOR THE OWNER'S LEGAL REVIEW — it is the
+          most load-bearing sentence on the site. */}
       <p>
-        Placing an order is an offer to buy. A contract is formed when we send
-        you an order confirmation email. Until then we may decline an order — for
-        example if an item has sold out, if a price was listed incorrectly, or if
-        we cannot deliver to your address. If we decline after you have paid, we
-        refund you in full.
+        Placing an order is an offer to buy. We accept that offer — and the
+        contract is formed — when your payment succeeds and we record the order
+        under its own order number, which is the number shown to you at the end
+        of checkout. Until that happens we may decline an order — for example if
+        an item has sold out, if a price was listed incorrectly, or if we cannot
+        deliver to your address. If we decline after you have paid, we refund you
+        in full.
+      </p>
+      <p>
+        Keep your order number: it is how you{" "}
+        <Link href="/track" className={LINK}>
+          track the parcel
+        </Link>{" "}
+        and how we find your order if you write to us.{" "}
+        {/* Gated on the capability the webhook itself checks, never on a
+            separate switch: while the secrets are set an itemised confirmation
+            really is sent, and denying it here would be a false statement in a
+            legal document. Dispatch and tracking mail is denied unconditionally
+            because nothing sends either in any configuration. It is stated as
+            what we do, not as a delivery guarantee — the send is fire-and-forget
+            and can fail, which is why /track never depends on it. */}
+        {SENDS_CONFIRMATION
+          ? "When your payment succeeds we email you an order confirmation listing what you ordered and the total paid. We do not send dispatch or tracking emails, and the confirmation is a courtesy rather than a guarantee — your order number and this website are what you rely on."
+          : "We do not send order confirmation, dispatch or tracking emails."}
       </p>
 
       <h2>Prices and payment</h2>
@@ -39,7 +180,7 @@ export default function TermsPage() {
         All prices are in Australian dollars.{" "}
         {SHOP.gstRegistered
           ? "Prices include GST, and your receipt shows the GST component."
-          : "[REGISTERED BUSINESS NAME] is not currently registered for GST, so no GST is charged on your order."}
+          : `${SHOP.name} is not currently registered for GST, so no GST is charged on your order.`}
         Prices exclude delivery, which is shown at checkout before you pay.
       </p>
       <p>
@@ -76,8 +217,12 @@ export default function TermsPage() {
       <p>
         For name charms and anything else you personalise, you are responsible
         for the spelling, characters and colours you submit — we print exactly
-        what you enter. Check your order confirmation carefully and tell us
-        immediately if something is wrong.
+        what you enter. Check the personalisation in your basket before you pay,
+        and afterwards in{" "}
+        <Link href="/account/orders" className={LINK}>
+          your account
+        </Link>{" "}
+        if you have one. Tell us immediately if something is wrong.
       </p>
       <p>
         We will not print licensed or trademarked characters, logos, or anything
@@ -112,7 +257,13 @@ export default function TermsPage() {
         lost or is damaged in transit, contact us and we will lodge an enquiry
         with the carrier and sort out a replacement or refund.
       </p>
-      <p>[ADD INTERNATIONAL SHIPPING TERMS HERE IF YOU START SHIPPING ABROAD.]</p>
+      {/* Checkout only accepts Australian addresses (`allowed_countries: ["AU"]`
+          in app/api/checkout/route.ts), so this is a statement of what the site
+          does, not a placeholder for terms that do not exist yet. */}
+      <p>
+        We post within Australia only. Checkout will not accept an overseas
+        delivery address, and these terms do not cover international orders.
+      </p>
 
       <h2>Custom and wholesale orders</h2>
       <p>
@@ -181,15 +332,10 @@ export default function TermsPage() {
 
       <h2>Contact</h2>
       <p>
-        [REGISTERED BUSINESS NAME], [BUSINESS POSTAL ADDRESS], or email
-        [HELLO@YOURDOMAIN]. You can also use our{" "}
-        <Link
-          href="/contact"
-          className="font-bold text-accent underline underline-offset-2"
-        >
-          contact form
-        </Link>
-        .
+        <Reach
+          detail="about an order or about these terms"
+          unavailable={NO_CHANNEL}
+        />
       </p>
     </LegalShell>
   );

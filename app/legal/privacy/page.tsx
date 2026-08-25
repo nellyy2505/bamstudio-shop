@@ -1,12 +1,130 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import Link from "next/link";
 import { LegalShell } from "../LegalShell";
 import { SHOP } from "@/lib/config";
+import {
+  formsReachStudio,
+  hasSocialAccount,
+  hasStudioMailbox,
+  sendsOrderConfirmation,
+  socialLinks,
+} from "@/lib/contact";
+import { isEmailConfigured } from "@/lib/email";
 
 export const metadata: Metadata = {
   title: "Privacy policy",
   description:
     "What personal information Bam Studio collects when you order, why we collect it, who we share it with, and how to access or correct it.",
 };
+
+/**
+ * Rendered on every request, never baked at build time.
+ *
+ * The email sentences below are derived from `isEmailConfigured()`, which
+ * reads the RESEND_API_KEY / EMAIL_FROM secrets at render time. Prerendered,
+ * that answer is frozen into the HTML at build: an owner who adds the two
+ * secrets to the host without triggering a rebuild gets order-confirmation
+ * emails going out from the Stripe webhook while this page still says none
+ * are sent. A stale bake would turn a privacy disclosure into a false one —
+ * specifically, it would keep denying that customer names, addresses and
+ * order contents reach a US mail processor while they do. Cheap to render.
+ */
+export const dynamic = "force-dynamic";
+
+/**
+ * Whether the shop can send at all, read once from the server-side secrets.
+ * This is a server component, so `isEmailConfigured()` is safe here and is the
+ * same condition the senders themselves check — no public mirror to drift.
+ *
+ * It matters more on this page than anywhere else: it decides whether a US mail
+ * processor is disclosed as a recipient of customer names, addresses, order
+ * contents and totals. Getting it wrong is not a wording problem.
+ */
+const CAN_SEND_EMAIL = isEmailConfigured();
+
+/** Does an enquiry typed into /contact reach a person? See lib/contact.ts. */
+const FORM_DELIVERS = formsReachStudio(CAN_SEND_EMAIL);
+
+/** Does paying trigger an automatic order email to the customer? */
+const SENDS_CONFIRMATION = sendsOrderConfirmation(CAN_SEND_EMAIL);
+
+const LINK = "font-bold text-accent underline underline-offset-2";
+
+function SocialLinks() {
+  return (
+    <>
+      {socialLinks.map((link, index) => (
+        <span key={link.label}>
+          {index > 0 ? " or " : ""}
+          <a href={link.href} className={LINK}>
+            {link.label}
+          </a>
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
+ * One sentence telling the reader how to reach us, using only channels that
+ * exist. `SHOP.supportEmail` renders the literal string "[HELLO@YOURDOMAIN]"
+ * when unset, so it may never be printed without `hasSupportEmail`.
+ *
+ * This chain is repeated in the terms and refund pages and in the account
+ * pages. The *predicates* it branches on now live in lib/contact.ts; the JSX
+ * itself still cannot, because a .ts module holds no markup and each page words
+ * the fallback differently.
+ */
+function Reach({
+  detail,
+  unavailable,
+}: {
+  detail: string;
+  unavailable: ReactNode;
+}) {
+  if (hasStudioMailbox) {
+    return (
+      <>
+        Email{" "}
+        <a href={`mailto:${SHOP.supportEmail}`} className={LINK}>
+          {SHOP.supportEmail}
+        </a>{" "}
+        {detail}.
+        {FORM_DELIVERS ? (
+          <>
+            {" "}
+            Our{" "}
+            <Link href="/contact" className={LINK}>
+              contact form
+            </Link>{" "}
+            reaches the same inbox.
+          </>
+        ) : null}
+      </>
+    );
+  }
+
+  if (hasSocialAccount) {
+    return (
+      <>
+        Message us on <SocialLinks /> {detail}.
+      </>
+    );
+  }
+
+  return <>{unavailable}</>;
+}
+
+const NO_CHANNEL = (
+  <>
+    We have not published a contact address yet. Until one appears on our{" "}
+    <Link href="/contact" className={LINK}>
+      contact page
+    </Link>
+    , there is no way to reach us about this.
+  </>
+);
 
 export default function PrivacyPage() {
   return (
@@ -16,12 +134,19 @@ export default function PrivacyPage() {
       updated="25 August 2026"
     >
       <h2>Who we are</h2>
+      {/* The registered business name and postal address are the owner's real
+          details and cannot be invented, so this sentence is written to be
+          true and complete without them. Both still have to be added before
+          launch — a privacy policy needs a named contact point. */}
       <p>
-        {SHOP.name} is a sole trader business operating as{" "}
-        [REGISTERED BUSINESS NAME], ABN [ABN], based in {SHOP.city},{" "}
-        {SHOP.country}. In this policy, &quot;we&quot; and &quot;us&quot; mean
-        that business. We can be reached at [HELLO@YOURDOMAIN] or by post at
-        [BUSINESS POSTAL ADDRESS].
+        {SHOP.name} is a sole trader business based in {SHOP.city},{" "}
+        {SHOP.country}
+        {SHOP.abn ? <>, ABN {SHOP.abn}</> : null}. In this policy,
+        &quot;we&quot; and &quot;us&quot; mean that business.{" "}
+        <Reach
+          detail="with any question about this policy"
+          unavailable={NO_CHANNEL}
+        />
       </p>
       <p>
         As a small business we may fall below the turnover threshold at which the
@@ -38,18 +163,31 @@ export default function PrivacyPage() {
           address, phone number if you give one, what you bought, and any
           personalisation text (for example the letters on a name charm).
         </li>
+        {/* The contact form is only offered where it can actually deliver, so
+            naming it here when it is absent points a customer at something they
+            cannot find. The mailbox clause is gated for the same reason. */}
         <li>
-          <strong>Messages</strong> — anything you send through our contact form
-          or by email, including the order number you quote.
+          <strong>Messages</strong> — anything you send us
+          {FORM_DELIVERS ? " through our contact form" : ""}
+          {FORM_DELIVERS && hasStudioMailbox ? " or" : ""}
+          {hasStudioMailbox ? " by email" : ""}
+          {!FORM_DELIVERS && !hasStudioMailbox
+            ? " however you reach us"
+            : ""}, including the order number you quote.
         </li>
+        {/* True whether or not the signup form stays on the site: there is no
+            subscriber table, so an address sent to us is only ever a message
+            someone reads. */}
         <li>
-          <strong>Newsletter signups</strong> — your email address, and nothing
-          else.
+          <strong>Asking to hear about new drops</strong> — if you send us your
+          email address to be added to a future mailing list, that address
+          reaches us as a message and nothing else. There is no subscriber
+          database behind this site.
         </li>
         <li>
           <strong>Account details</strong> — if you create an account, your email
-          address and a securely hashed password held by our hosting provider. We
-          never see the password itself.
+          address and a securely hashed password held by Supabase, the service
+          that runs our accounts and database. We never see the password itself.
         </li>
         <li>
           <strong>Payment information</strong> — handled entirely by our payment
@@ -68,8 +206,9 @@ export default function PrivacyPage() {
       <p>
         To print, pack and post your order; to answer your questions; to process
         returns and refunds; to keep the business records the Australian Taxation
-        Office requires; and, if you have asked for it, to send you occasional
-        news about new designs and market dates.
+        Office requires; and, if you have asked us to, to note that you would
+        like to hear about new designs and market dates if we ever set up a way
+        to send them.
       </p>
       <p>
         We do not sell personal information, and we do not share it for anyone
@@ -87,17 +226,39 @@ export default function PrivacyPage() {
           transaction and fraud checks.
         </li>
         <li>
-          <strong>Website and database hosting</strong> — [HOSTING PROVIDER] and
-          [DATABASE PROVIDER], which store order and account records.
+          <strong>Accounts and order records</strong> — Supabase, which stores
+          your order history, profile and sign-in details, and sends the account
+          emails described below.
+        </li>
+        <li>
+          <strong>Website hosting</strong> — the provider that serves these pages
+          and keeps the basic server logs above.
         </li>
         <li>
           <strong>Delivery</strong> — Australia Post, which receives the name and
           address on the parcel label.
         </li>
-        <li>
-          <strong>Email</strong> — [EMAIL PROVIDER], which sends order
-          confirmations and any newsletter you subscribed to.
-        </li>
+        {/* Disclosed whenever email is ON — on the secrets alone, NOT on
+            `FORM_DELIVERS`. The order confirmation goes through Resend with no
+            dependency on the studio mailbox, so gating this on the mailbox too
+            produced a real configuration in which customer names, addresses,
+            order contents and totals were handed to a US processor while this
+            list named no email provider at all. Both flows are described,
+            because they carry different data to different recipients: the
+            confirmation carries the customer's own order TO the customer, the
+            form carries their message to us. */}
+        {CAN_SEND_EMAIL ? (
+          <li>
+            <strong>Email delivery</strong> — Resend, which sends our email for
+            us and is based in the United States. It handles your order
+            confirmation, so it sees your name, your email address, what you
+            ordered and what you paid
+            {FORM_DELIVERS
+              ? ", and it carries a message you send us through the contact form, or a request to hear about new drops, to our own inbox"
+              : ""}
+            . It does not use any of it for its own purposes.
+          </li>
+        ) : null}
       </ul>
       <p>
         We may also disclose information where the law requires it, or where it
@@ -113,13 +274,32 @@ export default function PrivacyPage() {
         stored and processed overseas by the providers listed above.
       </p>
 
-      <h2>Marketing and how to opt out</h2>
+      <h2>Email we send, and marketing</h2>
+      {/* Three separate facts, and only one of them is unconditional.
+          - Marketing, dispatch, tracking, restock and review-reminder email:
+            never sent, in any configuration. Nothing in this codebase can.
+          - Account email (address confirmation, password reset): always sent,
+            by Supabase Auth, independent of the Resend secrets.
+          - The itemised order confirmation: sent by the Stripe webhook whenever
+            the Resend secrets are set. That is an automatic order email by any
+            reading, so the denial has to be gated on SENDS_CONFIRMATION. This
+            paragraph was previously ungated and false in the launch config. */}
       <p>
-        We only email marketing to people who asked for it. Every newsletter has
-        an unsubscribe link, and you can also reply to any email or write to
-        [HELLO@YOURDOMAIN] and we will take you off the list. Order
-        confirmations, delivery updates and replies to your own messages are not
-        marketing and will still be sent.
+        We do not send marketing email. There is no mailing list and no
+        newsletter — if you have ticked a preference in your account, it records
+        what you would like for the day we can send it, and nothing goes out in
+        the meantime. We never send dispatch, tracking, restock or
+        review-reminder emails.
+      </p>
+      <p>
+        {SENDS_CONFIRMATION
+          ? "There are two kinds of email this site sends by itself. The first is about your account: confirming your email address when you sign up, and the link that resets your password when you ask for one. The second is a single order confirmation, sent to the address you gave at checkout once your payment succeeds, listing what you ordered and the total paid. Neither is marketing, and there is nothing to unsubscribe from."
+          : "The only email this site sends by itself is about your account: confirming your email address when you sign up, and the link that resets your password when you ask for one. Those are part of signing in, not marketing. No order confirmation is sent — your order number is shown on screen after you pay instead."}
+      </p>
+      <p>
+        If we ever do start a newsletter, it will only go to people who asked for
+        it, every message will carry an unsubscribe link, and this page will be
+        updated before the first one is sent.
       </p>
 
       <h2>Cookies</h2>
@@ -128,15 +308,19 @@ export default function PrivacyPage() {
         between visits, to keep you signed in if you have an account, and to
         complete checkout securely. You can block or clear cookies in your
         browser, but the basket and checkout will not work properly without them.
-        [ADD ANY ANALYTICS OR ADVERTISING COOKIES HERE BEFORE LAUNCH.]
+        {/* Verified against the codebase: no analytics or advertising script is
+            loaded anywhere. Update this line the day one is added. */}{" "}
+        We do not use analytics or advertising cookies.
       </p>
 
       <h2>How long we keep it</h2>
       <p>
         Order and payment records are kept for at least five years, which is the
-        period Australian tax law requires. Contact-form messages are kept while
-        they are useful for support and then deleted. Newsletter subscriptions
-        are kept until you unsubscribe.
+        period Australian tax law requires.{" "}
+        {FORM_DELIVERS
+          ? "A contact-form message is not saved on this site — it is forwarded straight to the studio inbox, where it stays until we delete it."
+          : "Contact-form messages are not saved on this site."}{" "}
+        There is no subscriber list, so there is nothing there to keep.
       </p>
 
       <h2>Security</h2>
@@ -150,19 +334,29 @@ export default function PrivacyPage() {
 
       <h2>Accessing and correcting your information</h2>
       <p>
-        Email [HELLO@YOURDOMAIN] to ask what we hold about you, to correct it, or
-        to ask us to delete it. We will respond within a reasonable time, usually
-        30 days. We may need to keep some records even after a deletion request
-        where tax or consumer law requires it, and we will tell you if that
-        applies.
+        <Reach
+          detail="to ask what we hold about you, to correct it, or to ask us to delete it"
+          unavailable={NO_CHANNEL}
+        />{" "}
+        We will respond within a reasonable time, usually 30 days. Deleting an
+        account is done by hand rather than by a button — see the note on the{" "}
+        <Link href="/account/settings" className={LINK}>
+          settings page
+        </Link>
+        . We may need to keep some records even after a deletion request where
+        tax or consumer law requires it, and we will tell you if that applies.
       </p>
 
       <h2>Complaints</h2>
       <p>
         If you think we have mishandled your personal information, tell us first
-        at [HELLO@YOURDOMAIN] — we would rather fix it. If you are not satisfied
-        with our response, you can complain to the Office of the Australian
-        Information Commissioner at oaic.gov.au.
+        — we would rather fix it.{" "}
+        <Reach
+          detail="with what went wrong"
+          unavailable={NO_CHANNEL}
+        />{" "}
+        If you are not satisfied with our response, you can complain to the
+        Office of the Australian Information Commissioner at oaic.gov.au.
       </p>
 
       <h2>Children</h2>
@@ -175,8 +369,7 @@ export default function PrivacyPage() {
       <h2>Changes to this policy</h2>
       <p>
         We will update this page when our practices change, and the date at the
-        top will change with it. Material changes will also be noted in the
-        newsletter.
+        top will change with it.
       </p>
     </LegalShell>
   );

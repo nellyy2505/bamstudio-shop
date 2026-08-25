@@ -3,6 +3,7 @@ import { ProductArt } from "@/components/ProductArt";
 import { Breadcrumbs, ButtonLink, Icon, Pill } from "@/components/ui";
 import type { IconName } from "@/components/ui";
 import { PRINT_LEAD_TIME, SHOP } from "@/lib/config";
+import { canReachStudio, hasSocialAccount } from "@/lib/contact";
 import type { ArtKey, Tint } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -10,6 +11,16 @@ export const metadata: Metadata = {
   description:
     "Bam Studio is three family members and one 3D printer — designed together, printed to order in Sydney, kept deliberately small.",
 };
+
+/*
+ * `canReachStudio` and `hasSocialAccount` come from lib/contact.ts — the same
+ * mailbox-or-social test /track, /contact and the legal pages use. The on-site
+ * contact form is deliberately not counted: it delivers by emailing the studio
+ * mailbox, so it is not a channel on its own.
+ *
+ * Nothing on this page claims the shop sends email, so no capability is read
+ * here.
+ */
 
 /** Tailwind scans source statically, so tint classes must appear literally. */
 const TINT_BG: Record<Tint, string> = {
@@ -95,12 +106,16 @@ export default function AboutPage() {
         <div className="grid items-center gap-10 lg:grid-cols-2">
           <div className="flex aspect-[4/3] flex-col items-center justify-center gap-4 rounded-[26px] border-2 border-dashed border-line2 bg-cream p-8 text-center">
             <Icon name="camera" size={34} className="text-faint" />
+            {/* Was a bracketed [PHOTO: ...] placeholder rendered to customers.
+                The frame stays — there is no studio photo yet and inventing one
+                is not an option — but it now reads as a plain note rather than
+                unfilled copy someone forgot to replace. */}
             <p className="max-w-[34ch] text-[13.5px] font-extrabold text-muted">
-              [PHOTO: the printer mid-run, with a bed of finished pieces waiting
-              to be trimmed]
+              A photo of the printer mid-run goes here, with a bed of finished
+              pieces waiting to be trimmed.
             </p>
             <p className="text-xs text-faint">
-              Photography placeholder — swap for a real image before launch.
+              We have not photographed the studio yet.
             </p>
           </div>
 
@@ -149,12 +164,21 @@ export default function AboutPage() {
             <h2 className="mt-4 mb-3 text-[28px] leading-tight text-[#F6F2EA] lg:text-[34px]">
               Come and click one before you buy it
             </h2>
+            {/* "Next stall" was an unfilled [MARKET NAME AND DATE] placeholder.
+                Naming a market we have not booked is worse than naming none, so
+                this says only what holds — the same wording /faq and /contact
+                settled on. Holding a piece aside needs somewhere to ask, so
+                that half is gated the way /track gates "message us". */}
             <p className="mb-7 max-w-[460px] text-[#BDB6AA]">
               We take the stall to {SHOP.city} weekend markets, with the DIY
               letter-charm bar set up so you can spell a name on the spot and
-              take it home the same afternoon. Next stall:{" "}
-              [MARKET NAME AND DATE]. Message us if you want us to hold something
-              aside, or if you are after a custom design.
+              take it home the same afternoon. Dates move around and we do not
+              have the next one confirmed here yet, so it is worth checking
+              before you make the trip
+              {hasSocialAccount ? " — our social accounts have the latest" : ""}.
+              {canReachStudio
+                ? " Message us if you want us to hold something aside, or if you are after a custom design."
+                : ""}
             </p>
             <div className="flex flex-wrap gap-3.5">
               <ButtonLink
@@ -162,7 +186,10 @@ export default function AboutPage() {
                 className="bg-[#F6F2EA] text-ink hover:bg-white"
               >
                 <Icon name="msg" size={18} />
-                Get in touch
+                {/* Same call as /track: with no mailbox and no social account
+                    there is nothing to get in touch through, and the contact
+                    page says so — the button must not promise more than it. */}
+                {canReachStudio ? "Get in touch" : "How to reach us"}
               </ButtonLink>
               <ButtonLink
                 href="/shop"

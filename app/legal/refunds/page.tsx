@@ -1,13 +1,128 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { LegalShell } from "../LegalShell";
 import { PRINT_LEAD_TIME, SHOP } from "@/lib/config";
+import {
+  canReachStudio,
+  formsReachStudio,
+  hasSocialAccount,
+  hasStudioMailbox,
+  sendsOrderConfirmation,
+  socialLinks,
+} from "@/lib/contact";
+import { isEmailConfigured } from "@/lib/email";
 
 export const metadata: Metadata = {
   title: "Refund policy",
   description:
     "Bam Studio's returns, refunds and replacements: 30 days for change of mind on stock designs, the personalised-items exception, and your Australian Consumer Law rights.",
 };
+
+/**
+ * Rendered on every request, never baked at build time.
+ *
+ * The email sentences below are derived from `isEmailConfigured()`, which
+ * reads the RESEND_API_KEY / EMAIL_FROM secrets at render time. Prerendered,
+ * that answer is frozen into the HTML at build: an owner who adds the two
+ * secrets to the host without triggering a rebuild gets order-confirmation
+ * emails going out from the Stripe webhook while this page still says none
+ * are sent. A stale bake would turn a term of the contract — and the remedy
+ * it points a charged customer at — into a false statement. A legal document
+ * nobody loads in bulk can afford the render.
+ */
+export const dynamic = "force-dynamic";
+
+/**
+ * Whether the shop can send at all, read once from the server-side secrets.
+ * This is a server component, so `isEmailConfigured()` is safe here and is the
+ * same condition the senders themselves check — no public mirror to drift.
+ */
+const CAN_SEND_EMAIL = isEmailConfigured();
+
+/** Does an enquiry typed into /contact reach a person? See lib/contact.ts. */
+const FORM_DELIVERS = formsReachStudio(CAN_SEND_EMAIL);
+
+/** Does paying trigger an automatic order email listing what was bought? */
+const SENDS_CONFIRMATION = sendsOrderConfirmation(CAN_SEND_EMAIL);
+
+const LINK = "font-bold text-accent underline underline-offset-2";
+
+function SocialLinks() {
+  return (
+    <>
+      {socialLinks.map((link, index) => (
+        <span key={link.label}>
+          {index > 0 ? " or " : ""}
+          <a href={link.href} className={LINK}>
+            {link.label}
+          </a>
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
+ * One sentence telling the reader how to reach us, using only channels that
+ * exist. `SHOP.supportEmail` renders the literal string "[HELLO@YOURDOMAIN]"
+ * when unset, so it may never be printed without `hasSupportEmail`.
+ *
+ * Same chain as the privacy and terms pages. The *predicates* it branches on
+ * now live in lib/contact.ts; the JSX itself still cannot, because a .ts module
+ * holds no markup and each page words the fallback differently.
+ */
+function Reach({
+  detail,
+  unavailable,
+}: {
+  detail: string;
+  unavailable: ReactNode;
+}) {
+  if (hasStudioMailbox) {
+    return (
+      <>
+        Email{" "}
+        <a href={`mailto:${SHOP.supportEmail}`} className={LINK}>
+          {SHOP.supportEmail}
+        </a>{" "}
+        {detail}.
+        {FORM_DELIVERS ? (
+          <>
+            {" "}
+            Our{" "}
+            <Link href="/contact" className={LINK}>
+              contact form
+            </Link>{" "}
+            reaches the same inbox.
+          </>
+        ) : null}
+      </>
+    );
+  }
+
+  if (hasSocialAccount) {
+    return (
+      <>
+        Message us on <SocialLinks /> {detail}.
+      </>
+    );
+  }
+
+  return <>{unavailable}</>;
+}
+
+const NO_CHANNEL = (
+  <>
+    We have not published a contact address yet, so there is no way to start
+    this online. Any channel we open will be listed on our{" "}
+    <Link href="/contact" className={LINK}>
+      contact page
+    </Link>
+    , and your rights under the Australian Consumer Law are unaffected in the
+    meantime.
+  </>
+);
 
 export default function RefundsPage() {
   return (
@@ -66,20 +181,36 @@ export default function RefundsPage() {
       <p>
         Personalised items <strong>can</strong> be returned if they are faulty,
         damaged in transit, or not what you ordered — for example if we printed a
-        different name or colour than your order confirmation shows. Your
-        Australian Consumer Law rights apply to personalised items in full.
+        different name or colour than your order shows. Your Australian Consumer
+        Law rights apply to personalised items in full.
       </p>
+      {/* The check points at surfaces that exist in every configuration: the
+          basket before payment and the order record afterwards. A confirmation
+          email now exists too, but only while the Resend secrets are set and it
+          can fail without anyone noticing, so it is offered as an extra place
+          to look rather than as the place to look. */}
       <p>
         Because a misspelling cannot be undone, please check the spelling and
-        colour on your confirmation email as soon as it arrives.
+        colour in your basket before you pay — and again in{" "}
+        <Link href="/account/orders" className={LINK}>
+          your account
+        </Link>{" "}
+        if you have one
+        {SENDS_CONFIRMATION
+          ? ", or on the confirmation email we send when your payment goes through"
+          : ""}
+        . Tell us straight away if it is wrong; there is usually a window before
+        it goes on the printer.
       </p>
 
       <h2>Faulty, damaged or wrong items</h2>
       <p>
         Tell us within 14 days of delivery, or as soon as a fault appears if it
-        is not immediately obvious. Email [HELLO@YOURDOMAIN] with your order
-        number and a photo of the problem — a photo usually saves you having to
-        post anything at all.
+        is not immediately obvious.{" "}
+        <Reach
+          detail="with your order number and a photo of the problem — a photo usually saves you having to post anything at all"
+          unavailable={NO_CHANNEL}
+        />
       </p>
       <p>
         Where an item is faulty, damaged or not what you ordered, we pay the
@@ -108,24 +239,39 @@ export default function RefundsPage() {
       </p>
 
       <h2>How to start a return</h2>
-      <ul>
-        <li>
-          Email [HELLO@YOURDOMAIN] with your order number, what you want to
-          return, and why.
-        </li>
-        <li>
-          Wait for our reply before posting anything — we will send the return
-          address and, where it is our fault, a way to return it at our cost.
-        </li>
-        <li>
-          Pack the item so it survives the trip, include a note with your order
-          number, and send it with tracking.
-        </li>
-      </ul>
-      <p>
-        Our return address is [BUSINESS RETURN ADDRESS]. Please do not send
-        anything back before contacting us; unannounced returns are easy to lose.
-      </p>
+      {/* The reply here is a person writing back from the studio inbox, not an
+          automated email — real as long as there is a channel to write to. With
+          no channel at all the steps cannot be honestly described, so the page
+          says that instead. The return address itself is a detail only the
+          owner can supply, so it is given in the reply rather than printed. */}
+      {canReachStudio ? (
+        <>
+          <ul>
+            <li>
+              <Reach
+                detail="with your order number, what you want to return, and why"
+                unavailable={NO_CHANNEL}
+              />
+            </li>
+            <li>
+              Wait for our reply before posting anything — one of us will write
+              back with the return address and, where it is our fault, a way to
+              return it at our cost.
+            </li>
+            <li>
+              Pack the item so it survives the trip, include a note with your
+              order number, and send it with tracking.
+            </li>
+          </ul>
+          <p>
+            Please do not send anything back before contacting us; unannounced
+            returns are easy to lose, and the return address is not published
+            here.
+          </p>
+        </>
+      ) : (
+        <p>{NO_CHANNEL}</p>
+      )}
 
       <h2>When we refund</h2>
       <p>
@@ -156,22 +302,18 @@ export default function RefundsPage() {
       <h2>Market purchases</h2>
       <p>
         Items bought at a market stall follow the same rules, and your Australian
-        Consumer Law rights are identical. Please keep your receipt or the
-        confirmation we send, since we have no online order record for a cash
-        sale.
+        Consumer Law rights are identical. Please keep your receipt, since a cash
+        sale at the stall leaves no online order record for us to look up.
       </p>
 
       <h2>Still not sorted?</h2>
       <p>
-        Write to us through the{" "}
-        <Link
-          href="/contact"
-          className="font-bold text-accent underline underline-offset-2"
-        >
-          contact form
-        </Link>{" "}
-        or at [HELLO@YOURDOMAIN]. If we cannot agree, you can contact NSW Fair
-        Trading or the ACCC about your consumer rights.
+        <Reach
+          detail="and tell us where it went wrong"
+          unavailable={NO_CHANNEL}
+        />{" "}
+        If we cannot agree, you can contact NSW Fair Trading or the ACCC about
+        your consumer rights.
       </p>
     </LegalShell>
   );

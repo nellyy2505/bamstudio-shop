@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Alert, Button, Field, Icon, inputClass } from "@/components/ui";
+import { SHOP } from "@/lib/config";
+import { hasStudioMailbox } from "@/lib/contact";
 
 const TOPICS = [
   { value: "order", label: "A question about my order" },
@@ -11,7 +13,14 @@ const TOPICS = [
   { value: "other", label: "Something else" },
 ];
 
-type Status = "idle" | "sending" | "sent" | "error";
+/**
+ * Nothing persists an enquiry — the email to the studio IS the delivery — so
+ * "sent" may only be claimed when /api/contact reports `delivered: true`.
+ * `undelivered` is a 200 whose enquiry reached nobody: the form stays on
+ * screen with the customer's words intact, because telling someone to write to
+ * us another way after wiping what they wrote is its own small betrayal.
+ */
+type Status = "idle" | "sending" | "sent" | "undelivered" | "error";
 
 export function ContactForm() {
   const [status, setStatus] = useState<Status>("idle");
@@ -49,8 +58,16 @@ export function ContactForm() {
         return;
       }
 
-      form.reset();
-      setStatus("sent");
+      const body = await res.json().catch(() => null);
+
+      // 200 says the submission was valid, not that it arrived. Only clear the
+      // form once we know the enquiry actually reached the studio.
+      if (body?.delivered) {
+        form.reset();
+        setStatus("sent");
+        return;
+      }
+      setStatus("undelivered");
     } catch {
       setError(
         "We could not reach the studio — check your connection and try again.",
@@ -66,10 +83,16 @@ export function ContactForm() {
           <Icon name="check" size={28} strokeWidth={2.4} />
         </span>
         <h2 className="mt-5 text-2xl">Message sent</h2>
+        {/* Only rendered on delivered:true, so "landed in our inbox" is a
+            report of what happened rather than a hope.
+
+            The clock is gone. Nothing in this codebase measures or guarantees a
+            turnaround, /contact says exactly that a few lines up, and the same
+            promise was removed from the product page and /order/confirmed on
+            that principle — leaving it here made the site contradict itself. */}
         <p className="mt-2 max-w-[48ch] text-[15px] text-muted">
           Thank you — it has landed in our inbox. One of us reads every message
-          personally, so replies usually take a business day or two, and a little
-          longer over a market weekend.
+          personally and answers between print runs and market weekends.
         </p>
         <Button
           variant="soft"
@@ -87,7 +110,7 @@ export function ContactForm() {
       <h2 className="text-2xl">Send us a message</h2>
       <p className="mt-1.5 text-[14.5px] text-muted">
         Fields marked with an asterisk are required. If it is about an order,
-        adding the order number saves us both an email.
+        adding the order number saves us both a round trip.
       </p>
 
       <form onSubmit={onSubmit} className="mt-7 flex flex-col gap-4">
@@ -154,7 +177,7 @@ export function ContactForm() {
         <Field
           label="Message *"
           htmlFor="contact-message"
-          hint="Ten characters or more. Photos can follow by email reply."
+          hint="Ten characters or more. Photos can follow once we reply."
         >
           <textarea
             id="contact-message"
@@ -170,6 +193,31 @@ export function ContactForm() {
 
         {status === "error" && error ? (
           <Alert tone="error">{error}</Alert>
+        ) : null}
+
+        {status === "undelivered" ? (
+          <Alert tone="error">
+            We could not get that to the studio, so nobody has read it — please
+            do not wait on a reply. Your message is still here.{" "}
+            {/* Built from NEXT_PUBLIC_ config only, so it is identical on the
+                server and in the browser — safe in a client component. Whether
+                the form DELIVERS is decided by the server page, which renders
+                this component only when it does. */}
+            {hasStudioMailbox ? (
+              <>
+                Send it straight to{" "}
+                <a
+                  href={`mailto:${SHOP.supportEmail}`}
+                  className="font-bold underline underline-offset-2"
+                >
+                  {SHOP.supportEmail}
+                </a>{" "}
+                and it will reach us.
+              </>
+            ) : (
+              <>Try again in a few minutes.</>
+            )}
+          </Alert>
         ) : null}
 
         <div className="mt-1 flex flex-wrap items-center gap-4">

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { PAYMENT_BADGES, SHOP } from "@/lib/config";
+import { formsReachStudio, hasSocialAccount } from "@/lib/contact";
+import { isEmailConfigured } from "@/lib/email";
 import { NewsletterForm } from "./NewsletterForm";
 
 const COLUMNS = [
@@ -26,6 +28,20 @@ const COLUMNS = [
 ];
 
 export function Footer() {
+  /**
+   * The sign-up box is offered only where the request can actually reach a
+   * person: /api/newsletter forwards it as an email to the studio mailbox, so
+   * without sending capability *and* a mailbox there is nobody at the other
+   * end and nothing stores the address either. Collecting addresses that reach
+   * no one is the false promise, not the wording on the button.
+   *
+   * This footer is a server component, so the capability is `isEmailConfigured()`
+   * — the same secrets the route checks per request. It used to be a public
+   * build flag, which could be false while the secrets were set, hiding a
+   * sign-up box that would have worked.
+   */
+  const canForwardSignups = formsReachStudio(isEmailConfigured());
+
   return (
     <footer className="mt-20 bg-[#2B2724] text-[#BDB6AA]">
       <div className="wrap pt-14 pb-7">
@@ -67,12 +83,25 @@ export function Footer() {
 
           <div>
             <h4 className="mb-3.5 font-display text-sm text-[#F6F2EA]">
-              Stay in the loop
+              {canForwardSignups ? "Hear about new drops" : "New drops"}
             </h4>
-            <p className="mb-3 text-[13.5px]">
-              New drops and {SHOP.city} market dates, about once a month.
-            </p>
-            <NewsletterForm />
+            {/* No list exists yet, so no frequency and no "you're subscribed"
+                is promised anywhere — this asks the studio to note you down. */}
+            {canForwardSignups ? (
+              <>
+                <p className="mb-3 text-[13.5px]">
+                  There is no mailing list yet. Leave your address and we will
+                  pass it to the studio to keep for when there is one.
+                </p>
+                <NewsletterForm />
+              </>
+            ) : (
+              <p className="mb-3 text-[13.5px]">
+                {hasSocialAccount
+                  ? "New designs go up on our socials first."
+                  : "New designs go up in the shop as they come off the printer."}
+              </p>
+            )}
             {/* Both URLs are env-configured and null until they're set, so a
                 missing one is simply not linked rather than rendered dead. */}
             <div className="mt-4 flex gap-4 text-[13px]">

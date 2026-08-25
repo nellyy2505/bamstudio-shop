@@ -4,6 +4,12 @@ import type { ReactNode } from "react";
 import { Breadcrumbs, ButtonLink, Icon } from "@/components/ui";
 import type { IconName } from "@/components/ui";
 import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitLabel } from "@/lib/config";
+import {
+  hasSocialAccount,
+  hasStudioMailbox,
+  sendsOrderConfirmation,
+} from "@/lib/contact";
+import { isEmailConfigured } from "@/lib/email";
 import { money } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -14,6 +20,27 @@ export const metadata: Metadata = {
 
 const standard = SHIPPING.methods.find((m) => m.id === "standard")!;
 const express = SHIPPING.methods.find((m) => m.id === "express")!;
+
+/**
+ * Rendered on every request, never baked at build time.
+ *
+ * The email sentences below are derived from `isEmailConfigured()`, which
+ * reads the RESEND_API_KEY / EMAIL_FROM secrets at render time. Prerendered,
+ * that answer is frozen into the HTML at build: an owner who adds the two
+ * secrets to the host without triggering a rebuild gets order-confirmation
+ * emails going out from the Stripe webhook while this page still says none
+ * are sent. A stale bake would have this page answering "will I get an
+ * email?" wrongly in both directions. Low traffic; it can afford the render.
+ */
+export const dynamic = "force-dynamic";
+
+/**
+ * Whether the shop can send at all. Server component, so this reads the same
+ * `RESEND_API_KEY` / `EMAIL_FROM` secrets the Stripe webhook does.
+ * `hasStudioMailbox` — is `SHOP.supportEmail` a real address rather than the
+ * `[HELLO@YOURDOMAIN]` placeholder — comes from lib/contact.ts.
+ */
+const SENDS_CONFIRMATION = sendsOrderConfirmation(isEmailConfigured());
 
 const CATEGORIES: {
   icon: IconName;
@@ -54,8 +81,23 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
         <p>
           Everything is printed to order on one printer, so allow{" "}
           <strong className="text-ink">{PRINT_LEAD_TIME.label}</strong> for
-          printing, checking and packing before your parcel is dispatched. You
-          will get a tracking number by email the moment it goes out.
+          printing, checking and packing before your parcel is dispatched. The
+          tracking number appears on{" "}
+          <Link
+            href="/track"
+            className="font-bold text-accent underline underline-offset-2"
+          >
+            your order
+          </Link>{" "}
+          as soon as it is posted — order number and the email you ordered with
+          is all you need.{" "}
+          {/* Gated on the secrets the webhook checks. We never email a dispatch
+              or tracking notice in any configuration, so that denial is flat;
+              the confirmation email is where the order number comes from when
+              one is sent, which is worth saying because /track needs it. */}
+          {SENDS_CONFIRMATION
+            ? "We email you an order confirmation with that number when you pay, but we do not email dispatch or tracking notices — the tracking number appears here instead."
+            : "We do not email order confirmations, dispatch notices or tracking numbers, so this page is where to look."}
         </p>
         <p>
           After dispatch: {standard.label.toLowerCase()} post is{" "}
@@ -116,7 +158,7 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
     answer: (
       <p>
         Usually yes, if it has not been printed.{" "}
-        {SHOP.hasSupportEmail ? (
+        {hasStudioMailbox ? (
           <>
             Email us at{" "}
             <a
@@ -127,11 +169,14 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
             </a>
           </>
         ) : (
+          // With no studio mailbox there is no message form either, so this
+          // sends them to the page that lists whatever channels do exist
+          // rather than promising a message box.
           <Link
             href="/contact"
             className="font-bold text-accent underline underline-offset-2"
           >
-            Send us a message
+            Get in touch
           </Link>
         )}{" "}
         with your order number as soon as you can — colour swaps, address fixes
@@ -164,11 +209,24 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
   {
     question: "Where can I find you in person?",
     answer: (
+      // The next stall was an unfilled [MARKET NAME AND DATE] placeholder and
+      // there is no newsletter to check, so this promises neither: it says
+      // only what can be honoured, and asks people to check before travelling.
       <p>
         We run a stall at {SHOP.city} weekend markets, with the DIY letter-charm
-        bar so you can spell a name and take it home the same day. Our next stall
-        is [MARKET NAME AND DATE]. Dates move around, so the newsletter and our
-        social accounts are the most reliable place to check before you travel.
+        bar so you can spell a name and take it home the same day. Dates move
+        around and we do not have the next one confirmed here yet, so{" "}
+        {hasSocialAccount ? (
+          "check our social accounts"
+        ) : (
+          <Link
+            href="/contact"
+            className="font-bold text-accent underline underline-offset-2"
+          >
+            ask us
+          </Link>
+        )}{" "}
+        before you travel.
       </p>
     ),
   },
@@ -265,9 +323,16 @@ export default function FaqPage() {
         <div className="card flex flex-col items-start gap-5 bg-blush p-7 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl">Still stuck?</h2>
+            {/* The reply promise only holds if a message can reach the studio
+                mailbox at all — without one there is nobody to read it. The
+                "usually within a couple of days" clock is gone: nothing here
+                measures or guarantees a turnaround, /contact says so outright,
+                and the same claim was removed from the product page, the
+                contact form and /order/confirmed on that principle. */}
             <p className="mt-1.5 max-w-[46ch] text-[14.5px] text-muted">
-              If your question is not here, write to us. It is one of us reading
-              it, usually within a couple of days.
+              {hasStudioMailbox
+                ? "If your question is not here, write to us. It is one of us reading it, between print runs and market weekends."
+                : "If your question is not here, the contact page has every way to reach us right now."}
             </p>
           </div>
           <ButtonLink href="/contact" className="shrink-0">

@@ -1,18 +1,91 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Alert, Button, Field, cx, inputClass } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { SHOP } from "@/lib/config";
+import { formsReachStudio, hasStudioMailbox, socialLinks } from "@/lib/contact";
+
+const LINK = "font-bold text-accent underline underline-offset-2";
+
+/**
+ * How to ask us for a hand, using only channels that exist. `SHOP.supportEmail`
+ * renders the literal string "[HELLO@YOURDOMAIN]" when unset, so it may never
+ * be printed without `hasStudioMailbox`. Same chain as the legal pages; the
+ * predicates now live in lib/contact.ts, the markup cannot.
+ *
+ * @param canSendEmail server-read capability, threaded in as a prop — see the
+ *   note on the component's props. Never read the secrets here: this is a
+ *   client component and would answer false in the browser.
+ */
+function emailChangeHint(canSendEmail: boolean) {
+  const formDelivers = formsReachStudio(canSendEmail);
+  if (hasStudioMailbox) {
+    return (
+      <>
+        Changing the email on an account needs a hand from us — write to{" "}
+        <a href={`mailto:${SHOP.supportEmail}`} className={LINK}>
+          {SHOP.supportEmail}
+        </a>
+        {formDelivers ? (
+          <>
+            {" "}
+            or use the{" "}
+            <Link href="/contact" className={LINK}>
+              contact form
+            </Link>
+          </>
+        ) : null}
+        .
+      </>
+    );
+  }
+
+  const handles = socialLinks;
+
+  if (handles.length > 0) {
+    return (
+      <>
+        Changing the email on an account needs a hand from us — message us on{" "}
+        {handles.map((handle, index) => (
+          <span key={handle.label}>
+            {index > 0 ? " or " : ""}
+            <a href={handle.href} className={LINK}>
+              {handle.label}
+            </a>
+          </span>
+        ))}
+        .
+      </>
+    );
+  }
+
+  return (
+    <>
+      Changing the email on an account needs a hand from us, and we have not
+      published a way to reach us yet.
+    </>
+  );
+}
 
 export function ProfileCard({
   userId,
+  canSendEmail,
   email,
   firstName,
   lastName,
   phone,
 }: {
   userId: string;
+  /**
+   * Whether the shop can send its own email — `isEmailConfigured()`, read on
+   * the server by the settings page and handed down. It cannot be read here:
+   * the secrets behind it are not `NEXT_PUBLIC_`, so this client component
+   * would see `undefined`, offer the contact form as a second door when it does
+   * not deliver, and render different words before and after hydration.
+   */
+  canSendEmail: boolean;
   email: string;
   firstName: string;
   lastName: string;
@@ -67,8 +140,12 @@ export function ProfileCard({
       <h2 id="profile-heading" className="text-xl">
         Profile
       </h2>
+      {/* The name goes on the parcel, and — where the Resend secrets are set —
+          onto the order confirmation's delivery details. Neither is a claim
+          this line needs to make, so it says the part that is true in every
+          configuration and no more. */}
       <p className="mt-1 text-[13.5px] text-muted">
-        The name we put on your parcels and order emails.
+        The name we put on your parcels.
       </p>
 
       <form onSubmit={save} noValidate className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -104,7 +181,7 @@ export function ProfileCard({
           <Field
             label="Email address"
             htmlFor="profile-email"
-            hint={`Changing the email on an account needs a hand from us — email ${SHOP.supportEmail}.`}
+            hint={emailChangeHint(canSendEmail)}
           >
             <input
               id="profile-email"

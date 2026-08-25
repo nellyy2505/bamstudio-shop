@@ -12,10 +12,18 @@ import {
   getReviews,
 } from "@/lib/queries";
 import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitDays } from "@/lib/config";
+import { canReachStudio } from "@/lib/contact";
 import { deliveryWindow, money, pluralise } from "@/lib/format";
 import { siteUrl } from "@/lib/stripe";
 
 export const revalidate = 300;
+
+/*
+ * `canReachStudio` comes from lib/contact.ts — the same mailbox-or-social test
+ * /track and the legal pages use. The on-site contact form is deliberately not
+ * counted: it delivers by emailing the studio mailbox, so it needs both that
+ * mailbox and the Resend secrets before it is a channel at all.
+ */
 
 type Params = Promise<{ slug: string }>;
 
@@ -239,8 +247,13 @@ export default async function ProductPage({ params }: { params: Params }) {
             </span>
             <div className="flex-1">
               <b className="text-[14.5px]">{SHOP.name}</b>
+              {/* "Usually replies within a day" is gone: nothing measures or
+                  guarantees a reply time, and /api/contact cannot even deliver
+                  the enquiry unless the Resend secrets and a studio mailbox are
+                  both set. Where the studio is is a fact we can stand behind, so
+                  that is all the line claims now. */}
               <p className="text-[12.5px] text-muted">
-                {SHOP.city}, {SHOP.country} · Usually replies within a day
+                {SHOP.city}, {SHOP.country}
               </p>
             </div>
             <Link
@@ -248,7 +261,9 @@ export default async function ProductPage({ params }: { params: Params }) {
               className="flex h-11 items-center gap-2 rounded-full border border-line2 bg-surface px-4 text-sm font-extrabold hover:border-ink"
             >
               <Icon name="msg" size={16} />
-              Message
+              {/* Same call as /track: with no mailbox and no social account
+                  there is nothing to message, and /contact says so. */}
+              {canReachStudio ? "Message" : "Contact"}
             </Link>
           </div>
         </div>

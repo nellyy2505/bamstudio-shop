@@ -10,29 +10,29 @@ import {
   transitDays,
   transitLabel,
 } from "@/lib/config";
+import { canReachStudio } from "@/lib/contact";
 import { deliveryWindow, formatDate, money } from "@/lib/format";
 import { ORDER_STATUS_FLOW } from "@/lib/types";
-import type { Address, ArtKey, OrderStatus, Tint } from "@/lib/types";
+import type { OrderStatus, PublicTrackedOrder } from "@/lib/types";
 
-type TrackedItem = {
-  product_name: string;
-  variant_label: string | null;
-  art: ArtKey;
-  tint: Tint;
-  unit_price: number;
-  quantity: number;
-};
+/**
+ * The API allow-lists the fields it publishes, so the browser type is the
+ * published shape itself — notably it carries no `phone`, which this page has
+ * never rendered and must not start rendering.
+ */
+type TrackedOrder = PublicTrackedOrder;
 
-type TrackedOrder = {
-  order_number: string;
-  status: OrderStatus;
-  total: number;
-  shipping_method: string;
-  tracking_number: string | null;
-  created_at: string;
-  shipping_address: Address | null;
-  items: TrackedItem[] | null;
-};
+/*
+ * `canReachStudio` — is there a mailbox or a social account behind "send us the
+ * order number and we will find it" — is imported from lib/contact.ts. It is
+ * built from NEXT_PUBLIC_ config only, so it is identical on the server and in
+ * the browser and is safe in this client component.
+ *
+ * Nothing on this page depends on whether the shop can SEND email, so no
+ * capability prop is threaded in from /track. If a claim about email is ever
+ * added here, it must arrive as a prop from the server page — reading the
+ * secrets in the browser is the skew this codebase was just cleaned of.
+ */
 
 const STEP_COPY: Record<OrderStatus, { label: string; body: string }> = {
   // Unpaid checkouts are excluded by lookup_order, so this never renders.
@@ -106,8 +106,11 @@ export function TrackForm() {
     <div className="flex flex-col gap-6">
       <div className="card p-7 sm:p-8">
         <h2 className="text-xl">Find your order</h2>
+        {/* The order number comes off /order/confirmed, which prints it on the
+            page — this must never send anyone to an email that is not sent,
+            because the number is what makes this page usable at all. */}
         <p className="mt-1.5 text-[14.5px] text-muted">
-          Use the order number from your confirmation email, plus the email
+          Use the order number from your confirmation page, plus the email
           address you ordered with. No account needed.
         </p>
 
@@ -175,12 +178,13 @@ function NotFoundCard() {
       <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">
         Nothing to worry about yet — it is almost always a typo in the order
         number, or a different email address than the one used at checkout (a
-        partner&apos;s, or the one attached to your payment account). Have
-        another look at your confirmation email and try again.
+        partner&apos;s, or the one attached to your payment account). Check both
+        against your confirmation page and try again.
       </p>
       <p className="mt-3 max-w-[56ch] text-[14.5px] text-muted">
-        Still nothing? Send us the order number and we will find it from our
-        side.
+        {canReachStudio
+          ? "Still nothing? Send us the order number and we will find it from our side."
+          : "Still nothing? The contact page has the ways to reach us."}
       </p>
       <Link
         href="/contact"
@@ -230,8 +234,10 @@ function OrderResult({ order }: { order: TrackedOrder }) {
       {cancelled ? (
         <div className="pt-6">
           <Alert tone="error">
-            This order was cancelled and nothing was printed. If you did not ask
-            for that, message us and we will sort it out.
+            This order was cancelled and nothing was printed.
+            {canReachStudio
+              ? " If you did not ask for that, message us and we will sort it out."
+              : ""}
           </Alert>
         </div>
       ) : (
@@ -381,9 +387,9 @@ function OrderResult({ order }: { order: TrackedOrder }) {
           href="/contact"
           className="font-bold text-accent underline underline-offset-2"
         >
-          Message us
-        </Link>{" "}
-        with the order number and we will take a look.
+          {canReachStudio ? "Message us" : "See how to reach us"}
+        </Link>
+        {canReachStudio ? " with the order number and we will take a look." : "."}
       </p>
     </div>
   );

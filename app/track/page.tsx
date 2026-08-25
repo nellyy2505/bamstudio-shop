@@ -3,7 +3,31 @@ import Link from "next/link";
 import { Breadcrumbs, Icon } from "@/components/ui";
 import { TrackForm } from "./TrackForm";
 import { PRINT_LEAD_TIME, SHIPPING, transitLabel } from "@/lib/config";
+import { canReachStudio, sendsOrderConfirmation } from "@/lib/contact";
+import { isEmailConfigured } from "@/lib/email";
 import { money } from "@/lib/format";
+
+/**
+ * Rendered on every request, never baked at build time.
+ *
+ * The email sentences below are derived from `isEmailConfigured()`, which
+ * reads the RESEND_API_KEY / EMAIL_FROM secrets at render time. Prerendered,
+ * that answer is frozen into the HTML at build: an owner who adds the two
+ * secrets to the host without triggering a rebuild gets order-confirmation
+ * emails going out from the Stripe webhook while this page still says none
+ * are sent. A stale bake would tell a customer chasing an order to watch
+ * for a confirmation that is not coming, or not to expect one that is. Low
+ * traffic; it can afford the render.
+ */
+export const dynamic = "force-dynamic";
+
+/**
+ * Does the shop email the order number as well as showing it? Server component,
+ * so this reads the same secrets the Stripe webhook does. `canReachStudio` —
+ * is there a mailbox or a social account behind "message us" — comes from
+ * lib/contact.ts, shared with /contact, /about and the legal pages.
+ */
+const SENDS_CONFIRMATION = sendsOrderConfirmation(isEmailConfigured());
 
 export const metadata: Metadata = {
   title: "Track your order",
@@ -59,15 +83,26 @@ export default function TrackPage() {
             </section>
           ))}
 
+          {/* Leads with the confirmation page, which shows the order number on
+              screen in every configuration. The confirmation email carries it
+              too, but only while the Resend secrets are set, and it is queued
+              after the response and can fail — so it is named as a second place
+              to look rather than the place, and only when one is actually
+              sent. */}
           <p className="px-1 text-[13px] text-muted">
-            Lost the confirmation email? Check the spam folder first, then{" "}
+            Do not have your order number? It is shown on the confirmation page
+            straight after you pay
+            {SENDS_CONFIRMATION
+              ? ", and on the confirmation email if one reached you"
+              : ""}
+            . If you have lost it,{" "}
             <Link
               href="/contact"
               className="font-bold text-accent underline underline-offset-2"
             >
-              message us
-            </Link>{" "}
-            — we can look it up from our side.
+              {canReachStudio ? "message us" : "see how to reach us"}
+            </Link>
+            {canReachStudio ? " — we can look it up from our side." : "."}
           </p>
         </aside>
       </div>
