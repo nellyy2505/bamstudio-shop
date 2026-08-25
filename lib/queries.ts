@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { Collection, Product, Review } from "@/lib/types";
 import { FALLBACK_COLLECTIONS, FALLBACK_PRODUCTS } from "./fallback-data";
 
@@ -294,4 +294,99 @@ export async function getFacets(): Promise<{
   };
 
   return { categories: tally("category"), themes: tally("theme") };
+}
+
+/* --------------------------------------------------- order confirmation */
+
+export type OrderConfirmationSummary = {
+  /**
+   * Null until the Stripe webhook allocates one. Order numbers are handed out
+   * on payment, not at checkout, so a shopper who beats the webhook back to
+   * the confirmation page legitimately has none yet.
+   */
+  orderNumber: string | null;
+  status: string | null;
+};
+
+/**
+ * Three outcomes, kept apart on purpose. "There is no such order" and "we
+ * could not look it up" are different facts, and the confirmation page has to
+ * say which one it means — telling a customer who has just been charged that
+ * no order matches, when really the lookup itself failed, is the same class of
+ * false statement this page is being fixed for.
+ */
+export type OrderConfirmationLookup =
+  | { state: "found"; summary: OrderConfirmationSummary }
+  /** The database answered and holds no order for this checkout session. */
+  | { state: "not_found" }
+  /** No database, no service-role key, or the query errored. Nothing known. */
+  | { state: "unavailable" };
+
+/**
+ * The order number for a Stripe Checkout session.
+ *
+ * Runs on the ADMIN client by necessity. `orders` RLS is `auth.uid() =
+ * user_id`, so a guest — who has no session at all — can never read their own
+ * order through the anon client; that is why the guest order was untrackable
+ * (WORKLOG §0.1). `order_confirmation_summary` is security definer and granted
+ * to `service_role` only, so it is not callable over PostgREST with the public
+ * anon key the way `lookup_order` was (§0.2).
+ *
+ * The Stripe session id is the authorisation. It is unguessable and only ever
+ * reaches the browser that completed this checkout. The function returns the
+ * order number and status and nothing else, so even a leaked URL cannot yield
+ * an address, an email or a total — the column list is the security boundary,
+ * which is why this helper asks it for nothing more.
+ *
+ * **Never throws.** It renders on the page a customer sees immediately after
+ * being charged, so a missing service-role key, an absent database or a
+ * transient query error must degrade to `unavailable`, not to an error screen.
+ */
+export async function getOrderConfirmationSummary(
+  stripeSessionId: string,
+): Promise<OrderConfirmationLookup> {
+  if (!stripeSessionId) return { state: "unavailable" };
+
+  // Absence of a database is not a query error (CLAUDE.md): in the bundled
+  // sample-catalogue mode there is no orders table to consult, so nothing is
+  // known — which is not the same as "no such order", hence `unavailable`.
+  // The service-role key is checked here rather than left to
+  // createAdminClient()'s throw, so the normal no-key path is a plain return.
+  if (!isDatabaseConfigured() || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { state: "unavailable" };
+  }
+
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.rpc("order_confirmation_summary", {
+      p_stripe_session_id: stripeSessionId,
+    });
+
+    if (error) {
+      console.error("getOrderConfirmationSummary failed:", error.message);
+      return { state: "unavailable" };
+    }
+
+    // A `returns table` function comes back as rows, even with `limit 1`.
+    const row = (
+      data as { order_number: string | null; status: string | null }[] | null
+    )?.[0];
+    if (!row) return { state: "not_found" };
+
+    return {
+      state: "found",
+      summary: {
+        orderNumber: row.order_number ?? null,
+        status: row.status ?? null,
+      },
+    };
+  } catch (error) {
+    // createAdminClient() throws on a malformed URL, and the fetch itself can
+    // reject. Either way the customer's page must still render.
+    console.error(
+      "getOrderConfirmationSummary failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return { state: "unavailable" };
+  }
 }
