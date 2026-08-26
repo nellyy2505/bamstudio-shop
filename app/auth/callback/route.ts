@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/safe-next";
+import { siteUrl } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
@@ -15,13 +16,35 @@ const RECOVERY_NEXT = "/reset-password";
  */
 export type AuthErrorCode = "denied" | "expired" | "invalid" | "failed";
 
-function loginWithError(origin: string, code: AuthErrorCode, detail?: string) {
+function loginWithError(code: AuthErrorCode, detail?: string) {
   if (detail) console.warn(`Auth callback failed (${code}):`, detail);
-  return NextResponse.redirect(new URL(`/login?error=${code}`, origin));
+  return NextResponse.redirect(new URL(`/login?error=${code}`, siteUrl()));
 }
 
-/** Lands here after OAuth, email confirmation and password-reset links. */
+/**
+ * Lands here after OAuth, email confirmation and password-reset links.
+ *
+ * **Every redirect out of this route is built on `siteUrl()`, never on
+ * `url.origin`.** `request.url` is assembled from the address the *server* is
+ * listening on, and on Fly that is the container's own bind address — so
+ * `url.origin` was `http://0.0.0.0:8080` in production and every successful
+ * Google sign-in ended on `ERR_ADDRESS_INVALID`. The session cookie was set
+ * correctly on the way past, which is why pressing Back showed the user signed
+ * in: the authentication worked and only the redirect was thrown away. Email
+ * confirmation and password-reset links landed in the same dead end.
+ *
+ * This is the round-8 defect exactly — `siteUrl()` silently returning
+ * localhost, so a customer was charged and then sent to their own machine —
+ * found in `lib/stripe.ts` and fixed there, and missed here.
+ *
+ * Do not "fix" this with `x-forwarded-host` instead. That would be a second
+ * answer to "what is this shop's address", which is the pattern this codebase
+ * has been burned by twice; and the header is caller-supplied, which on the
+ * error path below would hand an attacker an open redirect off the real login
+ * screen. One source of truth: `NEXT_PUBLIC_SITE_URL`, baked in at build.
+ */
 export async function GET(request: Request) {
+  // Path and query off request.url are fine — only its ORIGIN is wrong here.
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const next = safeNext(url.searchParams.get("next"));
@@ -33,11 +56,11 @@ export async function GET(request: Request) {
       providerError.includes("denied") || providerError.includes("access_denied")
         ? "denied"
         : "failed";
-    return loginWithError(url.origin, code, providerError);
+    return loginWithError(code, providerError);
   }
 
   if (!code) {
-    return loginWithError(url.origin, "invalid");
+    return loginWithError("invalid");
   }
 
   const supabase = await createClient();
@@ -45,10 +68,10 @@ export async function GET(request: Request) {
 
   if (error) {
     const expired = /expire|invalid/i.test(error.message);
-    return loginWithError(url.origin, expired ? "expired" : "failed", error.message);
+    return loginWithError(expired ? "expired" : "failed", error.message);
   }
 
-  const response = NextResponse.redirect(new URL(next, url.origin));
+  const response = NextResponse.redirect(new URL(next, siteUrl()));
 
   // A session on its own says nothing about *how* it was obtained, so
   // /reset-password cannot tell "just clicked the emailed recovery link" from
