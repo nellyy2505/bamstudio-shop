@@ -3,26 +3,11 @@
 Everything a new session needs to pick this up: what was built, what was found
 wrong and fixed, what is deliberately still open, and how to verify any of it.
 
-Last updated: 25 August 2026 (round 10). Branch: `master`. **Round 10 wired
-Australia Post postage into checkout and the cart**, and on the way found that
-`0001_init.sql` could not be applied to a real Supabase project at all, and that
-four customer-facing pages — including the terms of sale — stated a flat postage
-price that wiring would have made false. §0 has the current open list; §5 round
-10 has the reasoning; §7 has the commit state and what to distrust in it.
-
-**Three documents were wrong when round 10 started, in both directions.** They
-are corrected below, but the habit is the lesson: `git status` and a run of the
-harness are the only trustworthy answers.
-
-- `HANDOFF.md` said the round-9 postage work was "not committed anywhere". It
-  was committed, as `36a33d5`, and merely unpushed.
-- `CLAUDE.md`, `HANDOFF.md` and §0 item B all said `scripts/verify-sql.sh`
-  applies `0001` only and that "the SQL harness cannot pass as it stands". The
-  fix had already landed inside `36a33d5`; nobody updated the prose.
-- The repeated claim that "ten files show as permanently modified" is nine.
-  `git diff --numstat` shows equal insertions and deletions on each, and
-  `git diff --ignore-all-space` returns zero changed lines. Still never
-  `git add -A`.
+Last updated: 25 August 2026. Branch: `master`. Two pieces of work have landed
+since the last docs pass: **round 8**, the move from Vercel to Fly.io, and
+**round 9**, phase 1 of Australia Post postage — built, and deliberately **not
+yet wired into checkout**. §0 has the current open list; §5 rounds 8 and 9 have
+the reasoning; §7 has the commit state and what to distrust in it.
 
 ---
 
@@ -49,13 +34,11 @@ act on next.
 
 | # | Item | Who | Where |
 |---|---|---|---|
-| A | ✅ **DONE, round 10.** `quoteBasket()` is wired into checkout, into a new `POST /api/shipping/quote`, and into the cart. Both surfaces go through `quoteBasket()` on server-loaded rows via the one builder in `lib/shipping/lines.ts`. Verified by instrumenting the route and reading the amount it actually sent | — | §5 round 10 |
-| B | ✅ **DONE — and it was already done.** The script has applied `0002_shipping.sql` since `36a33d5`; three documents said otherwise. **29/29 has now been observed**, for the first time, against a real PostgreSQL 16 | — | §5 round 10 |
+| A | **Wire `quoteBasket()` into checkout.** `lib/shipping/` is built and verified against the live Australia Post API, and **nothing imports it** — `app/api/checkout/route.ts:499` still calls the flat-rate `shippingCost()`. Until it is wired, postage is the old flat $9.50 / $14.50 | agent | §5 round 9, §6 |
+| B | **`scripts/verify-sql.sh` applies only `0001_init.sql`, and `verify.sql` now asserts against `0002_shipping.sql`.** So the SQL harness **cannot pass as it stands** — the run would error on `shipping_rate_cache` and on the new product columns. Fix the script before trusting any SQL claim | agent | §4 |
 | C | **Weigh three items and give the real numbers** — one name charm, one clicker keychain, one pet bowl, each in the mailer actually used: grams, and thickness in mm. **Every** weight and dimension in `lib/shipping/dimensions.ts` and in the seed is a reasoned estimate today. These three readings are the single highest-value input to postage accuracy | **owner** | §6 backlog |
 | D | **Decide: cheap-untracked or dearer-tracked.** Every product is `letter_eligible: false`, so everything quotes as a tracked parcel — which overcharges slightly and never undercharges. Large Letter is $3.40 against ~$10.20, and is **untracked and uninsured**. Enabling it is a per-row toggle in Supabase **plus** the `transitLabel()` fix in item E. This is a business decision, not a code one | **owner** | §6 |
-| E | ✅ **DONE, round 10 — early, on purpose.** `transitLabel(methodId, tracked)` now takes the answer as a **required** argument, so the compiler asks at every call site and `quoteBasket()`'s `tracked` supplies it. Done before item D rather than with it, because `letter_eligible` is a **checkbox in the Supabase table editor**: one tick, with no deploy and no review, would have armed the lie. Pages with no basket to ask use the new `transitRangeLabel()` and make no tracking claim at all | — | §5 round 10 |
-| J | **The 43-scenario webhook harness was not rebuilt in round 10.** Round 10 changed nothing in `app/api/webhooks/stripe/route.ts`, so nothing regressed — but "unchanged" is not "covered", and that file is the highest-consequence one in the project. It still lives only in `/tmp` and still dies with its session | agent | §4 |
-| K | **The FAQ, terms and `/track` no longer say postage is "tracked".** Removed in round 10 rather than hardcoded: those pages have no basket, so they cannot read the capability behind the claim, and round 7's rule says a page that cannot read it must not assert it. It is true today. Restoring the word honestly means a `allPostageTracked()` that reads the catalogue. **Owner's call on whether that is worth it** | **owner** | §5 round 10 |
+| E | **`transitLabel()` in `lib/config.ts` hardcodes "· tracked".** True only while everything ships as a parcel. It **must** be fixed in the same change that ever enables Large Letter, or the site tells customers untracked mail is tracked | agent | §6 |
 | F | **The Supabase JWT secret does not appear to have been rotated.** The previously-exposed anon key still authenticates, so the leaked `service_role` key is very likely still live. **Outstanding security action** | **owner** | §6 |
 | G | **`AUSPOST_API_KEY` is a new runtime secret** — free, self-serve, instant from developers.auspost.com.au. It is a **Fly secret, never a build arg**. Without it postage still works: it falls through to the deliberately pessimistic fallback table | **owner** | §6, `SETUP.md` |
 | H | **Delete the Porkbun parking wildcard.** `bamstudioshop.com` is registered, but DNS still carries `*` CNAME → `uixie.porkbun.com`, which shadows email records | **owner** | `SETUP.md` Step 5f |
@@ -893,243 +876,35 @@ reasoning only:** that the packing model matches how the studio actually packs
 depends on this and it is a packing-bench convention, not a measurement), and
 every gram and millimetre in `dimensions.ts`.
 
-### Round 10 — postage wired, and two defects that were nowhere near the postage
-
-Round 10 set out to do §0 item A. It did, but the two most valuable findings
-were things that had to be fixed *before* it could be done honestly.
-
-#### The migration could not be applied to Supabase, and the harness said it could
-
-The owner ran `0001_init.sql` in the Supabase SQL editor and got:
-
-```
-ERROR: 42883: function gen_random_bytes(integer) does not exist
-```
-
-`public.next_order_number()` is declared `security definer set search_path =
-public` and calls `gen_random_bytes(3)` unqualified. That function comes from
-pgcrypto, and **hosted Supabase installs extensions into a schema called
-`extensions`, not into `public`**. With the search path pinned to `public`
-alone the body cannot resolve it, and because the function is `language sql` its
-body is validated at creation time — so `create function` itself failed and
-every statement after line 172 never ran. Line 4's `create extension if not
-exists "pgcrypto"` looks like it covers this and does not: on Supabase pgcrypto
-is already installed, elsewhere.
-
-**The harness was the real defect.** `scripts/verify-sql.sh` set up its stand-in
-Supabase with `create extension if not exists pgcrypto` — no schema — so it
-landed in `public`, sat on the default search path, and every function could see
-it. The harness was testing a database shaped differently from the one this
-schema ships to, and it printed **29/29** an hour earlier while the migration
-could not be applied to a real project at all. That is this project's signature
-failure — a green check measuring the wrong thing — in its purest form yet: the
-check was green *because* the harness was wrong.
-
-Fixed in that order, deliberately:
-
-1. `scripts/verify-sql.sh` now creates the `extensions` schema first and
-   installs pgcrypto **into it**, matching Supabase.
-2. Re-ran the harness against the **unfixed** migration and reproduced the
-   owner's error verbatim. That is what makes the next line mean something.
-3. `0001_init.sql:168` → `security definer set search_path = public,
-   extensions`. Naming both schemas works on Supabase *and* wherever pgcrypto
-   lives elsewhere; qualifying the call as `extensions.gen_random_bytes` would
-   have worked only on Supabase. It is the only function in the file that
-   touches pgcrypto, so it is the only one changed, and the search path stays
-   pinned.
-4. Re-ran: 29/29.
-
-**The rule this earns:** a stand-in for a hosted platform has to reproduce that
-platform's *shape*, not just its API surface. Roles and function signatures were
-faithfully mimicked; schema layout was not, and that was the gap.
-
-#### `verify.sql` showed the owner two rows out of twenty-nine
-
-Told to run `verify.sql` in the Supabase SQL editor, the owner saw **2 rows,
-both `true`** — and reasonably read it as a failure. It was not. The editor
-displays only the result of the **last** statement it runs, and the file was
-eight separate assertion statements; the last returns two rows.
-
-Two ticks out of two looks exactly like a pass. The file whose entire job is to
-let the owner confirm her own production database was structurally incapable of
-doing so in the tool the runbook tells her to use.
-
-`verify.sql` now collects every assertion into a temp table and ends with one
-`select`, so all 29 rows appear in the editor and in `psql` alike. The header
-says to count the rows as well as the ticks: **24 rows all `t` would be a green
-result that never looked at the shipping schema at all.** Proved faithful by
-re-running the harness — same 29 labels, same order, all `t`.
-
-#### Wiring postage would have shipped four false statements
-
-Before writing any wiring, a grep for what the site *says* about postage found
-four places printing the flat rate — which becomes untrue the instant postage is
-quoted per basket ($3.40 to about $32.95 in measured baskets, against a stated
-$9.50):
-
-- `app/legal/terms/page.tsx:245` — **in the terms of sale**, a contract
-- `app/faq/page.tsx:103`
-- `app/track/page.tsx:47`
-- `app/product/[slug]/page.tsx:192` — on **every product page**
-
-Per §2, a change that makes an on-site statement untrue is as serious as a
-crash, so the copy shipped in the same change as the wiring rather than after
-it. All four now state the *rule* — postage is calculated from basket weight at
-Australia Post's current rates and shown before you pay — which stays true as
-carrier rates move. The $49 free-standard-post threshold is the shop's own
-promotion, is unchanged, and is still stated as a figure because it is one.
-
-Then the landmine behind them: with the last reader gone, `SHIPPING.methods[]`
-still carried `price: 950` / `price: 1450`, read by nothing. **Removed.** A
-number in a config file called `price` is one a future page will print.
-
-#### The wiring itself
-
-- **`lib/shipping/lines.ts`** (new) — `toShippingLines()`, the single builder of
-  the `ShippingLine[]` that `quoteBasket()` takes. It exists so the cart route
-  and checkout cannot build that array differently.
-- **`loadProductsBySlug()`** moved from private-in-checkout to `lib/queries.ts`,
-  so both surfaces get the same answer to "is this product still buyable".
-  `active` is filtered inside it, because forgetting it is silent.
-- **`POST /api/shipping/quote`** (new) — quotes both methods in one call from
-  slugs and quantities. It takes no weights and no prices.
-- **`isFreeShipping()`** replaces `shippingCost()`. `quoteBasket()` answers what
-  the post office charges; `isFreeShipping()` answers who pays it. The old
-  function is **deleted, not deprecated**: a second function still shaped like a
-  price is one a future call site reaches for by mistake, and wrong postage is
-  money out of the studio's pocket on every order until someone reconciles a
-  bill. Its three surviving callers were all using it as a predicate
-  (`shippingCost(threshold, id) === 0`) and now say what they mean.
-- **The cart** fetches the quote, shows `"Calculated at checkout"` — never 0 and
-  never a flat rate — until it lands, and reads tracking off the quote. The
-  quote is held tagged with the basket it was for and *derived* rather than
-  cleared, so a quote for a basket the customer has since edited simply is not a
-  quote for this basket.
-- **Provenance**: `shipping_quote_source`, `quoted_weight_grams` and
-  `quoted_service_code` are stamped on the staged order — **including on a
-  free-postage order**, which is the only thing that makes a carrier bill
-  reconcilable against the orders that caused it.
-
-#### One defect introduced, and how it was caught
-
-A basket containing a deactivated product quoted **$0.00 postage**:
-`toShippingLines()` drops a line with no row, a basket that loses every line is
-an *empty* basket, and `quoteBasket()` correctly prices nothing at zero. Three
-correct behaviours composing into a wrong answer.
-
-It was found by posting a fake slug at the new endpoint, not by reading the
-code that had just been written. The route now returns 409 when any line was
-dropped, matching checkout's answer to the same basket.
-
-#### What round 10 ran
-
-`tsc` clean · `eslint` clean · `npm run build` pass (25 routes) ·
-`verify-sql.sh` **29/29** · `replay-checkout.mjs` **7/7 with the negative
-control at 400** · the quote route driven by hand over six cases.
-
-Two things a reader should not over-read:
-
-- **The webhook harness was not rebuilt.** Round 10 changed nothing in that
-  file. That is not the same as coverage. See §0 item J.
-- **None of it ran on the owner's machine.** The device-bridge VM has no network
-  and no PostgreSQL, and `eslint` could not finish inside its command window, so
-  everything was run in a cloud container built from the repo's own lockfile.
-  All 17 changed files were then **md5-compared on both sides and matched
-  byte-for-byte**, but a Linux container is not her laptop and is certainly not
-  Fly.
-
-Measured amounts, read out of the running route rather than reasoned about:
-
-```
-subtotal $18.00   standard  quoted $11.70  charged $11.70   215 g  AUS_PARCEL_REGULAR
-subtotal $18.00   express   quoted $15.20  charged $15.20   215 g  AUS_PARCEL_EXPRESS
-subtotal $108.00  standard  quoted $24.45  charged  $0.00  1130 g  AUS_PARCEL_REGULAR
-subtotal $108.00  express   quoted $32.95  charged $32.95  1130 g  AUS_PARCEL_EXPRESS
-```
-
-Row three is the free-postage promotion waiving the charge while the order still
-records what the postage really cost. Row four is §0.10 holding: express is
-never free. A request naming its own `weight_grams: 1` alongside a pet bowl was
-still quoted at **215 g** — the browser cannot name its own postage.
-
-Every quote above reads `source: "fallback"`, because no `AUSPOST_API_KEY` is
-set. The fallback table deliberately returns the band *above* the true one, so
-the shop is currently quoting **$11.70 where Australia Post charges $10.20**.
-The key is free and instant; it is worth about **$1.50 on every small order**.
-
----
-
 ## 6. Open items
 
-### Postage — phase 2 is done; what is left
+### Postage — the half phase 1 did not do, and it comes first
 
-Items 1 to 4 below **were** this section's open list and are **closed by round
-10** (§5). `quoteBasket()` is the price on both surfaces, `isFreeShipping()`
-decides who pays, the provenance columns are stamped, and the SQL harness runs
-29/29. The flat $9.50 / $14.50 is gone from the code entirely — `SHIPPING`
-no longer has a `price` field at all.
+`lib/shipping/` is built, documented and verified against the live carrier API
+(§5 round 9). **Nothing imports it.** Until the list below is done the shop
+still charges the flat $9.50 / $14.50 from `lib/config.ts`, which is a made-up
+number that happens to be roughly right for a parcel and badly wrong for a
+letter.
 
-What is still open here:
-
-1. **The L2 cache tier** is a marked seam in `lib/shipping/cache.ts`, not an
+1. **Wire `quoteBasket()` into `app/api/checkout/route.ts`**, replacing the
+   `shippingCost()` call at **line 499**. `quoteBasket` answers what the post
+   office charges; `SHIPPING.freeThreshold` / `shippingCost()` still decides
+   *who pays it* — the free-shipping rule is about the basket subtotal and is
+   deliberately not inside the quoter. Stamp the three provenance columns
+   (`shipping_quote_source`, `quoted_weight_grams`, `quoted_service_code`) on
+   the order while you are there; `0002` added them for this.
+2. **Add `POST /api/shipping/quote`** so the cart can price a basket without
+   creating a checkout session. It must call `quoteBasket` and nothing else —
+   two code paths computing postage is exactly how the cart price and the
+   Stripe charge come to differ for some baskets and not others.
+3. **Cart UI and copy.** Show the real figure, and label a `source:
+   "fallback"` quote as an estimate if you show anything at all.
+4. **Fix `scripts/verify-sql.sh` to apply `0002_shipping.sql`** — see §4. The
+   29 assertions have never been run.
+5. **The L2 cache tier** is a marked seam in `lib/shipping/cache.ts`, not an
    implementation. Read the three numbered warnings in that file first; the
    important one is that **a fallback price must never be persisted**, or a
-   two-second outage becomes six hours of deliberately-inflated quotes. The
-   `shipping_rate_cache` table exists, has RLS with no policies and is granted
-   to `service_role` only — `verify.sql` asserts all three — and **no code
-   touches it yet**. Today's cache is one process's `Map`, which dies with the
-   machine, exactly like the rate limiter (§0 item I).
-2. ✅ **DONE — the live carrier path has now been served by the running app.**
-   The owner supplied `AUSPOST_API_KEY` late in round 10 and the quote route was
-   driven against the real Australia Post API. `estimated` flipped from `true`
-   to `false` and every measured basket dropped a band:
-
-   | Basket | Fallback table | **Live PAC** |
-   |---|---|---|
-   | 1 pet bowl · 215 g | $11.70 | **$10.20** |
-   | 1 name charm · 50 g | $11.70 | **$10.20** |
-   | 12 name charms · 225 g | $11.70 | **$10.20** |
-   | Express, any of the above | $15.20 | **$13.20** |
-
-   So the fallback table costs the shop **$1.50 per standard order and $2.00 per
-   express one** while the key is absent — which is the right direction to be
-   wrong in, and worth knowing the size of. Note all three baskets land on the
-   same figure: with every product `letter_eligible: false` they are all parcels
-   under 500 g, so they share a band. The spread only appears once item D (Large
-   Letter) is decided.
-
-   **The L1 cache was then measured through the route**, same basket repeated:
-
-   ```
-   cold basket (live PAC round trip)   0.578 s
-   same basket again (L1 hit)          0.010 s
-   same basket again                   0.010 s
-   a second cold basket                0.607 s
-   that one again (L1 hit)             0.013 s
-   ```
-
-   ~57× on a hit, and it confirms a cold quote adds roughly **600 ms to
-   checkout** — once per basket shape per six hours, per machine. Acceptable
-   next to Stripe's own session creation, and the reason the L2 tier (item 1)
-   matters more than it looks: on a machine restart every basket pays that
-   600 ms again.
-
-   **The replay harness was re-run with the live carrier in the checkout path:
-   7/7, negative control 400.** Checkout still validates and still reaches
-   Stripe with a real network call to Australia Post in the middle of it.
-
-   Still not exercised: any carrier-**error** path. `lib/shipping/client.ts`'s
-   2.5 s timeout and single retry were verified as a module in round 9, never
-   through a route. A quote route that hangs is a cart that hangs.
-3. **Restore an honest tracking claim on the general pages, or decide not to.**
-   §0 item K. The FAQ, terms and `/track` no longer say "tracked" because they
-   have no basket to ask. Doing it honestly means one expression that reads the
-   catalogue — `allPostageTracked()`, false as soon as any active product is
-   `letter_eligible` — not a constant someone has to remember to flip.
-4. **`verify.sql`'s two backfill assertions still hand-copy the migration's
-   `WHERE` clause** rather than running the migration's own `UPDATE`. Untouched
-   by round 10 and still worth fixing: a copy can agree with itself while
-   disagreeing with the thing it is meant to be checking.
+   two-second outage becomes six hours of deliberately-inflated quotes.
 
 **A trap in the schema, worth knowing before you touch a product row.**
 `0002_shipping.sql` declares `letter_eligible boolean not null default true`,
@@ -1141,6 +916,58 @@ has measured. Either flip the column default to `false` in a follow-up
 migration, or make adding a row a checklist item that includes setting it.
 Nothing is wrong today — every existing row is explicitly `false` — but the
 default is the wrong way round.
+
+### Front end — too many hand-drawn components
+
+**Requested by the owner, and not urgent.** The shop draws a lot of things by
+hand that a component library already solves: every table is a bare `<table>`
+with its own paddings, the checkbox in `app/admin/products/ProductForm.tsx` is
+a styled `<input type="checkbox">`, `Panel` exists twice (once in
+`app/admin/ui.tsx` for server components, once inside `ProductForm.tsx` because
+that file is `"use client"` and importing the other would drag it into the
+browser bundle), and there is no date picker, no combobox and no dialog — the
+places that would want one work around not having it.
+
+Nothing here is broken. The cost is that a change to "how a table looks" is a
+change in eight files, and the eight have already drifted: two of them round
+their corners differently.
+
+Before adding a component, check whether one of these does it:
+
+* `components/ui/index.tsx` — buttons, pills, fields, alerts, breadcrumbs,
+  empty states, **and `Pagination`, which every admin table must use**. Do not
+  write a second pager.
+* `app/admin/ui.tsx` — page headings, panels, stats, swatches, status pills.
+
+The refactor itself, when someone picks it up: adopt a headless library
+(Radix, or React Aria) for the interactive primitives only — menu, dialog,
+combobox, checkbox, radio — and keep the visual layer where it is. Tailwind v4
+tokens in `app/globals.css` are the design system and they are fine; the gap is
+behaviour and accessibility, not colour. Do NOT adopt a styled component kit:
+it would fight the tokens and the shop would end up looking like the kit.
+
+### The admin area — what is verified and what is not
+
+Built in round 10. Verified by execution: the SQL (50 assertions, each one
+tested by breaking it), the costing chain (against the workbook's own cached
+values), the authorisation layering (a real built server, four scenarios,
+including replaying an owner's captured server-action request as a customer),
+and every screen rendered in a real Chromium.
+
+**Not verified against a real Supabase.** The rig used for the above answers
+`/auth/v1/user` and `/rest/v1/staff` truthfully and returns fixtures for
+everything else — it does not parse PostgREST syntax. So nothing in it is
+evidence that a `select` string with an embedded join is correct. The queries
+that have never run against PostgREST are the embedded-resource ones in
+`app/admin/data.ts`:
+
+* `product_filament(grams, colours(id, name, hex))` — a two-level embed
+* `order_items(id)` used for a count, and the full line embed on `getOrder`
+* `order_items(...) → orders!inner(status)` in `getOpenDemand`, which filters a
+  child by a parent column
+
+Run each of those once against the real project before trusting a number on
+the Inventory or Reports screen.
 
 ### Backlog — the owner's input, and the thing that would help most
 

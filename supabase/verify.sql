@@ -1,14 +1,14 @@
 -- Schema smoke test.
 --
 -- Run this in the Supabase SQL editor after applying 0001_init.sql,
--- 0002_shipping.sql and seed.sql. It returns ONE table of 29 rows and every
+-- 0002_shipping.sql and seed.sql. It returns ONE table of 45 rows and every
 -- `pass` must be `t`. These are the guarantees that only fail in production —
 -- a missing grant here means paid orders are never recorded, and you would
 -- first hear about it from a customer.
 --
--- Count the rows as well as the ticks. 29 rows means both migrations are
--- applied; 24 rows all `t` would be a green result that never looked at the
--- shipping schema at all.
+-- Count the rows as well as the ticks. 45 rows means all three migrations
+-- are applied; 29 rows all `t` would be a green result that never looked at
+-- the staff area, and 24 that never looked at shipping either.
 --
 -- It writes four throwaway orders (and one order item) inside a transaction it
 -- rolls back, so it is safe to run against a live database, though quiet hours
@@ -41,10 +41,11 @@ union all
 select 'personalised products have a mode', count(*) filter (
          where is_personalised and personalisation_mode is null) = 0            from public.products
 union all
--- 9 since 0002_shipping.sql added shipping_rate_cache. A new table that
--- forgets to enable RLS lands in `public` readable by the anon key, so this
--- count is deliberately exact rather than `>=`.
-select 'row-level security everywhere',    count(*) = 9 from pg_tables
+-- 16 since 0003_admin.sql added staff, staff_invitations, colours,
+-- filament_stock, shop_settings, accessories and product_filament. A new table
+-- that forgets to enable RLS lands in `public` readable by the anon key, so
+-- this count is deliberately exact rather than `>=`.
+select 'row-level security everywhere',    count(*) = 16 from pg_tables
          where schemaname = 'public' and rowsecurity = true
 union all
 -- A client must never be able to write a review: the old policy let any
@@ -221,6 +222,110 @@ select 'backfill marks a finished order',
            and o.order_number is not null
            and exists (select 1 from public.order_items oi where oi.order_id = o.id)) = 1;
 
+-- 0003_admin.sql. `role` is not a column on `profiles` because 0001 grants every
+-- signed-in account UPDATE on its own profile row across all columns — a role
+-- there would be self-assignable over PostgREST with the anon key that ships in
+-- the browser. These four rows are the proof that authority lives somewhere the
+-- public key cannot reach, and stays there.
+insert into _checks (check_name, pass)
+select 'anon cannot read staff',
+       not has_table_privilege('anon', 'public.staff', 'select') as pass
+union all
+select 'signed-in cannot read staff',
+       not has_table_privilege('authenticated', 'public.staff', 'select')
+union all
+select 'signed-in cannot write staff',
+       not has_table_privilege('authenticated', 'public.staff', 'update')
+union all
+select 'the server can read staff',
+       has_table_privilege('service_role', 'public.staff', 'select')
+union all
+-- An invitation token is the whole of the authority it grants, so the table is
+-- as closed as `staff` itself.
+select 'anon cannot read invitations',
+       not has_table_privilege('anon', 'public.staff_invitations', 'select')
+union all
+select 'signed-in cannot read invitations',
+       not has_table_privilege('authenticated', 'public.staff_invitations', 'select')
+union all
+-- Settings holds margins and costs. Nothing customer-facing reads it.
+select 'anon cannot read settings',
+       not has_table_privilege('anon', 'public.shop_settings', 'select')
+union all
+select 'signed-in cannot read settings',
+       not has_table_privilege('authenticated', 'public.shop_settings', 'select')
+union all
+-- How many rolls are on the shelf is a business figure, which is why it is its
+-- own table rather than a column on the public `colours` row.
+select 'anon cannot read filament stock',
+       not has_table_privilege('anon', 'public.filament_stock', 'select')
+union all
+-- ...while the palette itself must be readable, or the shop cannot draw a swatch.
+select 'the shop can read colours',
+       has_table_privilege('anon', 'public.colours', 'select');
+
+insert into _checks (check_name, pass)
+select 'the filament palette loaded', count(*) = 18 from public.colours
+union all
+select 'every colour has a real hex',
+       count(*) filter (where hex !~ '^#[0-9A-Fa-f]{6}$') = 0 from public.colours
+union all
+select 'costing settings exist', count(*) = 1 from public.shop_settings
+union all
+-- The singleton really is a singleton: the primary key can only hold `true`.
+select 'settings cannot be duplicated',
+       (select count(*) from pg_constraint
+         where conrelid = 'public.shop_settings'::regclass and contype = 'c'
+           and pg_get_constraintdef(oid) ilike '%id%') > 0
+union all
+-- Cost is captured per line at the time of sale. Without it every historical
+-- margin rewrites itself the next time a filament price changes.
+select 'order lines can record their cost',
+       exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'order_items'
+                  and column_name = 'unit_cost_cents')
+union all
+select 'orders know which channel they came from',
+       exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'orders'
+                  and column_name = 'channel')
+union all
+-- Every option the studio can put on a product has a price, even if that price
+-- is a deliberate zero. The workbook's equivalent lookup silently returned 0
+-- for three of its seven attachment options; a foreign key onto a seeded table
+-- is what stops that being possible.
+select 'every accessory is priced',
+       (select count(*) from public.accessories) = 9
+union all
+-- Cost data, so the browser key must not reach it.
+select 'anon cannot read accessories',
+       not has_table_privilege('anon', 'public.accessories', 'select')
+union all
+select 'anon cannot read filament recipes',
+       not has_table_privilege('anon', 'public.product_filament', 'select')
+union all
+-- The workbook needs a whole check row for this ("grams typed with no colour
+-- chosen — should be 0") because there, grams and colour are separate cells.
+-- Here the primary key makes the pair inseparable, so the condition it checks
+-- for cannot be represented at all. This asserts the structure that makes it
+-- impossible, not the absence of bad rows.
+select 'grams cannot exist without a colour',
+       (select count(*) from information_schema.key_column_usage
+         where table_schema = 'public' and table_name = 'product_filament'
+           and constraint_name = (select constraint_name
+                                    from information_schema.table_constraints
+                                   where table_schema = 'public'
+                                     and table_name = 'product_filament'
+                                     and constraint_type = 'PRIMARY KEY')) = 2
+union all
+-- Deleting a colour a product prints in would quietly reduce that product's
+-- cost. Restrict makes the studio deactivate it instead.
+select 'a colour in use cannot be deleted',
+       exists (select 1 from pg_constraint
+                where conrelid = 'public.product_filament'::regclass
+                  and contype = 'f' and confdeltype = 'r'
+                  and confrelid = 'public.colours'::regclass);
+
 -- Search is bounded: a lone wildcard must not match the whole catalogue.
 insert into _checks (check_name, pass)
 select 'search rejects a bare wildcard' as check,
@@ -229,7 +334,7 @@ union all
 select 'search ignores empty input',
        (select count(*) from public.search_products('   ')) = 0;
 
--- Every assertion, in one result set. `pass` must be `t` on all 29 rows.
+-- Every assertion, in one result set. `pass` must be `t` on all 45 rows.
 select check_name as check, pass from _checks order by ord;
 
 rollback;

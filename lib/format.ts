@@ -26,8 +26,20 @@ const dayMonthFmt = new Intl.DateTimeFormat("en-AU", {
   month: "short",
 });
 
-export function formatDate(value: string | Date): string {
-  return dateFmt.format(new Date(value));
+/**
+ * A date, or an em dash.
+ *
+ * `Intl.DateTimeFormat.format` THROWS a RangeError on an invalid date, and in a
+ * React Server Component a throw is a 500 for the whole page. Found by loading
+ * the staff list against a row whose timestamp was absent: one missing
+ * `created_at` and the entire Studio access screen was replaced by "This page
+ * couldn't load". A date nobody recorded should read as a dash, not as an
+ * outage.
+ */
+export function formatDate(value: string | Date | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : dateFmt.format(date);
 }
 
 function addBusinessDays(from: Date, days: number): Date {
@@ -59,8 +71,10 @@ export function deliveryWindow(
 }
 
 /** "2 weeks ago" / "3 months ago" for review timestamps. */
-export function relativeTime(value: string | Date): string {
+export function relativeTime(value: string | Date | null | undefined): string {
+  if (value === null || value === undefined) return "—";
   const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return "—";
   const days = Math.floor((Date.now() - then) / 86_400_000);
   if (days < 1) return "today";
   if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;

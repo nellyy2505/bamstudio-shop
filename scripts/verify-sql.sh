@@ -115,6 +115,29 @@ create schema if not exists auth;
 grant usage on schema auth to anon, authenticated, service_role;
 grant usage on schema public to anon, authenticated, service_role;
 
+-- THE TRAP THIS LINE EXISTS TO REPRODUCE.
+--
+-- On hosted Supabase, every table created in `public` is granted to anon and
+-- authenticated the moment it is created, by a default privilege the platform
+-- sets up. That is why 0002 and 0003 revoke explicitly instead of relying on
+-- "we never granted it": without the revoke, a private table is readable with
+-- the key that ships in the browser bundle.
+--
+-- Vanilla PostgreSQL has no such default. So a harness without this line
+-- reports "anon cannot read staff" as PASS whether or not the revoke is there
+-- — it is measuring the absence of a grant that Supabase would have made. Every
+-- privacy assertion in verify.sql is worthless without it, and worse than
+-- worthless, because it reads as evidence.
+--
+-- Verified by deleting a revoke from 0003 and watching the matching assertion
+-- go red. If you change this, do that again.
+alter default privileges in schema public
+  grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on functions to anon, authenticated, service_role;
+
 -- Hosted Supabase does NOT put extensions in `public` — it puts them in a
 -- schema called `extensions`. Reproducing that here is the whole point: this
 -- shim used to install pgcrypto into `public`, where it sat on the default
@@ -170,6 +193,12 @@ psql_run "-d $DBNAME -q -f '$SQL_DIR/migrations/0001_init.sql'" >/dev/null
 # `products.weight_grams` rather than on anything real.
 echo "==> applying supabase/migrations/0002_shipping.sql"
 psql_run "-d $DBNAME -q -f '$SQL_DIR/migrations/0002_shipping.sql'" >/dev/null
+
+# 0003 adds the staff area: roles, invitations, the colour palette and the
+# costing settings. Its assertions are the ones that prove a customer cannot
+# make themselves an admin, so a run that skips it proves nothing about that.
+echo "==> applying supabase/migrations/0003_admin.sql"
+psql_run "-d $DBNAME -q -f '$SQL_DIR/migrations/0003_admin.sql'" >/dev/null
 
 echo "==> applying supabase/seed.sql"
 psql_run "-d $DBNAME -q -f '$SQL_DIR/seed.sql'" >/dev/null

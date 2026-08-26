@@ -2,19 +2,60 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Refreshes the Supabase auth cookie on every request and guards /account.
- * Without this, server components see a stale (expired) session.
+ * Paths nobody signed-out may reach. Prefixes, matched with a boundary so
+ * `/accountant` — a page that does not exist today but might — is not
+ * accidentally covered, and so `/admin-something` is not silently guarded
+ * while looking like it is.
  */
+const SIGNED_IN_ONLY = ["/account", "/admin"] as const;
+
+function needsSignIn(pathname: string): boolean {
+  return SIGNED_IN_ONLY.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + "/"),
+  );
+}
+
+/**
+ * Refreshes the Supabase auth cookie on every request and guards /account and
+ * /admin. Without this, server components see a stale (expired) session.
+ *
+ * Note what this file can and cannot do. It only has the anon client, and the
+ * `staff` table is unreadable with the anon key by design (see the header of
+ * lib/auth/staff.ts). So the gate below establishes "signed in at all" and
+ * nothing more — it is a cheap first pass that keeps signed-out visitors off
+ * the staff area. Whether a signed-in account is *staff* is decided by
+ * `requireStaff()`, on the server, in every page, route handler and server
+ * action under /admin. Do not be tempted to add a role check here.
+ */
+/**
+ * The header the root layout reads to decide whether to draw the shop's own
+ * chrome around a page.
+ *
+ * A layout cannot see the path it is rendering — that is by design in the App
+ * Router, so a layout cannot re-render on navigation. The proxy can, and it
+ * already runs on every matched request, so it stamps the path on the request
+ * on the way through.
+ */
+export const PATH_HEADER = "x-bamstudio-path";
+
+function withPath(request: NextRequest): NextResponse {
+  // Set on the REQUEST headers, not the response: this is for the server
+  // rendering the page, and it must never be echoed back to the browser.
+  const headers = new Headers(request.headers);
+  headers.set(PATH_HEADER, request.nextUrl.pathname);
+  return NextResponse.next({ request: { headers } });
+}
+
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  let response = withPath(request);
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   // Before Supabase is configured the shop still browses on sample data.
-  // Nobody can be signed in, so /account has nothing to guard.
+  // Nobody can be signed in, so there is nothing behind these paths to reach.
   if (!url || !anonKey) {
-    if (request.nextUrl.pathname.startsWith("/account")) {
+    if (needsSignIn(request.nextUrl.pathname)) {
       const redirect = request.nextUrl.clone();
       redirect.pathname = "/login";
       return NextResponse.redirect(redirect);
@@ -34,7 +75,7 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          response = NextResponse.next({ request });
+          response = withPath(request);
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options),
           );
@@ -47,7 +88,7 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && request.nextUrl.pathname.startsWith("/account")) {
+  if (!user && needsSignIn(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", request.nextUrl.pathname);

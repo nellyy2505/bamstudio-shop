@@ -81,7 +81,8 @@ const PILL_TONES = {
   dark: "bg-ink text-white",
   accent: "bg-accent-soft text-accent-dark",
   good: "bg-good-soft text-good",
-  warn: "bg-[#F6ECD8] text-[#8A6320]",
+  warn: "bg-warn-soft text-warn",
+  danger: "bg-danger-soft text-danger",
   line: "border border-line2 bg-surface text-ink",
   surface: "bg-surface text-ink shadow-sm",
 } as const;
@@ -280,4 +281,104 @@ export function Alert({
       <span>{children}</span>
     </div>
   );
+}
+
+/* ------------------------------------------------------------- pagination */
+
+/**
+ * Page links for a table.
+ *
+ * Server-rendered links rather than client state, so a page of results is a
+ * real URL: it survives a refresh, it can be bookmarked, and the back button
+ * does what a person expects. Every admin table uses this one — a table that
+ * grows its own pager is how two of them end up disagreeing about what "page 1"
+ * means.
+ *
+ * `hrefFor` keeps this component ignorant of the rest of the query string, so a
+ * caller can preserve its own filters without this file knowing they exist.
+ */
+export function Pagination({
+  page,
+  pageCount,
+  total,
+  noun,
+  hrefFor,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  /** Plural, lowercase: "products", "orders". */
+  noun: string;
+  hrefFor: (page: number) => string;
+}) {
+  if (pageCount <= 1) {
+    return (
+      <div className="flex items-center justify-between px-5 py-3.5 text-[13.5px] text-faint">
+        <span>
+          {total} {noun}
+        </span>
+      </div>
+    );
+  }
+
+  // A window around the current page, always showing the first and last.
+  const window = new Set<number>([1, pageCount, page, page - 1, page + 1]);
+  const pages = [...window]
+    .filter((n) => n >= 1 && n <= pageCount)
+    .sort((a, b) => a - b);
+
+  const step =
+    "inline-flex h-9 min-w-9 items-center justify-center rounded-full px-3 font-display text-[13.5px] font-semibold";
+
+  return (
+    <nav
+      aria-label={`${noun} pages`}
+      className="flex items-center justify-between gap-4 px-5 py-3.5"
+    >
+      <span className="text-[13.5px] text-faint">
+        Page {page} of {pageCount} · {total} {noun}
+      </span>
+
+      <div className="flex items-center gap-1.5">
+        {page > 1 ? (
+          <Link href={hrefFor(page - 1)} className={cx(step, "border border-line2 bg-surface hover:border-ink")}>
+            Previous
+          </Link>
+        ) : null}
+
+        {pages.map((n, i) => (
+          <span key={n} className="flex items-center gap-1.5">
+            {i > 0 && n - pages[i - 1] > 1 ? (
+              <span className="px-1 text-faint" aria-hidden="true">
+                …
+              </span>
+            ) : null}
+            {n === page ? (
+              <span aria-current="page" className={cx(step, "bg-ink text-[#F8F5EF]")}>
+                {n}
+              </span>
+            ) : (
+              <Link href={hrefFor(n)} className={cx(step, "border border-line2 bg-surface hover:border-ink")}>
+                {n}
+              </Link>
+            )}
+          </span>
+        ))}
+
+        {page < pageCount ? (
+          <Link href={hrefFor(page + 1)} className={cx(step, "border border-line2 bg-surface hover:border-ink")}>
+            Next
+          </Link>
+        ) : null}
+      </div>
+    </nav>
+  );
+}
+
+/** Clamp a `?page=` value to something a query can be built from. */
+export function pageFromParam(value: string | string[] | undefined, pageCount: number) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const n = Number.parseInt(raw ?? "1", 10);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, Math.max(1, pageCount));
 }

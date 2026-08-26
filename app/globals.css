@@ -19,6 +19,10 @@
   --color-good-soft: #eaf0e4;
   --color-danger: #9a4a38;
   --color-danger-soft: #e9d3cb;
+  /* Named from the literals PILL_TONES already used, so `text-warn` is a real
+     colour rather than one that silently inherits. */
+  --color-warn: #8a6320;
+  --color-warn-soft: #f6ecd8;
 
   /* Product tints */
   --color-blush: #f7e3de;

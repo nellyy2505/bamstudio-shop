@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Poppins, Nunito_Sans } from "next/font/google";
 import "./globals.css";
+import { headers } from "next/headers";
+import { PATH_HEADER } from "@/proxy";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { CartProvider } from "@/components/cart/CartProvider";
@@ -58,12 +60,36 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  /*
+   * The staff area gets none of the shop's chrome.
+   *
+   * Found by screenshotting it: the studio was rendering inside the shop's
+   * promo bar, search, category nav and full footer, so a page for printing
+   * parcels carried a "Free AU standard post from $49.00" banner and a link to
+   * the returns policy. Worse, it read as a customer page with an admin panel
+   * pasted into it — exactly the confusion the dark STAFF bar exists to
+   * prevent.
+   *
+   * `app/admin/layout.tsx` draws its own header and its own sidebar, and it is
+   * the only chrome that belongs there.
+   */
+  const path = (await headers()).get(PATH_HEADER) ?? "";
+  const isStaffArea = path === "/admin" || path.startsWith("/admin/");
+
   // Only used to pick the header's Sign in vs Account link.
   let signedIn = false;
   try {
-    signedIn = Boolean(await getUser());
+    if (!isStaffArea) signedIn = Boolean(await getUser());
   } catch {
     // Supabase not configured yet — render the signed-out header.
+  }
+
+  if (isStaffArea) {
+    return (
+      <html lang="en-AU" className={`${poppins.variable} ${nunito.variable}`}>
+        <body className="min-h-screen">{children}</body>
+      </html>
+    );
   }
 
   return (
