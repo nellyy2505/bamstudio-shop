@@ -5,7 +5,16 @@ import { can, requireStaff, ROLE_LABEL, type Capability } from "@/lib/auth/staff
 import { Pill } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Studio · Bam Studio",
+  /*
+   * `absolute`, because the root layout sets `title.template` to
+   * "%s · Bam Studio" and a plain string here is a child title: Next runs it
+   * through that template, so every staff page without its own title came out
+   * as "Studio · Bam Studio · Bam Studio". `title.absolute` ignores a parent
+   * template. It still carries no `template` of its own, so the pages that do
+   * set a title ("Inventory · Studio", "Edit product · Studio") are printed as
+   * written, which is what they already expect.
+   */
+  title: { absolute: "Studio · Bam Studio" },
   // Nothing here should ever be indexed, linked to, or previewed.
   robots: { index: false, follow: false, nocache: true },
 };
