@@ -1,16 +1,30 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createHash, randomBytes } from "node:crypto";
+import { redirect } from "next/navigation";
+import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireStaff, type Capability } from "@/lib/auth/staff";
 import { siteUrl } from "@/lib/stripe";
+import {
+  hashToken,
+  isInvitableRole,
+  resolveJoin,
+} from "@/app/(admin-join)/admin/join/invitation";
 
 /**
  * Every write the staff area makes.
  *
  * ────────────────────────────────────────────────────────────────────────────
- * EVERY ACTION CALLS requireStaff() AS ITS FIRST STATEMENT. NO EXCEPTIONS.
+ * EVERY ACTION CALLS requireStaff() AS ITS FIRST STATEMENT.
+ *
+ * There is exactly ONE exception, `acceptInvitation` at the bottom of this
+ * file, and it is exempt because requiring staff there would be circular: it is
+ * the action that MAKES somebody staff, so the only people who can legitimately
+ * reach it are signed-in accounts that are not staff yet. It does not go
+ * unguarded — it does its own equivalent check against the invitation row, and
+ * the long comment above it explains exactly what stands in for the capability.
+ * Do not add a second exception without the same treatment.
  *
  * A server action is an HTTP endpoint. Next.js gives it a generated id and
  * routes to it directly — it is NOT wrapped by app/admin/layout.tsx, and it does
@@ -688,6 +702,11 @@ async function costAtSale(
  * holds; and the only path into it is this action, which requires the "access"
  * capability, which only the owner has.
  *
+ * The link goes to /admin/join, which is the page that turns the invitation
+ * into a staff row — see `acceptInvitation` below. That route deliberately
+ * sits outside app/admin/, because app/admin/layout.tsx requires staff and an
+ * invited person is not staff yet.
+ *
  * The token is generated here, hashed, and only the hash is stored. A database
  * dump therefore contains no usable invitation — the same reason a password
  * table holds hashes. The plaintext is returned to the caller exactly once, to
@@ -702,13 +721,16 @@ export async function inviteStaff(_prev: FormState, form: FormData): Promise<For
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail("That does not look like an email address.");
     // "owner" is deliberately not invitable. There is one owner, placed by hand
     // in the SQL editor; an invitation that grants the ability to invite is a
-    // loop with no floor.
-    if (!["studio", "packing"].includes(role)) {
+    // loop with no floor. The list lives in one place, next to the check that
+    // /admin/join makes again before it writes the staff row.
+    if (!isInvitableRole(role)) {
       return fail("Choose Studio or Packing. The owner role is not something that can be handed out.");
     }
 
     const token = randomBytes(32).toString("base64url");
-    const tokenHash = createHash("sha256").update(token).digest("hex");
+    // Hashed by the module that reads it back, so the write and the read can
+    // never drift onto two different algorithms. See the note on hashToken().
+    const tokenHash = hashToken(token);
     const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     const admin = createAdminClient();
@@ -769,6 +791,191 @@ export async function removeStaff(_prev: FormState, form: FormData): Promise<For
     revalidatePath("/admin/access");
     return ok("Access removed.");
   });
+}
+
+/**
+ * Accept an invitation and become staff.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * THE ONE ACTION IN THIS FILE THAT DOES NOT CALL guard(), AND WHY.
+ *
+ * `guard()` starts with `requireStaff()`. Requiring staff here is circular:
+ * this is the action that MAKES somebody staff. Everyone who legitimately
+ * reaches it is a signed-in account with no row in `public.staff` — that is
+ * what being invited means — so `requireStaff()` would redirect every single
+ * one of them to /login and no invitation could ever be accepted. It is the one
+ * admin action a non-staff signed-in person is supposed to reach.
+ *
+ * What stands in for the capability check, all of it in `resolveJoin()`:
+ *
+ *   • The caller must be signed in. `getUser()` reads the session cookie; if
+ *     there is nobody, nothing happens.
+ *   • The token must hash to a row in `staff_invitations`. The plaintext is
+ *     never stored, so an unknown or a guessed token simply matches nothing.
+ *   • The signed-in email must equal the invited email. This is the real gate:
+ *     it is not enough to hold the link, you have to be the person it was made
+ *     for.
+ *   • The invitation must be live — not accepted, not revoked, not expired.
+ *
+ * That is a narrower gate than any capability in this file. It grants exactly
+ * what one row, written earlier by the owner, says it grants.
+ *
+ * DEFECT THIS CLOSES: `inviteStaff` has handed out links to /admin/join since
+ * the day it was written and that route did not exist. Every invitation 404d,
+ * so Studio and Packing access could not be given to anybody — the owner was
+ * the only person who could ever be in the studio, because hers is the one row
+ * placed by hand in the SQL editor.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+export async function acceptInvitation(_prev: FormState, form: FormData): Promise<FormState> {
+  let failure: FormState;
+
+  try {
+    // Returns null when the person is now staff, or a message saying why not.
+    failure = await joinWithInvitation(text(form, "token"));
+  } catch (error) {
+    console.error("[admin]", error);
+    return fail("Something went wrong. You have not been given access.");
+  }
+
+  if (failure) return failure;
+
+  // The owner's invitation table now says "accepted".
+  revalidatePath("/admin/access");
+
+  // Outside the try on purpose, for the same reason `guard()` keeps
+  // requireStaff() outside its own: redirect() signals by throwing a Next.js
+  // control-flow value, and catching it would turn a successful join into
+  // "something went wrong" on a person who is already staff.
+  redirect("/admin");
+}
+
+/**
+ * The write half of accepting. Null means it worked.
+ *
+ * Split out so the redirect above can sit outside the try/catch. Not exported —
+ * every export from a "use server" file becomes an HTTP endpoint, and this one
+ * has no business being one.
+ */
+async function joinWithInvitation(token: string): Promise<FormState> {
+  const state = await resolveJoin(token);
+
+  // The page has already shown each of these; the action says them again
+  // because a form can be submitted long after the page was rendered, and the
+  // invitation can have been revoked, used or run out in between.
+  switch (state.kind) {
+    case "signed_out":
+      return fail(
+        "You are not signed in any more. Sign in with the address the invitation was sent " +
+          "to, then open the link again.",
+      );
+    case "invalid":
+      return fail("This invitation link is not valid.");
+    case "accepted":
+      return fail("This invitation has already been used. Ask the owner for a fresh one.");
+    case "revoked":
+      return fail("This invitation was revoked. Ask the owner for a fresh one.");
+    case "expired":
+      return fail("This invitation has expired. Ask the owner for a fresh one.");
+    case "wrong_person":
+      return fail(
+        "This invitation was made for a different email address, so it cannot be accepted " +
+          "from this account.",
+      );
+    case "refused_role":
+      return fail(
+        "This invitation asks for access that cannot be handed out through a link. Nothing " +
+          "has been changed.",
+      );
+    case "already_staff":
+      return fail("You already have studio access — there is nothing to accept.");
+    case "ready":
+      break;
+  }
+
+  /*
+   * The role is read off the invitation row and asserted a second time here,
+   * before anything is written.
+   *
+   * It never comes from the URL, the form or any other thing a request body can
+   * steer — the form carries a token and nothing else. `staff.role` accepts
+   * 'owner'; `staff_invitations.role` does not, and neither does this. A row
+   * that somehow said 'owner' would be refused rather than minting a second
+   * owner who could then invite more owners.
+   */
+  if (!isInvitableRole(state.role)) {
+    return fail("That invitation does not grant a role that can be handed out.");
+  }
+
+  const admin = createAdminClient();
+
+  /*
+   * Claim the invitation FIRST, with a compare-and-set.
+   *
+   * `.is("accepted_at", null)` is what makes an invitation single-use: two tabs,
+   * or two people who were forwarded the same link and share an inbox, race
+   * here and exactly one of them updates a row. No rows back means somebody
+   * already used it.
+   */
+  const { data: claimed, error: claimError } = await admin
+    .from("staff_invitations")
+    .update({ accepted_at: new Date().toISOString(), accepted_by: state.userId })
+    .eq("id", state.invitationId)
+    .is("accepted_at", null)
+    .is("revoked_at", null)
+    .select("id");
+
+  /*
+   * Database errors are logged and NOT shown, which is the opposite of what
+   * every other action in this file does.
+   *
+   * `friendly()` passes Postgres's own words through to the screen, and that is
+   * right for the owner — she can act on "another product already uses that
+   * SKU". The person reading this page is not staff and may not even be the
+   * invitee; constraint names and column names are not theirs to see.
+   */
+  if (claimError) {
+    console.error("[admin] claiming invitation", claimError.message);
+    return fail("We could not take up your invitation just now. Please try again in a moment.");
+  }
+  if (!claimed || claimed.length === 0) {
+    return fail("This invitation has already been used. Ask the owner for a fresh one.");
+  }
+
+  // insert, never upsert. An upsert keyed on user_id would OVERWRITE an
+  // existing role — the owner clicking an old Packing link would demote
+  // herself out of the access page and there would be no way back except the
+  // SQL editor. A duplicate key here means they are already staff, which is
+  // handled below rather than papered over.
+  const { error: staffError } = await admin.from("staff").insert({
+    user_id: state.userId,
+    role: state.role,
+    invited_by: state.invitedBy,
+  });
+
+  if (staffError) {
+    // Hand the invitation back. It was claimed a moment ago and the access it
+    // was claimed for did not happen, so burning it would leave the person with
+    // no way in and the owner with an invitation that reads "accepted" by
+    // somebody who is not in the studio. Scoped to this user's own claim so it
+    // can never clear somebody else's acceptance.
+    await admin
+      .from("staff_invitations")
+      .update({ accepted_at: null, accepted_by: null })
+      .eq("id", state.invitationId)
+      .eq("accepted_by", state.userId);
+
+    if (staffError.code === "23505") {
+      return fail("You already have studio access — there is nothing to accept.");
+    }
+    console.error("[admin] writing staff row", staffError.message);
+    return fail(
+      "We could not add you to the studio just now. Nothing has changed, and your " +
+        "invitation still works — please try again in a moment.",
+    );
+  }
+
+  return null;
 }
 
 /* ----------------------------------------------------------------- errors */

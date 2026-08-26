@@ -56,8 +56,12 @@ export async function proxy(request: NextRequest) {
   // Nobody can be signed in, so there is nothing behind these paths to reach.
   if (!url || !anonKey) {
     if (needsSignIn(request.nextUrl.pathname)) {
+      // No `next` here on purpose: with Supabase unconfigured nobody can sign
+      // in, so there is nowhere to come back from. The inherited query is
+      // dropped rather than carried onto /login as stray parameters.
       const redirect = request.nextUrl.clone();
       redirect.pathname = "/login";
+      redirect.search = "";
       return NextResponse.redirect(redirect);
     }
     return response;
@@ -89,9 +93,17 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user && needsSignIn(request.nextUrl.pathname)) {
+    // The query string is part of where they were going, not decoration.
+    // /admin/join?token=... IS the invitation: sending only the pathname meant
+    // an invited person signed in, landed back on the join page with no token,
+    // and was told the link was not valid. `search` is carried, and the
+    // inherited params are cleared first so the original query is not also
+    // repeated on /login as loose parameters of its own.
+    const back = request.nextUrl.pathname + request.nextUrl.search;
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("next", request.nextUrl.pathname);
+    url.search = "";
+    url.searchParams.set("next", back);
     return NextResponse.redirect(url);
   }
 
