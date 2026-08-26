@@ -31,7 +31,23 @@ const NAV = [
   { href: "/about", label: "Our story" },
 ];
 
-export function Header({ signedIn }: { signedIn: boolean }) {
+/**
+ * @param isStaff decided on the SERVER and threaded in as a prop. It cannot be
+ *   worked out here: the `staff` table is unreadable with the anon key that
+ *   ships in this bundle, which is the whole point of putting roles in their
+ *   own table. See the header of lib/auth/staff.ts.
+ *
+ *   Showing this link is presentation, not permission. /admin checks for
+ *   itself; a customer who guesses the URL is turned away whether or not they
+ *   ever saw a link to it.
+ */
+export function Header({
+  signedIn,
+  isStaff = false,
+}: {
+  signedIn: boolean;
+  isStaff?: boolean;
+}) {
   const pathname = usePathname();
   const { count, ready } = useCart();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -80,6 +96,17 @@ export function Header({ signedIn }: { signedIn: boolean }) {
           </div>
 
           <div className="ml-auto flex items-center gap-1">
+            {/* Staff only. Without it the studio is reachable solely by typing
+                the URL, which is how a tool nobody uses gets built. */}
+            {isStaff ? (
+              <Link
+                href="/admin"
+                className="hidden items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-[12.5px] font-extrabold text-[#F8F5EF] hover:bg-[#3B3630] sm:flex"
+              >
+                <Icon name="shield" size={16} />
+                Studio
+              </Link>
+            ) : null}
             <Link
               href={signedIn ? "/account/orders" : "/login"}
               className="flex flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-[11.5px] font-bold text-muted hover:text-ink md:px-3"
@@ -165,6 +192,16 @@ export function Header({ signedIn }: { signedIn: boolean }) {
                 <Icon name="truck" size={17} />
                 Track an order
               </Link>
+              {isStaff ? (
+                <Link
+                  href="/admin"
+                  onClick={closeDrawer}
+                  className="mt-1 flex items-center gap-2 rounded-xl bg-ink px-2 py-3 text-[15px] font-bold text-[#F8F5EF]"
+                >
+                  <Icon name="shield" size={17} />
+                  Studio
+                </Link>
+              ) : null}
             </div>
           </nav>
         ) : null}

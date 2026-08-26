@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins, Nunito_Sans } from "next/font/google";
 import "./globals.css";
 import { headers } from "next/headers";
+import { getStaffRole } from "@/lib/auth/staff";
 import { PATH_HEADER } from "@/proxy";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -76,12 +77,30 @@ export default async function RootLayout({
   const path = (await headers()).get(PATH_HEADER) ?? "";
   const isStaffArea = path === "/admin" || path.startsWith("/admin/");
 
-  // Only used to pick the header's Sign in vs Account link.
+  /*
+   * Two facts the header needs, and the cost of getting them.
+   *
+   * `signedIn` picks Sign in vs Account. `isStaff` decides whether the Studio
+   * link appears at all — it has to be answered here because the `staff` table
+   * is unreadable with the anon key the browser holds, so the Header component
+   * could not work it out even if it wanted to.
+   *
+   * The staff lookup is skipped entirely for signed-out visitors, which is
+   * nearly all of them, so it costs one extra Supabase request per page view
+   * for people with accounts. On the free tier that is a real number, and it is
+   * the price of the studio being reachable by clicking rather than by
+   * remembering a URL.
+   */
   let signedIn = false;
+  let isStaff = false;
   try {
-    if (!isStaffArea) signedIn = Boolean(await getUser());
+    if (!isStaffArea) {
+      signedIn = Boolean(await getUser());
+      if (signedIn) isStaff = (await getStaffRole()) !== null;
+    }
   } catch {
-    // Supabase not configured yet — render the signed-out header.
+    // Supabase not configured yet, or unreachable. Render the signed-out
+    // header and no Studio link — a failed lookup must never grant anything.
   }
 
   if (isStaffArea) {
@@ -102,7 +121,7 @@ export default async function RootLayout({
           Skip to content
         </a>
         <CartProvider>
-          <Header signedIn={signedIn} />
+          <Header signedIn={signedIn} isStaff={isStaff} />
           <main id="main" className="flex-1">
             {children}
           </main>

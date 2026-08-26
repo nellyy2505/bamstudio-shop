@@ -11,11 +11,29 @@ const LINKS: { href: string; label: string; icon: IconName }[] = [
   { href: "/account/settings", label: "Settings", icon: "user" },
 ];
 
-export function AccountNav() {
+/**
+ * @param isStaff decided on the server by the layout above. This component
+ *   cannot ask: the `staff` table is invisible to the key that reaches the
+ *   browser, by design. Hiding the link is presentation — /admin does its own
+ *   checking.
+ */
+export function AccountNav({ isStaff = false }: { isStaff?: boolean }) {
   const pathname = usePathname();
 
   return (
     <nav aria-label="Account" className="flex flex-col gap-1">
+      {isStaff ? (
+        <>
+          <Link
+            href="/admin"
+            className="mb-1 flex items-center gap-2.5 rounded-xl bg-ink px-3.5 py-2.5 text-[14.5px] font-bold text-[#F8F5EF] transition-colors hover:bg-[#3B3630]"
+          >
+            <Icon name="shield" size={17} />
+            Open the studio
+          </Link>
+          <hr className="mb-1 border-line" />
+        </>
+      ) : null}
       {LINKS.map((link) => {
         const active =
           pathname === link.href || pathname.startsWith(`${link.href}/`);

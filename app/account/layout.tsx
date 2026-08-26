@@ -1,6 +1,7 @@
 import { AccountNav } from "./AccountNav";
 import { SignOutButton } from "./SignOutButton";
 import { requireAccount, type Profile } from "./data";
+import { getStaffRole } from "@/lib/auth/staff";
 
 export default async function AccountLayout({
   children,
@@ -8,6 +9,13 @@ export default async function AccountLayout({
   children: React.ReactNode;
 }) {
   const { supabase, user } = await requireAccount();
+
+  /*
+   * Staff get a way back into the studio from here as well as from the header.
+   * This is the page someone lands on after signing in, so it is where they
+   * look — and on a narrow screen the header's Studio button is hidden.
+   */
+  const isStaff = (await getStaffRole()) !== null;
 
   const { data } = await supabase
     .from("profiles")
@@ -43,7 +51,7 @@ export default async function AccountLayout({
 
         <hr className="my-4 border-line" />
 
-        <AccountNav />
+        <AccountNav isStaff={isStaff} />
 
         <hr className="my-4 border-line" />
 
