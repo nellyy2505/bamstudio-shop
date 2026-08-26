@@ -185,7 +185,10 @@ export function ProductForm({
 
       <Panel title="Price and stock">
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Price" htmlFor="price" hint="In dollars, GST included.">
+          {/* The hint used to read "In dollars, GST included." The shop is under
+              the $75,000 threshold and is not registered (SHOP.gstRegistered), so no
+              page may show or claim GST — including a form hint only she reads. */}
+          <Field label="Price" htmlFor="price" hint="In dollars — what a customer pays.">
             <input
               id="price"
               name="price"

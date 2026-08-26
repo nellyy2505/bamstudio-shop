@@ -112,11 +112,24 @@ export default async function EditProductPage({
           </Panel>
 
           <Panel title="What to charge">
-            {costed.suggested === null ? (
-              <p className="text-[13.5px] text-muted">
-                A suggested price needs a unit cost. Fill in the print time and at least one
-                filament colour and it appears here.
-              </p>
+            {/* Profit and margin are worked out from the same `cost.total` the
+                suggestion is, so gating only on `suggested` let an unmeasured
+                piece print four false numbers from packaging alone: $0.50
+                suggested, $8.73 profit, 97% margin. The whole block branches on
+                the unknown cost. The price she typed in is still a fact and
+                stays; everything derived from a cost that does not exist goes. */}
+            {costed.cost.unknown || costed.suggested === null ? (
+              <dl className="flex flex-col gap-2.5 text-[14px]">
+                {product.price > 0 ? (
+                  <Row label="Your price" value={money(product.price)} />
+                ) : null}
+                <Row label="Profit each" value="—" />
+                <Row label="Actual margin" value="—" />
+                <p className="mt-1 text-[13.5px] text-muted">
+                  A suggested price, a profit and a margin all need a unit cost. Fill in the
+                  print time and at least one filament colour and they appear here.
+                </p>
+              </dl>
             ) : (
               <dl className="flex flex-col gap-2.5 text-[14px]">
                 <Row

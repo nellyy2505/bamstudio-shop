@@ -22,6 +22,22 @@ export default async function InventoryPage() {
   const inventory = await getInventory();
   const needed = inventory.filament.filter((f) => f.gramsNeeded > 0 || f.rollsToBuy > 0);
 
+  /*
+   * Nothing recorded and nothing needed are two different claims.
+   *
+   * The buy list is built from filament recipes, so a product with no grams on
+   * it is invisible to it. Measured in the browser against the live database:
+   * all 44 products had no recipe, and this page still printed "ROLLS TO BUY /
+   * 0 / the shelf covers the queue" and "Nothing to buy. Either the queue is
+   * empty, or the rolls you have cover it." Both were false, and both were
+   * stated as fact next to a banner saying the opposite. While `unmeasured` is
+   * above zero the buy list is a floor at best, and where it comes out empty it
+   * says nothing at all.
+   */
+  const unmeasuredNote = `${inventory.unmeasured} product${
+    inventory.unmeasured === 1 ? " has" : "s have"
+  } no filament recorded`;
+
   return (
     <div>
       <PageHead
@@ -37,11 +53,19 @@ export default async function InventoryPage() {
         />
         <Stat
           label="ROLLS TO BUY"
-          value={String(inventory.totalRollsToBuy)}
+          value={
+            inventory.unmeasured > 0 && inventory.totalRollsToBuy === 0
+              ? "—"
+              : String(inventory.totalRollsToBuy)
+          }
           note={
-            inventory.totalRollsToBuy > 0
-              ? `about ${money(inventory.totalBuyCostCents)}`
-              : "the shelf covers the queue"
+            inventory.unmeasured > 0
+              ? inventory.totalRollsToBuy > 0
+                ? `at least ${money(inventory.totalBuyCostCents)} — ${unmeasuredNote}`
+                : `not measured — ${unmeasuredNote}`
+              : inventory.totalRollsToBuy > 0
+                ? `about ${money(inventory.totalBuyCostCents)}`
+                : "the shelf covers the queue"
           }
         />
         <Stat
@@ -139,7 +163,9 @@ export default async function InventoryPage() {
         >
           {needed.length === 0 ? (
             <NoRows>
-              Nothing to buy. Either the queue is empty, or the rolls you have cover it.
+              {inventory.unmeasured > 0
+                ? `Nothing recorded to buy — ${unmeasuredNote}, so this list is empty because the grams are missing, not because the shelf covers the queue.`
+                : "Nothing to buy. Either the queue is empty, or the rolls you have cover it."}
             </NoRows>
           ) : (
             <div className="overflow-x-auto">

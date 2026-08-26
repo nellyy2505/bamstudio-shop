@@ -454,7 +454,17 @@ export function costProduct(
   });
   return {
     cost,
-    suggested: suggestedPrice(settings, cost.total),
+    // A partial cost must not produce a price. With no print time and no
+    // filament weight, `cost.total` is packaging alone — 13c — and
+    // suggestedPrice() turned that into a $0.50 suggestion and a 97% margin on
+    // a piece nobody has measured, which is exactly the number she would price
+    // from. The guard lives here and not in suggestedPrice() because
+    // lib/costing.ts is a line-by-line transcription of the workbook, checked
+    // against Excel's own cached values by scripts/check-costing.mjs; the
+    // workbook has no notion of an unmeasured input, so teaching one to that
+    // file would make the sheet and the shop disagree. Knowing that an input is
+    // missing is this layer's job.
+    suggested: cost.unknown ? null : suggestedPrice(settings, cost.total),
     accessoryName: accessory?.name ?? null,
   };
 }
