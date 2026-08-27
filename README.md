@@ -106,11 +106,20 @@ supabase/
                               filament stock, settings, accessories, recipes
   migrations/0004_letter_eligible_default.sql
                               products.letter_eligible defaults to false
+  migrations/0005_sale_integrity.sql
+                              orders.confirmation_email_sent_at,
+                              products.oversold_units, an atomic
+                              decrement_stock that returns the shortfall,
+                              and the payment_incidents refund register
+  migrations/0006_enquiries.sql
+                              contact_enquiries and newsletter_signups —
+                              the customer's message is a row before it is
+                              an email. service_role only, both ways
   storage.sql                 the product-photos bucket. NOT a migration and
                               deliberately not run by verify-sql.sh — run it
                               by hand once in the Supabase SQL editor
   seed.sql                    catalogue, generated from the workbook
-  verify.sql                  schema smoke test — one table of 52 rows, and
+  verify.sql                  schema smoke test — one table of 86 rows, and
                               every one must print `t`
 scripts/
   generate-seed.mjs           regenerates seed.sql + fallback-data.ts
@@ -212,7 +221,8 @@ the machine's memory:
    customer who is never told.
 2. **`lib/rate-limit.ts` is an in-process `Map`**, and it is the only protection
    on `POST /api/track`. A stop resets every bucket, so anyone who can provoke
-   an idle stop wins their retry budget back for free.
+   an idle stop wins their retry budget back for free. The same `Map` now backs
+   the throttle on `/order/confirmed`, which reads a Stripe session by id.
 
 `suspend` is not a middle ground: it snapshots RAM, so the limiter would
 survive, but the machine resumes believing sockets are still live that the other
@@ -227,6 +237,47 @@ someone flips autostop on anyway.)
 same concern: the default 5s drain window is too short for an in-flight Resend
 request that no inbound connection accounts for. Next's standalone `server.js`
 registers its own SIGTERM handler, so no `tini`/`dumb-init` shim is needed.
+
+### Security response headers, and the one directive that is a compromise
+
+`next.config.ts` sets HSTS, a Content-Security-Policy, `X-Frame-Options: DENY`,
+`X-Content-Type-Options: nosniff` and `Referrer-Policy` on `/:path*`, with no
+exclusions. Until round 15 the shop served none at all.
+
+The hole they close is a specific one rather than hygiene. `@supabase/ssr`'s
+cookie defaults are `httpOnly: false`, `sameSite: "lax"`, 400 days and **no
+`secure` flag**, and `proxy.ts` passes them straight through. `force_https` in
+`fly.toml` is a *redirect*, so the browser has already put that cookie on the
+wire in clear before the redirect comes back. One captured plaintext request is
+400 days of somebody's account, and the account most worth capturing is the
+owner's.
+
+Three deliberate choices, all with the reasoning inline in the file:
+
+- **`script-src` keeps `'unsafe-inline'`.** Next streams the RSC payload through
+  inline `<script>self.__next_f.push(...)` tags on every response; the only
+  supported way to drop the token is a per-request nonce in `proxy.ts`, which
+  Next's own docs say forces every page to render dynamically. On one always-on
+  512 MB machine that is a real bill. So the policy does **not** stop injected
+  inline script; what it stops is an injection pulling script from an attacker's
+  host, which is how stolen data usually leaves. Do not tighten it without doing
+  the nonce work — you will break checkout.
+- **HSTS omits `preload`.** Preloading bakes the domain into shipped browsers
+  and coming back off the list takes months. `bamstudioshop.com` is bought and
+  still parked. The `.dev` TLD is already preloaded, so today's `fly.dev` address
+  is forced to https anyway; the day the shop answers on a plain `.com` is
+  exactly when this header starts earning its keep, and when `preload` should be
+  added.
+- **`form-action 'self'` does not list Stripe**, because checkout reaches Stripe
+  by `window.location.href = data.url` — a top-level navigation, which
+  `form-action` does not govern. Listing it would document a cross-origin form
+  POST that does not exist.
+
+The CSP was derived from evidence, not a template: after `next build`, the only
+absolute origins left in `.next/static/chunks` are the Supabase URL, our own
+site URL, the SVG `xmlns` namespace and documentation links inside error
+messages. Re-run that grep after adding any browser-side integration and widen
+`connect-src` / `img-src` if it grows.
 
 ### The health endpoint, and why `proxy.ts` excludes it
 
@@ -367,13 +418,15 @@ What is sent:
   allocates the order number — so retries and duplicate events cannot send it
   twice.
 - **Contact enquiries**, to the studio mailbox, with the sender as `reply-to`.
-  Nothing persists an enquiry, so the email *is* the delivery: the route
-  returns `{ ok, delivered }` and the form says plainly when `delivered` is
-  false.
-- **Newsletter sign-ups** — a *notification* to the studio, not a
-  subscription. **There is no subscriber list**, no audience and no unsubscribe
-  mechanism; the owner adds the address by hand. No page may promise a
-  newsletter until one exists.
+  Since `0006_enquiries.sql` the row is written to `contact_enquiries` *before*
+  the send, so the email is a notification rather than the delivery: the route
+  returns `{ ok, delivered, stored }`. **Nothing in the site can read that table
+  yet** — there is no `/admin/enquiries` screen — so the notification is still
+  how anyone learns a message arrived, and the copy says so.
+- **Newsletter sign-ups** — the address is kept in `newsletter_signups` as a
+  record that somebody asked. **There is still no newsletter**, no audience, no
+  welcome email and no unsubscribe link; `unsubscribed_at` is set by hand. No
+  page may promise a newsletter until one exists.
 
 Supabase Auth's own emails (sign-up confirmation, password reset) are separate
 and are sent by Supabase whether or not any of this is configured.
@@ -594,7 +647,7 @@ npx tsc --noEmit # typecheck
 ./scripts/verify-sql.sh          # every migration + seed + assertions on local
                                  # Postgres 16. It globs supabase/migrations/ —
                                  # there is no list to keep in step — and prints
-                                 # how many it applied. verify.sql is 52 rows;
+                                 # how many it applied. verify.sql is 86 rows;
                                  # count the rows as well as the ticks
 node scripts/check-costing.mjs   # lib/costing.ts vs the workbook's cached values
 node scripts/replay-checkout.mjs # replay the real client baskets at /api/checkout
@@ -623,6 +676,11 @@ in front of `/api/track`, which returns a customer's postal address for an order
 number plus the matching email — and order numbers are a sequence plus four hex
 characters. Move it to Upstash/Redis before launch; the call sites do not
 change. `WORKLOG.md` §6 has the rest of the open list.
+
+Every route family is now behind it, which was not true until round 15:
+`/order/confirmed` had no limit at all and reads a Stripe session by id. That
+does not make the limiter durable — it makes the gap in coverage smaller. The
+durability is the outstanding half.
 
 **What is no longer true of it:** `clientKey()` used to take the *first*
 `x-forwarded-for` value. That was safe on Vercel, whose proxy overwrites the

@@ -13,7 +13,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Repo rules that outrank a habit
 
-`CLAUDE.md` is the full brief and imports this file. These four are here because
+`CLAUDE.md` is the full brief and imports this file. These eight are here because
 they are the ones an agent gets wrong from memory rather than from reading:
 
 - **`requireStaff(capability)` is the first statement of every page, route
@@ -35,5 +35,73 @@ they are the ones an agent gets wrong from memory rather than from reading:
   `next build` sees the server-action boundary and proves a route group resolves
   to the URL you expect.
 - **`./scripts/verify-sql.sh` applies every file in `supabase/migrations/`**, not
-  a list, and `supabase/verify.sql` is one table of 52 rows that must all print
-  `t`. Count the rows as well as the ticks.
+  a list, and `supabase/verify.sql` is one table of **86** rows that must all
+  print `t`. Count the rows as well as the ticks — 24 → 29 → 50 → 52 → 65
+  (`0005_sale_integrity.sql`) → **86** (`0006_enquiries.sql`) — so a shorter
+  table is an older copy of the file, and an older copy is a green result that
+  never looked at part of the schema. **A missing migration does not shorten the
+  table, it aborts the run**: the first assertion naming an object that is not
+  there raises. There are **six** migrations as this was written:
+  `0001_init.sql`, `0002_shipping.sql`, `0003_admin.sql`,
+  `0004_letter_eligible_default.sql`, `0005_sale_integrity.sql`,
+  `0006_enquiries.sql` — but this file has fallen behind the directory before,
+  so trust `ls supabase/migrations/` over this list.
+- **`decrement_stock(uuid, integer)` returns the SHORTFALL, not void.** Since
+  `0005_sale_integrity.sql` it takes `for update` on the product row, then
+  returns how many units were sold that the ready-to-ship buffer did not have —
+  `0` ordinarily, `null` for a product id that does not exist. The same number
+  accumulates on `products.oversold_units`. **An oversell is deliberate and is
+  not an error**: this shop prints to order, and stock only moves in the webhook
+  *after* payment, so refusing the sale would refuse a customer who has already
+  been charged. Callers log it and the studio overview shows it. Do not "fix"
+  this into a rejection, do not clamp at zero, and do not decrement
+  `oversold_units` automatically — the owner clears it when the backlog is
+  printed. New in the same migration: `orders.confirmation_email_sent_at` (the
+  stamp that makes a lost confirmation email recoverable on a Stripe
+  redelivery — the webhook writes it with `.is(..., null)` so a redelivery
+  cannot send twice) and `public.payment_incidents` (a payment that cleared for
+  an order somebody had already cancelled; RLS on with no policy plus an
+  explicit revoke, `service_role` only, `stripe_session_id` unique so recording
+  is idempotent). `order_items.unit_cost_cents` is now stamped for **web** sales
+  as well as market sales, from one helper — `unitCostsAtSale()` in
+  `app/admin/data.ts`. It is a record of what the piece cost *when it sold*;
+  never derive it at read time, and leave it **null** for a product nobody has
+  measured rather than writing a packaging-only figure.
+- **`/contact` and `/newsletter` write a row BEFORE they attempt an email**
+  (`0006_enquiries.sql`). `/api/contact` used to hand the message to Resend and
+  store it nowhere — on a failed send the customer's words existed only in the
+  HTTP request and were gone. Three ordinary configurations lost them outright:
+  no `RESEND_API_KEY`/`EMAIL_FROM`, no `NEXT_PUBLIC_SUPPORT_EMAIL`, or Resend
+  answering 4xx/5xx. **The row is the delivery now; the email is a notification
+  about a row that already exists.** Do not reorder those two. Two tables, not
+  one: `contact_enquiries` is a piece of *work* (repeatable — a follow-up is a
+  second thing said — ends in a reply, carries `handled_at`/`handled_by`), and
+  `newsletter_signups` is a *membership* (the lower-cased address is the primary
+  key, asking twice is idempotent, ends in an unsubscribe that a later sign-up
+  must not silently undo). Both are **`service_role` only, in and out** — there
+  is deliberately no anon insert grant even though strangers write to them, because
+  the anon key ships in the browser and such a grant is a public PostgREST
+  endpoint that walks past the route's validation, its rate limiter and its
+  topic enum. `notified_at` being null means no notification went out, **not**
+  that the enquiry was lost. There is still no newsletter, no welcome email and
+  no unsubscribe link, so **no copy on the site may promise one.**
+- **The basket limits live in `lib/config.ts` (`BASKET_LIMITS`, line 222), and
+  there is now only one copy.** `maxLineQuantity` is 20 and `maxLines` is 40.
+  They used to be three copies — four hand-written literals across the Zod
+  schemas in `app/api/checkout/route.ts` and `app/api/shipping/quote/route.ts`,
+  plus a stopgap `components/cart/limits.ts` — with nothing making them agree.
+  That file is deleted; both route schemas and `components/cart/CartProvider.tsx`
+  import the constant. Change the number in `lib/config.ts` and nowhere else,
+  and do not put a literal back into a schema.
+- **The Content-Security-Policy in `next.config.ts` carries `script-src
+  'unsafe-inline'` on purpose.** Next streams the RSC payload through inline
+  `<script>self.__next_f.push(...)` tags on every response, and the only
+  supported way to drop `'unsafe-inline'` is a per-request nonce generated in
+  `proxy.ts`, which forces every page to render dynamically — a real bill on one
+  always-on 512 MB Fly machine. Removing it without doing the nonce work breaks
+  every page including checkout. `form-action 'self'` is likewise correct as
+  written: checkout reaches Stripe by a top-level navigation, not a
+  cross-origin form POST, so adding Stripe there would document a POST that does
+  not exist. HSTS omits `preload` deliberately until the custom domain is
+  settled. The long comment above `contentSecurityPolicy()` is the reasoning;
+  read it before touching a directive.

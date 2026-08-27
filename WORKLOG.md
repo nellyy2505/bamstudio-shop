@@ -3,14 +3,20 @@
 Everything a new session needs to pick this up: what was built, what was found
 wrong and fixed, what is deliberately still open, and how to verify any of it.
 
-Last updated: 27 August 2026. Branch: `master`. Four rounds have landed since
-the last docs pass: **round 10**, the pre-launch remediation, which also wired
+Last updated: 27 August 2026. Branch: `master`. Seven rounds have landed since
+the last full docs pass: **round 10**, the pre-launch remediation, which also wired
 postage into checkout; **round 11**, the staff area; **round 12**, the first
-session to drive the deployed studio against the live database; and **round
-13**, this one — the migration harness, `0004_letter_eligible_default.sql`,
-`next=` carried through sign-up, and a screen for measuring the catalogue. §0
-has the current open list; §5 rounds 10–13 have the reasoning; §7 has the commit
-state and what to distrust in it.
+session to drive the deployed studio against the live database; **round 13**,
+the migration harness, `0004_letter_eligible_default.sql`, `next=` carried
+through sign-up, and a screen for measuring the catalogue; **round 14**, the
+first real sale recorded in the studio — which finally exercised the three
+embedded joins with rows in them — plus the measure screen's markup and seven
+admin page titles; **round 15**, the security and truthfulness sweep: response
+headers and a CSP, a throttle on `/order/confirmed`, six untrue customer-facing
+statements removed, and `0005_sale_integrity.sql`; and **round 16**, which made
+a customer's contact message a row before it is an email (`0006_enquiries.sql`).
+§0 has the current open list; §5 rounds 10–16 have the reasoning; §7 has the
+commit state and what to distrust in it.
 
 ---
 
@@ -38,14 +44,19 @@ act on next.
 | # | Item | Who | Where |
 |---|---|---|---|
 | A | **`git push origin master`.** The three round-12 commits (`1a4e0d0`, `7c049aa`, `10a683f`) are made on `master` on the owner's machine and **not pushed** — the device shell has no network and cannot reach the Windows credential store. Nothing in them is live until she pushes | **owner** | §5 round 12, §7 |
-| B | **Record one real sale against a measured product.** The three embedded-resource selects in `app/admin/data.ts` have run against real PostgREST and returned `[]` every time, because every table behind them is empty. One sale on Orders → *Record a sale*, for a product that has a print time and a filament colour, exercises all three with rows in them. Until then, do not trust a number on Inventory or Reports | agent | §6 admin |
+| B | ~~**Record one real sale against a measured product.**~~ **Done, round 14.** The three embedded-resource selects in `app/admin/data.ts` had run against real PostgREST and returned `[]` every time, because every table behind them was empty; a real sale on Orders → *Record a sale*, against a product with a print time and a filament colour, exercised all three with rows in them, and the costing chain was checked by hand against the live numbers. **Keep the rule that made this an item** — an empty table is a question about the database, not about the query — because the next new join will be in the same position | done | §5 round 14 |
 | C | **Weigh three items and give the real numbers** — one name charm, one clicker keychain, one pet bowl, each in the mailer actually used: grams, and thickness in mm. **Every** weight and dimension in `lib/shipping/dimensions.ts` and in the seed is a reasoned estimate today. These three readings are the single highest-value input to postage accuracy | **owner** | §6 backlog |
 | D | **Decide: cheap-untracked or dearer-tracked.** Every product is `letter_eligible: false`, and since `0004_letter_eligible_default.sql` that is the column's default too, so everything quotes as a tracked parcel — which overcharges slightly and never undercharges. Large Letter is $3.40 against ~$10.20, and is **untracked and uninsured**. Enabling it is a per-row tick in Supabase **plus** carrying `quoteBasket()`'s `tracked` boolean through the UI, which `transitLabel(methodId, tracked)` now requires as an argument. This is a business decision, not a code one | **owner** | §6 |
 | E | **Owner data entry — the studio has almost nothing to work with.** 44 products, **all still at the seed price of $9.00**, **0 of 44 with a filament recipe**, and print times effectively all missing, so every cost, margin and suggested price reads "Not measured". `/admin/inventory/measure` is the screen built for the print-time-and-grams half of it | **owner** | §6 |
 | F | **Confirm the production secrets on Fly, then place one test order.** `NEXT_PUBLIC_SUPPORT_EMAIL`, `RESEND_API_KEY`, `EMAIL_FROM` and the **production** `STRIPE_WEBHOOK_SECRET` are filled in `.env.local`; the deployed shop reads Fly secrets, which is a different set of values. Nothing in this repo has ever been through a real Stripe session or put a message in a mailbox | **owner** | §6, `SETUP.md` |
 | G | **`AUSPOST_API_KEY` is a new runtime secret** — free, self-serve, instant from developers.auspost.com.au. It is a **Fly secret, never a build arg**. Without it postage still works: it falls through to the deliberately pessimistic fallback table | **owner** | §6, `SETUP.md` |
 | H | **Delete the Porkbun parking wildcard.** `bamstudioshop.com` is registered, but DNS still carries `*` CNAME → `uixie.porkbun.com`, which shadows email records | **owner** | `SETUP.md` Step 5f |
-| I | **The rate limiter is still one process's memory.** Round 8 fixed *which IP it reads*; it did not make it durable. Still the only thing in front of `/api/track` | agent | §6 |
+| I | **The rate limiter is still one process's memory.** Round 8 fixed *which IP it reads*; round 15 closed the last route family with no limit at all (`/order/confirmed`). Neither made it durable, and it is still the only thing in front of `/api/track` | agent | §6 |
+| J | **Run `0005_sale_integrity.sql` on the live project, then re-run `verify.sql` expecting 86 rows.** It is the money migration — the confirmation-email stamp, the observable stock clamp, the refund register — and none of the three does anything until it is applied. It goes after `0004` | **owner** | §5 round 15, `SETUP.md` Step 1c |
+| K | **Exercise `0005`'s three behaviours against real rows.** `verify.sql` asserts them against synthetic rows inside a rolled-back transaction, which proves the schema and not the webhook. An oversell that accumulates on `products.oversold_units`, a redelivered Stripe event that does not send a second email, and a payment on a cancelled order that writes exactly one incident are each still believed-correct-by-reading | agent | §5 round 15 |
+| M | **Run `0006_enquiries.sql` on the live project.** Until it is applied, a contact-form message is still stored nowhere and a failed send still loses it. It goes after `0005` | **owner** | §5 round 16, `SETUP.md` Step 1c |
+| N | **Exercise `0006` against real rows too** — an enquiry posted with the mail provider deliberately unconfigured must still land as a row, which is the whole point of the migration and the case that used to lose the message; a repeated sign-up must be idempotent; an unsubscribe must survive a later sign-up | agent | §5 round 16 |
+| L | **The basket limits exist in three places.** 20 per line and 40 lines are transcribed in `components/cart/limits.ts` from four literals in two Zod schemas. Nothing makes the copies agree; they belong in `lib/config.ts` | agent | §5 round 15 |
 
 | # | Status | What it was, and where it stands now |
 |---|---|---|
@@ -60,12 +71,17 @@ act on next.
 | 9 | **Partly closed** | Marketing consent is now unticked by default, and PII is out of the contact and newsletter logs. "Delete account" now describes what it actually does — which is nothing: it files a request by hand. **Real account deletion is not built** and needs a service-role admin route, re-authentication and an in-flight-order guard. §6 carries it |
 | 10 | **Closed** | "Free shipping" was stated unqualified but only ever applied to standard post. Qualified everywhere, and the cart derives the claim for the **selected** method, so it can no longer say "Free shipping unlocked" while Express is selected and charged the express rate. (The predicate is now `isFreeShipping(subtotal, methodId)`; `shippingCost()` was deleted in round 10 when postage moved to `quoteBasket()`) |
 
-Lower-severity items from round 5 (uncapped "Only N ready to ship", no quantity
-cap in the cart, **no CSP**, inert `revalidate`, the recovery cookie keyed on
-`next` rather than the flow) are still open and still not launch-blocking. That
-list used to say "empty `next.config.ts`" — it is no longer empty, it sets
-`output: "standalone"` for the Fly image (§5 round 8), but it still declares no
-security headers.
+Lower-severity items from round 5: **two of them are now closed.** Round 15 gave
+`next.config.ts` a full set of security headers — HSTS, an enforced CSP,
+`frame-ancestors`/`X-Frame-Options`, `nosniff` and `Referrer-Policy` — and moved
+the quantity cap into the cart itself instead of leaving a breaching basket to
+be refused at checkout with a blanket "Invalid basket." Still open and still not
+launch-blocking: the uncapped "Only N ready to ship", the inert `revalidate`,
+and the recovery cookie keyed on `next` rather than on the flow. That list used
+to say "empty `next.config.ts`", then "it sets `output: standalone` but declares
+no security headers"; **neither sentence is true any more, and the file is now
+one of the more heavily reasoned in the repo** — see §5 round 15 before changing
+a directive in it.
 
 ### What is verified by execution, and what is only verified by reasoning
 
@@ -82,16 +98,23 @@ green check is least able to tell you.
 
   **That 24/24 is historical, and so is every number after it.** The file has
   grown with the schema: 29 assertions with `0002_shipping.sql`, 50 with the
-  staff area in `0003_admin.sql`, and **52** since
-  `0004_letter_eligible_default.sql` added the two letter-eligibility checks.
+  staff area in `0003_admin.sql`, 52 with `0004_letter_eligible_default.sql`'s
+  two letter-eligibility checks, 65 with `0005_sale_integrity.sql` — the
+  confirmation-email stamp, the observable stock clamp and the refund register —
+  and **86** with `0006_enquiries.sql`, the contact-enquiry and
+  newsletter-sign-up tables.
   `scripts/verify-sql.sh` no longer carries a list of migrations at all — it
   applies **every `.sql` in `supabase/migrations/`** in `LC_ALL=C` filename
   order and prints how many it applied, because the hand-written list fell
   behind twice. Observed: **29/29** in round 10, **50/50** in round 11 with
   every assertion individually proved to fail when the thing it asserts was
   broken, and **50 rows all `t` against the live Supabase project** on 26
-  August (round 12). **52/52 has not been observed from this session** — the
-  count is read off `verify.sql`, not off a run.
+  August (round 12). **Neither 52/52 nor 86/86 has been observed from any
+  session** — every count after 50 is read off `verify.sql`, not off a run. The
+  86 was counted from the file this round rather than taken from its header: 22
+  `insert into _checks` statements, 64 `union all` branches between them, 86 rows
+  in the final select — which agrees with what the file says of itself. A run is
+  still owed.
 - **The anon-privilege denial, against real Postgres.** `permission denied for
   function lookup_order` for both `anon` and `authenticated`; a row returned
   for `service_role`. Run on a fresh database *and* on a simulated
@@ -407,10 +430,13 @@ must print `t`. Paste it into the Supabase SQL editor after setup, and locally:
 > removes its own evidence.** A drop in that `applied N` number between two runs
 > is the signature.
 >
-> `verify.sql` now declares **52 assertions** — 24, then 29 with shipping, 50
-> with the staff area, 52 with the letter-eligible default. **Count the rows as
-> well as the ticks**: a shorter table is an older copy of the file, which is a
-> green result that never looked at part of the schema.
+> `verify.sql` now declares **86 assertions** — 24, then 29 with shipping, 50
+> with the staff area, 52 with the letter-eligible default, 65 with
+> `0005_sale_integrity.sql`, 86 with `0006_enquiries.sql`. **Count the rows as well as the ticks**: a shorter
+> table is an older copy of the file, which is a green result that never looked
+> at part of the schema. A table that is short and a run that *aborts* are
+> different failures — an unapplied migration does not shorten the table, it
+> raises at the first assertion naming an object that is not there.
 >
 > ⚠️ **`supabase/storage.sql` is deliberately NOT applied by the harness** and
 > is not a migration. Storage is a platform feature; vanilla PostgreSQL has no
@@ -427,9 +453,12 @@ then applies the migration and the seed, runs `verify.sql`, prints the
 assertion table and **exits non-zero if any row is not `t`** — so it can gate a
 release. It refuses to run on any server that is not 16.
 
-> **The schema is the four files in `supabase/migrations/`** — `0001_init.sql`,
-> `0002_shipping.sql`, `0003_admin.sql`, `0004_letter_eligible_default.sql`, in
-> that order. There is no `supabase/schema.sql`. This document and `CLAUDE.md`
+> **The schema is the six files in `supabase/migrations/`** — `0001_init.sql`,
+> `0002_shipping.sql`, `0003_admin.sql`, `0004_letter_eligible_default.sql`,
+> `0005_sale_integrity.sql`, `0006_enquiries.sql`, in that order. That is what was in the directory
+> when this was written; the harness globs rather than reading this list, so
+> trust `ls supabase/migrations/` over this sentence. There is no
+> `supabase/schema.sql`. This document and `CLAUDE.md`
 > both used to say to pipe `schema.sql`, and that cost someone real time — the
 > migrations *are* the schema.
 
@@ -1132,11 +1161,11 @@ behind them is empty: `product_filament(grams, colours(id, name, hex))` and
 embeds in `getOrder()` have never run at all, because there is no order to open.
 **A query that runs is not a query that is right.**
 
-### Round 13 — this round: the schema harness, the default, and two screens
+### Round 13 — the schema harness, the default, and two screens
 
-The four changes in the working tree as this was written. **None of them has been
-re-verified from here** — no build, no harness run and no browser in this
-session — so read them as "landed", not as "proved".
+The changes in the working tree as that round was written. **None of them was
+re-verified from that session** — no build, no harness run and no browser — so
+read them as "landed", not as "proved".
 
 - **`scripts/verify-sql.sh` no longer keeps a list of migrations.** It globs
   `supabase/migrations/*.sql` under `nullglob`, sorts with `LC_ALL=C` and applies
@@ -1152,7 +1181,8 @@ session — so read them as "landed", not as "proved".
   rather than an edit to `0002` because `0002` has been applied, and editing an
   applied migration leaves the repo and the live schema disagreeing with no way to
   tell which is right.
-- **`supabase/verify.sql` is 52 assertions.** The two new ones are deliberately
+- **`supabase/verify.sql` went to 52 assertions** (it is 86 today — round 15
+  took it there). The two added in this round are deliberately
   separate: one reads the declared default, so it catches a migration that changes
   it; the other inserts a row the way the table editor does — every shipping
   column left alone — so it catches a trigger or a rewritten column that produces
@@ -1186,7 +1216,396 @@ session — so read them as "landed", not as "proved".
   fields would otherwise read as "this piece uses no colours" and wipe a recipe
   the screen never showed anybody.
 
+### Round 14 — the first real sale, and a screen that shipped 1.2 MB of markup
+
+**The item that had sat in §0 as B is closed.** A real sale was recorded through
+Orders → *Record a sale* against a product that had been given a print time and
+a filament colour, and the three embedded-resource selects in
+`app/admin/data.ts` — the ones that had parsed and returned `[]` every previous
+time — returned real rows. The costing chain was then checked by hand against
+the live numbers rather than against itself.
+
+**The trap this closes is worth keeping even though the instance is settled.**
+Those three queries had "run against real PostgREST" for two rounds. That was
+true and it proved nothing: an embedded join against an empty table returns `[]`
+in exactly the same shape as a join whose foreign-key path is wrong. **An empty
+table is a question about the database, not about the query**, and the two are
+indistinguishable from the calling code. Every new embedded select starts in that
+position. The only way out of it is a row.
+
+**`/admin/inventory/measure` was serving 1.2 MB of markup.** The screen renders a
+row per product with up to `MEASURE_COLOUR_SLOTS` (4) colour slots, and every
+slot was a full `<select>` over the whole filament palette, rendered
+server-side: 176 selects and 3,344 options for 44 products. Only the **first**
+colour slot is rendered server-side now; slots two to four start as hidden inputs
+carrying the values the row already has, and `ExtraColours.tsx` opens them on
+demand for the one row that asked. **182 KB, 44 selects, 836 options.** The
+hidden inputs are not an optimisation detail — they are why a row that is saved
+without ever opening its extra slots still submits every slot it had, unchanged.
+`saveMeasurement` rejects a payload with fewer than `MEASURE_COLOUR_SLOTS` slots
+precisely because a POST that simply omitted them would otherwise read as "this
+piece uses no colours" and wipe a recipe the screen never showed anybody.
+
+**Seven admin pages were given their own `metadata.title`.** Every page under
+`/admin` inherited one title, so the browser tab, the history and a bookmark all
+said the same thing for thirteen different screens. Each now sets `"<screen> ·
+Studio"` — Overview, Orders, Products, Inventory, Reports, Colours, Settings,
+Studio access, and the detail and creation pages under them.
+
+The byte counts above are as reported by the round that made the change; **they
+have not been re-measured from a build here.**
+
+### Round 15 — the security and truthfulness sweep
+
+The largest round since the staff area, and the one with the most reasoning
+worth preserving. Nothing in it was re-verified from the session that wrote it:
+**no build, no harness run, no browser, and the CSP in particular has never been
+loaded by a real browser.** An *enforced* policy that is one origin too narrow is
+a broken page, not a console warning, so that is the first thing to check.
+
+**Security response headers — `next.config.ts`.** The shop served none at all.
+The hole is specific rather than hygiene: `@supabase/ssr`'s cookie defaults are
+`httpOnly: false`, `sameSite: "lax"`, 400 days and **no `secure` flag**, and
+`proxy.ts` passes them straight through, while `force_https` in `fly.toml` is a
+*redirect* — so the browser has already put the session cookie on the wire in
+clear before the redirect comes back. One captured plaintext request is 400 days
+of somebody else's account, and the account most worth capturing is the owner's.
+Now set on `/:path*` with no exclusions: HSTS, an enforced Content-Security-Policy,
+`X-Frame-Options: DENY` alongside `frame-ancestors 'none'`, `nosniff`, and
+`Referrer-Policy: strict-origin-when-cross-origin`. Four decisions inside that
+are recorded so nobody "tightens" them into a broken checkout:
+
+- **`script-src 'self' 'unsafe-inline'` is a known, documented compromise.**
+  Next streams the RSC payload through inline `<script>self.__next_f.push(...)`
+  tags in every single response. The only supported way to allow those without
+  `'unsafe-inline'` is a per-request nonce generated in `proxy.ts`, and Next's
+  own docs state the price: a nonce **forces every page to render dynamically**,
+  which on one always-on 512 MB Fly machine is a real bill. So the directive
+  does **not** stop injected inline script. What it does stop is an injection
+  pulling script from an attacker's host, which is how stolen data usually
+  leaves. Tightening it means the nonce plus dynamic rendering, and is
+  deliberately not done. `'unsafe-eval'` is added in development only, where
+  React uses `eval` to rebuild server stack traces.
+- **HSTS deliberately omits `preload`** — one year, subdomains included, not
+  preloaded. Preloading submits the domain to a list baked into shipped
+  browsers; coming back off it is a removal request plus months of waiting for
+  browser releases. `bamstudioshop.com` is bought and still parked. What leaving
+  it off costs is stated rather than glossed: HSTS is trust-on-first-use, so a
+  browser's very first `http://` navigation is still exposed. That window is
+  narrow today only because the whole `.dev` TLD is already preloaded and
+  `bamstudio-shop.fly.dev` is forced to https regardless. **It stops being
+  narrow the day the shop answers on a plain `.com`** — which is exactly when
+  `preload` should be added.
+- **The policy was derived from evidence, not from a template.** After
+  `next build`, the only absolute origins left in `.next/static/chunks` are the
+  Supabase URL, our own site URL, the SVG `xmlns` namespace (never fetched) and
+  documentation links inside error messages. `font-src 'self'` because
+  `next/font/google` downloads and self-hosts at build time and the browser
+  never contacts `fonts.gstatic.com`. Re-run that grep after adding any
+  browser-side integration.
+- **`form-action 'self'` does not list Stripe, and must not.** Checkout reaches
+  Stripe by `window.location.href = data.url` — a top-level navigation, which
+  `form-action` does not govern and neither does any other directive browsers
+  implement. Listing Stripe would document a cross-origin form POST that does
+  not exist. Equally, `/api/webhooks/stripe` is **not** excluded here even
+  though `proxy.ts` excludes it: the proxy's exclusion is about the *request*
+  bytes Stripe signs over, and this config only adds *response* headers, which
+  Stripe's client discards. Copying the exclusion would take its shape without
+  its reason.
+
+**`/order/confirmed` was the only route family with no rate limit.** It reads a
+Stripe session by id. The check is placed inside the `if (sessionId)` branch, so
+a visit carrying no `session_id` calls Stripe not at all and spends nobody's
+allowance, and it returns **before** the Stripe calls, because throttling that
+still spends the quota protects nothing. Two consequences deliberately preserved:
+the early return means `<ClearCartOnMount />` never renders, so a throttled
+basket survives exactly as an unpaid one does; and the throttled copy claims
+**nothing** about the payment, because we did not ask Stripe and do not know.
+Telling someone who has just been charged that no money was taken is the one
+mistake that page exists to avoid.
+
+**Six untrue customer-facing statements removed.** Each had been true-shaped
+rather than true:
+
+1. **"0 reviews" under every search suggestion.** `SearchBar` printed the count
+   unconditionally, so every suggestion in the shop read "$9.00 · 0 reviews". No
+   product has a review and none is invented; a count of zero printed as fact is
+   a claim about a review history that does not exist.
+2. **The FAQ and `/track` promised a tracking number.** "…scan it in" was an
+   unconditional promise, printed to customers whose parcels the shop knowingly
+   posts untracked as Large Letters. Pages that describe postage in general
+   cannot know which a basket will be — that is `quoteBasket()`'s answer — so
+   they must not say. `transitRangeLabel()` exists for exactly this: the
+   carrier's transit range with no tracking claim.
+3. **`/track` reported rate-limiting and bad input as "no order matched".** Two
+   different facts about the *request* were rendered as a fact about the
+   *database*. A customer who typed their email wrong, and a customer who was
+   simply throttled, were both told their order did not exist.
+4. **The builder claimed letters are "always in stock"** and added a day nothing
+   added. Neither was derived from anything.
+5. **A promise to email for a review that nothing sends.** The same class of
+   defect as §0.1 and round 7 — a claim about a capability, checked against
+   nothing.
+6. **A "Highest rated" sort over an all-zero column.** Every product is
+   `rating: 0`, so the sort was really an arbitrary order presented as a ranking,
+   in a shop that suppresses ratings on every other surface. Removed from the
+   `ProductFilters["sort"]` type and from both query builders; a bookmarked
+   `?sort=rating` falls through to the default rather than erroring, because a
+   shared link outlives this change.
+
+   Also on `/track`: **a market sale read as though it had been posted.** A sale
+   typed in at a stall is written straight to `delivered` and never had a parcel.
+
+**Money integrity — `0005_sale_integrity.sql` and the code around it.** Six
+defects, all of which lost or hid money:
+
+- **`orders.confirmation_email_sent_at`.** The confirmation was sent with no
+  record that it had been, so a send lost to a stopped machine was lost for
+  good. The webhook now stamps it under a `.is(…, null)` filter, which makes a
+  Stripe redelivery either recover a lost email or do nothing — never send
+  twice. `getStudioAttention()` counts **website** orders that are numbered,
+  past `pending` and still unstamped; market sales are excluded because they
+  never had a confirmation to send, and counting them would report a backlog
+  that does not exist.
+- **`unit_cost_cents` is now written for web sales as well as market sales**,
+  from one shared helper — `unitCostsAtSale()` in `app/admin/data.ts`, called by
+  both `app/api/checkout/route.ts` and the webhook. It had been written in
+  exactly one place, the market-stall form in `recordSale`, so every website
+  sale landed with a null cost and Reports had nothing to subtract for the
+  shop's **main** channel. Reports was honest about the hole — it counts the
+  lines carrying no cost and says the profit understates what was spent — but
+  *honest about a hole* is not the same as *measurable*. It is **stamped, not
+  derived**: the column records what the piece cost when it sold, and computing
+  it at read time would rewrite every historical margin the next time filament
+  or an accessory changed price. It stays **null** for a product with no print
+  time or no filament recipe, because a 13c "cost" is a 97% margin on a piece
+  nobody has timed, and null is the honest answer.
+- **`decrement_stock` is atomic, and it answers.** It takes `select … for
+  update` on the product row before the arithmetic, so a concurrent call — a
+  second webhook delivery, or a market sale typed in while a website order
+  confirms — waits rather than reading a value about to be stale. The
+  read-modify-write that used to live in `recordSale` cannot exist inside one
+  locked transaction. It now returns the **shortfall**: how many units were sold
+  that the ready-to-ship buffer did not have. `0` is the ordinary answer; `null`
+  means no such product, which is a different question from a sale that took
+  nothing.
+
+  **The decision behind it is the part to preserve.** Overselling stays allowed.
+  This shop prints to order, and stock only moves in the webhook *after*
+  payment, so a stock check at checkout guards a window it does not own — two
+  shoppers can both pass it, and the loser would be refused **after being
+  charged**, which is worse than printing one more. So the cost of allowing it
+  is paid by making it visible: the shortfall accumulates on
+  `products.oversold_units`, the webhook logs the order it happened on, and the
+  studio overview shows it. It is a print-this-first queue signal, not an error.
+  Nothing decrements it automatically; the owner clears it when the backlog is
+  printed.
+- **`recordSale` no longer leaves an order with no lines counted as revenue.**
+- **A customer charged for an already-cancelled order is recorded**, in the new
+  `public.payment_incidents`, and surfaced on `/admin`. The webhook correctly
+  refuses to number such an order, move its stock or email its customer — but
+  its entire response was a `console.error` saying "refund this one by hand" and
+  a 200 to Stripe. The customer is charged, receives nothing, and the only
+  record is a log line on a platform nobody reads. **Money the shop owed back
+  was invisible.** A row rather than a column on `orders`, because the incident
+  is a fact about a *payment*, needs its own resolution state, and there is no
+  guarantee the order row still exists to hang it on (`on delete set null`:
+  losing the order must not lose the debt). `stripe_session_id` is unique, which
+  is what makes recording idempotent under redelivery. RLS on with **no policy**
+  plus an explicit revoke — the pattern `0002` and `0003` document, because
+  hosted Supabase grants every new `public` table to `anon` as it is created.
+  `resolveRefundIncident` (guarded on `orders`) marks one issued. **The refund
+  itself stays manual and always will**: refunding is a decision with a customer
+  at the other end of it, not something a webhook should take on its own.
+- **`removePhoto` could delete any object in the storage bucket from a form
+  field.** `path` was passed straight to `storage.remove()` on the
+  **service-role** client, which bypasses RLS and every storage policy, and the
+  only surrounding check merely filtered this product's own JSON array. A POST
+  with this action's id and any other object's path deleted that object — every
+  photograph in the bucket was one request away from anyone holding a
+  `catalogue` capability, which staff invitations grant. The product's stored
+  photo list is now the authority. **Deliberately not a path-prefix check**:
+  `uploadPhotos` happens to write `<product id>/<random>.<ext>`, but that is a
+  naming convention, and a rule derived from a convention stops holding the day
+  the convention changes.
+
+**Basket limits are enforced in the cart** (20 per line, 40 lines) instead of
+only being rejected at checkout. A breaching basket used to be refused by
+checkout with a blanket `{ error: "Invalid basket." }` and by
+`POST /api/shipping/quote` with a 400 the cart could only render as "Calculated
+at checkout" — a customer left with no total and no reason. **The known defect
+in the fix is recorded in the file that carries it**: `components/cart/limits.ts`
+says out loud that these belong in `lib/config.ts`, that it is a stopgap, and
+that **the real limits are four literals in two Zod schemas** with nothing
+enforcing that the three copies agree. It lives there only because the round
+that found the defect did not own `lib/config.ts`. Change one, change all three.
+
+**`Field` in `components/ui` announces its errors to screen readers.** The
+message carries `role="alert"` rather than `aria-live="polite"` — it is mounted
+at the moment it appears, and a live region's first announcement of its own
+content is unreliable, whereas `role="alert"` announces on insertion. The
+control gets `aria-invalid` and its own `aria-describedby` is preserved with the
+field's id appended rather than overwritten, and the message is prefixed
+"Error:" so it is identifiable when read out of context.
+
+**`supabase/verify.sql` went from 52 assertions to 65** in this round (86 today
+— round 16 took it there), and it is one
+table. The three new groups cover exactly the three behaviours above, against
+throwaway rows inside a transaction it rolls back: the confirmation-email stamp,
+a sale within stock and a sale past it, and the incident register including that
+a redelivery records **one** incident. Note what that does and does not prove:
+it proves the schema and the grants, not that the webhook calls any of it
+correctly. The RLS-count assertion is `= 17`, deliberately exact rather than
+`>=`, because a new table that forgets to enable RLS lands in `public` readable
+by the anon key.
+
+
+### Round 16 — the customer's message is a row before it is an email
+
+**The defect.** `/api/contact` handed the enquiry to Resend and stored it
+nowhere. The route said so in its own comment — *"Nothing is persisted — there
+is no enquiries table — so the email IS the delivery"* — and on a failed send it
+answered `{ ok: true, delivered: false }`. That is an honest answer to the
+customer and a **total loss to the shop**: the words they typed existed only in
+the HTTP request, and once the send failed there was nothing left anywhere.
+Three ordinary configurations lose the message outright, and none of them is
+exotic: `RESEND_API_KEY` or `EMAIL_FROM` unset, which are secrets a shop can
+deploy without; `NEXT_PUBLIC_SUPPORT_EMAIL` unset, so there is no address to
+send to; or Resend answering 4xx/5xx, or not answering inside the 8-second
+timeout.
+
+**It matters more here than it would elsewhere.** This shop states in several
+places, the legal pages included, that it sends no order emails at all — so the
+contact form is one of a very small number of channels a customer has. A
+pointer rather than legal advice, recorded in the migration itself: under the
+Australian Consumer Law a message reporting faulty goods starts a consumer
+guarantee claim, and that is precisely the message that must not vanish. Whether
+a given enquiry does so is a lawyer's question; **the engineering conclusion
+stands on its own — a channel the shop advertises must not depend on a
+third-party API call succeeding on the first attempt.**
+
+So the row is written **first**, and the email becomes a notification about a
+row that already exists. A failed send now costs the owner a prompt, not the
+customer their message. Do not reorder those two.
+
+**Two tables, not one**, and the reasoning is the transferable part. An enquiry
+and a sign-up arrive through the same shaped route, and that is all they have in
+common:
+
+- **An enquiry is a piece of WORK.** Name, topic, free text, an optional order
+  number; answered once and then done, so it carries `handled_at`/`handled_by`
+  and every message is its own row. **Writing twice is two enquiries, and must
+  be** — a customer who follows up has said a second thing.
+- **A sign-up is a MEMBERSHIP.** One address, held for as long as the shop might
+  mail it, and asking twice is the same fact stated twice — so the lower-cased
+  address is the primary key and a repeat submission is idempotent. Its
+  lifecycle ends in an unsubscribe, not a reply, and `unsubscribed_at` is
+  *recorded* rather than the row deleted, so an address that has been taken off
+  cannot be silently re-added by a later `on conflict do nothing` insert.
+
+Folded into one table, half the columns are null for half the rows, the
+unique-address rule cannot be expressed (wrong for enquiries, required for
+sign-ups), and clearing out answered enquiries would delete the mailing list.
+
+**Why there is no anon insert grant, on tables anonymous strangers write to.**
+The obvious alternative is `grant insert to anon` with an insert-only RLS
+policy, letting the browser write its own row. It was considered and rejected.
+The anon key ships in the browser bundle, so that grant *is* a public PostgREST
+endpoint accepting arbitrary rows into the table: it walks straight past the
+route's zod validation, its rate limiter and its topic enum, and the CHECK
+constraints become the entire defence. `/api/contact` already runs server-side
+(`export const runtime = "nodejs"`), so the service-role client is right there —
+the row is written by the same code that validated it, and the public key gets
+nothing at all. **A write-only grant is also not the harmless thing it sounds
+like**: `insert … returning` and constraint-violation messages both leak, and a
+duplicate-key error on `newsletter_signups` would turn a write-only grant into
+an oracle for "is this address on the list". Both tables are `service_role`
+only, in and out — RLS on with no policy plus an explicit revoke, the pattern
+`0002`, `0003` and `0005` document.
+
+**`notified_at` is a fact, not a status.** It is the same shape and the same
+reasoning as `orders.confirmation_email_sent_at` in `0005`: null means no
+studio-notification email has gone out for this row. It does **not** mean the
+enquiry was lost — the row is the delivery now — it means the only way the owner
+finds this one is by looking. A shop with no mail provider configured leaves
+every row null, which is true, and the reader asks `isEmailConfigured()` at read
+time rather than having this schema mirror a deployment setting it cannot see.
+
+**The length bounds are duplicated from the zod schema in
+`app/api/contact/route.ts` on purpose, and the two must move together.** The
+route validates; the table is the backstop that makes an unbounded message
+impossible no matter which code path writes it. `message` is the only free-text
+field a stranger controls.
+
+**What this does NOT create.** There is still **no newsletter, no welcome email
+and no unsubscribe link.** `newsletter_signups` is a record that somebody asked
+— worth having as evidence the address was volunteered, *before* a first mailout
+is ever sent rather than after — and it is not a mailing list that is sent to.
+**No copy on the site may promise one.** The table comment says so, and it is
+there because this is exactly the shape of §0.1 and round 7: a claim about a
+capability, checked against nothing.
+
+**Abuse, written down so nobody re-derives it.** These are unauthenticated
+endpoints that now write rows. What stands in front of them is
+`rateLimit(clientKey(request, "contact"), 5, 60_000)` — five posts per minute
+per client, in a `Map` in one process, resetting on every deploy, with "client"
+meaning an IP address, so a caller with a pool of them has a proportional
+allowance. That is the same limiter §6 has wanted moved to shared storage since
+round 8, and it now guards one more thing.
+
+**`supabase/verify.sql` is 86 assertions**, up from 65. The RLS-count assertion
+moved to `= 19` — deliberately exact rather than `>=`, because a new table that
+forgets to enable RLS lands in `public` readable by the anon key. The new
+assertions cover an enquiry stored as sent, an over-long message rejected, an
+invented topic rejected, anon and authenticated locked out of both tables, a
+repeated sign-up recording once, a mixed-case address stored lower-cased, and an
+unsubscribe surviving a later sign-up.
+
+**Nothing in this round has been verified by running it.** The count above was
+read off the file, the behaviour off the code.
+
+
 ## 6. Open items
+
+### Left behind by round 15 — read `next.config.ts` before proposing any of it
+
+- **The CSP has never been loaded by a browser.** It is enforced, not
+  report-only, and was derived from a grep of `.next/static/chunks` after a
+  build. That is good evidence and it is not a test. Load the shop, the cart, a
+  product page carrying a photograph (the Supabase storage origin, `img-src`)
+  and `/admin`, and read the console.
+- **`script-src 'unsafe-inline'` is a known compromise, not a to-do.** Removing
+  it needs a per-request nonce in `proxy.ts` and forces dynamic rendering on
+  every page — a real cost on one always-on 512 MB machine, and a broken shop if
+  half-done. If it is ever taken on, it is a project, and checkout is what
+  breaks first.
+- **`preload` on HSTS waits for the custom domain.** One word plus a submission
+  at hstspreload.org, once `bamstudioshop.com` is live and settled on https. Not
+  before: preloading is a one-way door.
+- **The basket limits exist in three places** — `components/cart/limits.ts` and
+  four literals across two Zod schemas (`app/api/checkout/route.ts`,
+  `app/api/shipping/quote/route.ts`). Nothing enforces that they agree. They
+  belong in `lib/config.ts`, imported by all three. The file that holds them
+  says so itself.
+- **`0005_sale_integrity.sql`'s three behaviours are unexercised end to end.**
+  `verify.sql` asserts them against throwaway rows inside a rolled-back
+  transaction, which proves the schema and the grants — not that the webhook
+  calls any of it correctly. What is still owed: an oversell that accumulates on
+  `products.oversold_units`; a redelivered Stripe event that does **not** send a
+  second confirmation; and a payment landing on a cancelled order that writes
+  exactly one `payment_incidents` row and appears on `/admin`.
+- **The webhook harness has three more behaviours to cover** and still is not in
+  the repo (`/tmp/webhook-harness/`, §4). Rebuild it before anything touches the
+  builder payload.
+- **`0006_enquiries.sql` is unexercised end to end too.** The case that matters
+  is the one that used to lose the message: post a contact enquiry with the mail
+  provider deliberately unconfigured and confirm the row lands anyway. Then a
+  repeated sign-up (idempotent), a mixed-case address (stored lower-cased) and
+  an unsubscribe surviving a later sign-up.
+- **`newsletter_signups` is not a newsletter.** No mailout, no welcome email, no
+  unsubscribe link. The table records that somebody asked. Building it or
+  removing the form are both honest; the current state is honest only for as
+  long as no copy on the site claims otherwise.
 
 ### Postage — wired in round 10, and what is left of it
 
@@ -1365,7 +1784,7 @@ claim.
 
 | Item | Detail |
 |---|---|
-| **The newsletter has no subscriber list** | There is no table, no audience, no unsubscribe mechanism. `/api/newsletter` forwards a *notification* to the studio inbox and the owner adds the address by hand wherever the list eventually lives — it is **not a subscription**, and the footer copy must never promise a newsletter, a welcome email or an unsubscribe link until one exists |
+| **The newsletter keeps addresses but sends nothing** | `0006_enquiries.sql` added `newsletter_signups`, so an address is now recorded rather than only forwarded — but there is still no audience, no welcome email and no unsubscribe link, and `unsubscribed_at` is set by hand. It is **not a subscription**, and the footer copy must never promise a newsletter, a welcome email or an unsubscribe link until one exists. The same migration added `contact_enquiries`; **no screen reads either table**, so `/admin/enquiries` is owed before storage is worth anything to her |
 | **Real account deletion is not built** | §0.9 closed the *claim* only: the card now says a request is filed by hand, which is what happens. Actual deletion needs a server-side admin route holding the service-role key (the browser client uses the anon key and is refused), **re-authentication** before it fires, and a guard for in-flight orders. TODO in `DeleteAccountCard.tsx` |
 | **Saved addresses don't prefill checkout** | Stripe collects the address fresh. The copy is honest about this. Real prefill needs a Stripe Customer with `shipping`, passed as `customer` on the session. TODO in `app/account/addresses/page.tsx` |
 | **No review UI** | The insert policy was withdrawn. The migration records the shape of a correct one (requires a delivered order, forces `verified`) for when reviews ship |
@@ -1486,7 +1905,7 @@ None of it has been verified from here — it is what the owner reports.
 |---|---|
 | Domain | **`bamstudioshop.com` registered at Porkbun.** DNS still on Porkbun's parking wildcard (`*` CNAME → `uixie.porkbun.com`), **which must be deleted** — it shadows email records |
 | GitHub | `https://github.com/nellyy2505/bamstudio-shop`, **public**, branch `master`, pushed |
-| Supabase | **Applied and live.** `0001_init.sql`, `0002_shipping.sql`, `0003_admin.sql`, `seed.sql`, `storage.sql` and the claim statement have all been run; `verify.sql` returned **50 rows, all `t`** on 26 August. **`0004_letter_eligible_default.sql` has not been run yet** — it is new in round 13, and `verify.sql` is 52 rows once it has |
+| Supabase | **Applied and live.** `0001_init.sql`, `0002_shipping.sql`, `0003_admin.sql`, `seed.sql`, `storage.sql` and the claim statement have all been run; `verify.sql` returned **50 rows, all `t`** on 26 August, which was the whole file at the time. **Two migrations have not been run there yet** — `0004_letter_eligible_default.sql` (round 13) and `0005_sale_integrity.sql` (round 15, the money one). Run them in that order; `verify.sql` is **86** rows once both are in |
 | Fly | **Created and deployed.** Live at `bamstudio-shop.fly.dev` |
 | Stripe | **Test** keys in use. The live key exposed in chat has been rolled. The **production** webhook secret has not been confirmed against Fly |
 | Supabase keys | **JWT secret rotated, 26 August** — settled, see above |
@@ -1532,8 +1951,9 @@ a print time and filament grams for each, on `/admin/inventory/measure` ·
 **delete Porkbun's `*` parking CNAME** · `AUSPOST_API_KEY` from
 developers.auspost.com.au (free, self-serve, instant — a **Fly secret**, never a
 build arg; without it postage falls back to the pessimistic table and still
-works) · **run `0004_letter_eligible_default.sql`** on the Supabase project and
-re-run `verify.sql`, which should then print 52 rows all `t` · **confirm the
+works) · **run `0004_letter_eligible_default.sql` and then
+`0005_sale_integrity.sql`** on the Supabase project, in that order, and re-run
+`verify.sql`, which should then print **86** rows all `t` · **confirm the
 production `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` and
 `NEXT_PUBLIC_SUPPORT_EMAIL` on Fly and place one test order** ·
 ABN (Stripe needs it to release money) · registered business name · business
@@ -1591,12 +2011,23 @@ Round 11 added `app/admin/` (nine screens), `app/admin/actions.ts`,
 `supabase/migrations/0003_admin.sql` and `supabase/storage.sql`, and took
 `verify.sql` from 29 assertions to 50. Round 12 added
 `app/(admin-join)/admin/join/` and changed `proxy.ts`, `app/admin/data.ts`,
-`app/admin/actions.ts` and `app/admin/layout.tsx`. Round 13 — in the working
-tree, not yet in any commit this document can see — changed
-`scripts/verify-sql.sh`, `supabase/verify.sql` (52), `package.json`,
+`app/admin/actions.ts` and `app/admin/layout.tsx`. Rounds 13–15 — in the working
+tree, and this document cannot see which of them are committed — changed
+`scripts/verify-sql.sh`, `supabase/verify.sql` (now **86**), `package.json`,
 `app/signup/**`, `app/login/page.tsx` and `app/auth/callback/route.ts`, and
 added `supabase/migrations/0004_letter_eligible_default.sql` and
-`app/admin/inventory/measure/`.
+`app/admin/inventory/measure/` (round 13); reworked
+`app/admin/inventory/measure/` into a page plus `ExtraColours.tsx` and added
+`metadata.title` to the admin pages (round 14); and, in round 15, added
+`supabase/migrations/0005_sale_integrity.sql` and changed `next.config.ts`,
+`app/order/confirmed/page.tsx`, `app/api/checkout/route.ts`,
+`app/api/webhooks/stripe/route.ts`, `app/admin/data.ts`, `app/admin/actions.ts`,
+`components/cart/limits.ts` (new), `components/cart/CartProvider.tsx`,
+`app/cart/CartView.tsx`, `app/product/[slug]/ProductBuy.tsx`,
+`components/ui/index.tsx`, `components/layout/SearchBar.tsx`, `lib/queries.ts`,
+`app/shop/SortSelect.tsx`, `app/track/TrackForm.tsx` and
+`app/builder/BuilderClient.tsx`. **That file list was read off the tree while
+other work was in flight; treat it as a map, not an inventory.**
 
 **Where those changes live is not the same answer everywhere, so check rather
 than assume.** These docs have been written in more than one clone, and a commit
@@ -1620,12 +2051,19 @@ browser against the live database. **The webhook harness lives in
 `/tmp/webhook-harness/` and does not survive the session that wrote it** — §4
 says what it covers so it can be rebuilt.
 
-**Nothing in round 13 has been re-verified.** `verify.sql` now declares **52**
-assertions and `scripts/verify-sql.sh` applies every migration including the new
-`0004`, but **52/52 has not been observed**, and no typecheck, lint or build has
-been run over the round-13 tree from here. A dependency was removed from
-`package.json` in that round, which makes `npm run build` the first thing to
-run.
+**Nothing in rounds 13, 14 or 15 has been re-verified from the sessions that
+wrote them.** `verify.sql` now declares **86** assertions and
+`scripts/verify-sql.sh` applies every migration including `0004` and `0005`, but
+**neither 52/52 nor 86/86 has been observed anywhere**, and no typecheck, lint or
+build has been run over any of those trees. Three things make the build the first
+thing to run rather than a formality: a dependency was removed from
+`package.json` in round 13; `next.config.ts` gained a `headers()` function and a
+`contentSecurityPolicy()` in round 15, and the build is what proves that config
+still loads; and **the CSP is enforced, not report-only**, so a directive one
+origin too narrow is a broken page rather than a console warning. **No browser
+has ever loaded a page under that policy.** Load the shop, the cart, a product
+with a photograph (Supabase storage origin, `img-src`) and `/admin`, and read the
+console.
 
 Round 9's own verification was **against the live Australia Post API** — the
 quotes, the response shapes, the 200-vs-404 error behaviour, the postcode
@@ -1638,9 +2076,13 @@ Verified **by reasoning only**, and worth repeating because the distinction is
 the most useful thing in this file: real Resend delivery, the Stripe
 `product_data.metadata.slug` round trip, `after()` completing on the deployed
 machine, grants on a hosted Supabase project applied outside the migration, and
-**the shape of anything an embedded PostgREST join returns** — those three
-selects have parsed and returned `[]`, which is a fact about the tables being
-empty and not about the queries (§6). What round 8 measured, against a real local build: the ~1.6 GB
+the CSP against a real browser. **The shape of an embedded PostgREST join is no
+longer on this list**: those three selects had parsed and returned `[]`, which
+is a fact about the tables being empty and not about the queries, and round 14
+put real rows behind all three and checked the costing chain by hand against the
+live numbers. **The rule outlives the instance** — the next new embedded join
+starts in exactly the same position, and an empty table will look identical to a
+wrong foreign-key path from the calling code. What round 8 measured, against a real local build: the ~1.6 GB
 build peak and ~150 MB running server, the ~72 MB / ~24 MB-gzipped standalone
 tree against 629 MB of `node_modules`, and the constant-folding of
 `NEXT_PUBLIC_SITE_URL` into `.next/server/chunks/lib_stripe_ts_*.js` with its
@@ -1684,8 +2126,14 @@ the things being watched. What is genuinely left is smaller and named:
 
 Start at §0 and its open list, then §5 round 7 — the design rule it ends on is
 the one thing in this file that will stop the same defect being written a third
-time — then §5 rounds 11 and 12, whose three traps are the ones this project
-keeps walking into: a harness that passes for the wrong reason, static checks
-that pass on a build that cannot compile, and a screen that states as fact
-something that was only unmeasured. §6's admin section is where the actual work
-is.
+time — then §5 rounds 11, 12 and 14, whose four traps are the ones this project
+keeps walking into: a harness that passes for the wrong reason; static checks
+that pass on a build that cannot compile; an empty table, which is a question
+about the database and not about the query, and looks identical to a broken one;
+and a screen that states as fact something that was only unmeasured. §5 round 15
+adds the fifth, and it is the one the shop's customers would have felt: **a
+plausible zero is a false statement someone eventually decides on.** "0 reviews"
+under every product, a "Highest rated" sort over an all-zero column, a tracking
+number promised for a parcel knowingly posted untracked — each was true-shaped,
+each printed a fact the shop did not have, and six of them shipped. §6's admin
+section is where the actual work is.

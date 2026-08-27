@@ -19,18 +19,31 @@ across seven review rounds; hosting moved from Vercel to Fly.io (round 8);
 postage was built against the live Australia Post API (round 9) and **wired into
 checkout, the cart and `POST /api/shipping/quote`** (round 10); the staff area
 was built (round 11) and then driven against the live database, which found
-three defects and one hole (round 12); and round 13 — in the working tree as
-this was written — replaced the migration list in the SQL harness with a glob,
-added `0004_letter_eligible_default.sql`, took `verify.sql` to 52 assertions,
-removed `@stripe/stripe-js`, carried `next=` through sign-up, and added
-`/admin/inventory/measure`. `WORKLOG.md` is the source of truth for all of it —
-start at **§0**, which opens with the current open list.
+three defects and one hole (round 12); round 13 replaced the migration list in
+the SQL harness with a glob, added `0004_letter_eligible_default.sql`, took
+`verify.sql` to 52 assertions, removed `@stripe/stripe-js`, carried `next=`
+through sign-up, and added `/admin/inventory/measure`; round 14 recorded the
+first real sale in the studio — which finally exercised the three embedded joins
+with rows in them — cut the measure screen's markup, and gave seven admin pages
+their own `metadata.title`; and **round 15** was the security and truthfulness
+sweep: response headers and a CSP in `next.config.ts`, a throttle on
+`/order/confirmed`, **six untrue customer-facing statements removed**, and
+`0005_sale_integrity.sql` for the money-integrity defects; and **round 16**,
+which made a customer's contact-form message a **row before it is an email**
+(`0006_enquiries.sql` — `contact_enquiries` and `newsletter_signups`), taking
+`verify.sql` to **86** assertions. `WORKLOG.md` is the source of truth for all
+of it — start at **§0**, which opens with the current open list.
 
 **Settled, so do not re-raise:** the **Supabase JWT secret has been rotated**
 (owner-confirmed, 26 August 2026) and the round-10 key leak is closed; the deploy
 and the SQL steps (`0003_admin.sql`, `storage.sql`, the claim statement that
-makes the owner `owner` in `public.staff`) are done and `verify.sql` returned 50
-rows all `t` against the live project.
+makes the owner `owner` in `public.staff`) are done and `verify.sql` **has been
+run against production** — 50 rows all `t` on 26 August, which was the whole file
+at the time. The three embedded-resource joins in `app/admin/data.ts` were
+verified with real rows in round 14, and the costing chain was checked by hand
+against live numbers, so "those queries have only ever returned `[]`" is no
+longer true. The CSP's `script-src 'unsafe-inline'` and HSTS's missing `preload`
+are recorded decisions, not oversights — see `next.config.ts` and `CLAUDE.md`.
 
 ## How I want you to work
 
@@ -134,6 +147,11 @@ not pushed** — `1a4e0d0` *Stop the studio printing numbers it has not measured
 studio's page title once*. **Only the owner can push**: the device shell has no
 network and cannot reach the Windows credential store.
 
+**That list is a snapshot from round 12 and rounds 13, 14 and 15 have landed
+since**, so treat it as history rather than as the current tip. Run `git log
+origin/master..master --oneline` yourself; this paragraph is the first thing in
+the file to go stale, and it has.
+
 Two habits this project earned the hard way:
 
 - **Don't trust a commit message as a complete description of its contents.**
@@ -170,13 +188,23 @@ Two habits this project earned the hard way:
   a request.
 - **The schema is applied on the live project and `verify.sql` returned 50 rows
   all `t`** on 26 August, after `0003_admin.sql`, `storage.sql` and the claim
-  statement. `0004_letter_eligible_default.sql` is the one migration not yet run
-  there, and it takes the file to 52.
+  statement. **Three migrations are not yet run there** —
+  `0004_letter_eligible_default.sql`, `0005_sale_integrity.sql` and
+  `0006_enquiries.sql` — and `verify.sql` is now **86 assertions**, counted off
+  the file this round (22 `insert into _checks` statements, 64 `union all`
+  branches, 86 rows in the final select, which agrees with the file's own
+  header). 24 → 29 → 50 → 52 → 65 → 86. **86/86 has never been observed from any
+  session**; every count after 50 is read, not run.
 - **The staff area is live and has been used.** All nine screens opened as the
   owner against real Supabase in round 12; everything renders, nothing 500s.
   What that did *not* prove is anything about the three embedded-resource
-  selects in `app/admin/data.ts`: every table behind them is empty, so they have
-  only ever returned `[]`. **A query that runs is not a query that is right.**
+  selects in `app/admin/data.ts`: every table behind them is empty, so they had
+  only ever returned `[]`. **A query that runs is not a query that is right** —
+  an empty table is a question about the database, not about the query, and the
+  two look identical from here. **Round 14 closed that**: a real sale was
+  recorded against a measured product, all three selects returned real rows, and
+  the costing chain was checked by hand against the live numbers. Keep the rule;
+  the instance is settled.
 
 ### Postage — built, verified against the live carrier API, and wired
 
@@ -237,63 +265,105 @@ the page out of the layout that would bounce an invited person.
 ### Still not built — do not read ticks as "done"
 
 1. **The rate limiter is still one process's memory.** Round 8 fixed *which IP
-   it reads*, not durability. It is the only thing in front of `/api/track`,
-   which returns a postal address for an order number plus the matching email —
-   and order numbers are a sequence plus four hex characters. Upstash/Redis; the
-   call sites do not change. It is also, with the `after()` email task, why
-   `fly.toml` cannot scale to zero.
+   it reads*, not durability; round 15 added the missing throttle on
+   `/order/confirmed` — coverage, not durability. It is still the only thing in
+   front of `/api/track`, which returns a postal address for an order number
+   plus the matching email — and order numbers are a sequence plus four hex
+   characters. Upstash/Redis; the call sites do not change. It is also, with the
+   `after()` email task, why `fly.toml` cannot scale to zero.
 2. **Real account deletion.** The claim was fixed, not the capability. Needs a
    server-side admin route, re-authentication, and an in-flight-order guard.
-3. **A newsletter subscriber list.** No table, no audience, no unsubscribe.
-4. **The `"unknown"` email sentinel escapes the webhook** into `/track`, the
+3. **A newsletter that sends anything.** `0006_enquiries.sql` added the
+   `newsletter_signups` table, so addresses are now kept — but there is no
+   audience, no welcome email and no unsubscribe link, and `unsubscribed_at`
+   is set by hand. Likewise `contact_enquiries` stores messages that **no
+   screen can read**: `/admin/enquiries` is owed, roughly a page, a detail
+   view and one server action.
+5. **The `"unknown"` email sentinel escapes the webhook** into `/track`, the
    account order pages and `lib/queries.ts`, which read the column as an address.
-5. **`components/contact/Reach.tsx`** — the "can the customer reach us" fallback
+6. **`components/contact/Reach.tsx`** — the "can the customer reach us" fallback
    chain is still written out six times in JSX. The predicates were deduplicated
    into `lib/contact.ts`; the markup was not.
-6. **The 43-scenario webhook harness is not in the repo.** It scored 7/26 against
+7. **The 43-scenario webhook harness is not in the repo.** It scored 7/26 against
    the old code, which is what made it meaningful. Rebuild it **before** the
    builder payload changes, not after.
-7. **The builder rework** — per-keycap and per-key-holder colours, no cord,
+8. **The builder rework** — per-keycap and per-key-holder colours, no cord,
    optional charm, numbers/star/heart/paw. Not started.
-8. **`app/admin/layout.tsx` hardcodes "Bam Studio"** where `app/layout.tsx` uses
+9. **`app/admin/layout.tsx` hardcodes "Bam Studio"** where `app/layout.tsx` uses
    `SHOP.name` from `lib/config.ts`. Same value today, two sources tomorrow.
+10. **The basket limits are in three places.** `components/cart/limits.ts` says
+   so itself: 20 per line and 40 lines are transcribed there from four literals
+   in two Zod schemas (`app/api/checkout/route.ts`,
+   `app/api/shipping/quote/route.ts`), and nothing makes the copies agree. They
+   belong in `lib/config.ts`, imported by all three. The round that found the
+   defect did not own `lib/config.ts`, which is why they are not there yet.
+11. **The CSP still carries `script-src 'unsafe-inline'`.** Documented and
+   deliberate — dropping it needs a nonce in `proxy.ts` and forces dynamic
+   rendering on every page. Read the comment in `next.config.ts` before
+   proposing it as a quick win; it is neither quick nor free, and getting it
+   wrong breaks checkout.
 
 ## What to do first
 
 Roughly this order of value:
 
-1. **Re-verify the round-13 tree, then report the real numbers.**
-   `npx tsc --noEmit`, `npm run lint`, **`npm run build`** — a dependency
-   (`@stripe/stripe-js`) was removed from `package.json` and only the build shows
-   nothing pulled it in transitively — then `./scripts/verify-sql.sh`, which
-   should now apply four migrations and print **52** assertions. Nothing in round
-   13 has been run. Say what you ran and what it printed, not that it "should"
-   pass.
-2. **Record one real sale in the studio, against a measured product.** Orders →
-   *Record a sale*, for a product with a print time and a filament colour on it,
-   then open that order, Inventory and Reports and check every number against
-   what was typed in; cancel it afterwards. This is the only thing that
-   exercises the three embedded-resource selects in `app/admin/data.ts` with rows
-   in them — they have parsed and returned `[]` every time, which proves syntax
-   and nothing else. **Until this is done, no number on Inventory or Reports is
-   trustworthy.** `/admin/inventory/measure` is the fastest way to give one
-   product the two inputs it needs.
-3. **The rate limiter** — the only remaining *security* item fully in your hands.
-4. **The `"unknown"` sentinel**, wherever it escapes the webhook.
-5. **`components/contact/Reach.tsx`** — mechanical, and it protects the thing
+1. **Re-verify the tree as it stands, then report the real numbers.**
+   `npx tsc --noEmit`, `npm run lint`, **`npm run build`**, then
+   `./scripts/verify-sql.sh`, which should apply **six** migrations and print
+   **86** assertions. Rounds 13 through 16 have each landed without a single
+   harness run from the session that wrote them, and 86/86 has never been
+   observed anywhere. A dependency (`@stripe/stripe-js`) was removed from
+   `package.json` in round 13 and only the build shows nothing pulled it in
+   transitively. `next.config.ts` gained a `headers()` function and a CSP in
+   round 15 — the build is also what proves that config still loads. **Say what
+   you ran and what it printed, not that it "should" pass.**
+2. **Exercise `0005_sale_integrity.sql`'s three new behaviours against real
+   rows**, the way round 14 finally exercised the embedded joins. Specifically:
+   sell more of a product than `stock_on_hand` holds and confirm
+   `decrement_stock` returns the shortfall and `products.oversold_units`
+   accumulates it; confirm a second delivery of the same Stripe event does not
+   send a second confirmation email (`orders.confirmation_email_sent_at`); and
+   confirm a payment landing on a cancelled order writes exactly one
+   `payment_incidents` row and appears on `/admin`. Each of these is currently
+   believed-correct-by-reading. `verify.sql` asserts them against synthetic rows
+   it rolls back, which is a different thing from the webhook doing it.
+3. **Exercise `0006_enquiries.sql` the same way.** Post a contact enquiry with
+   the mail provider deliberately unconfigured and confirm the row lands anyway
+   — that is the entire point of the migration, and it is the case that used to
+   lose the message. Then confirm a repeated newsletter sign-up is idempotent,
+   that a mixed-case address is stored lower-cased, and that an unsubscribe
+   survives a later sign-up.
+4. **Verify the CSP against a real browser, on a real page.** The policy was
+   derived from a grep of `.next/static/chunks` and is *enforced*, not
+   report-only, so a directive that is one origin too narrow is a broken page
+   rather than a console warning. Load the shop, the cart, a product with a
+   photograph (Supabase storage origin, `img-src`) and `/admin`, and read the
+   console. This has not been done.
+5. **Move the basket limits into `lib/config.ts`** and import them from
+   `components/cart/limits.ts` and both Zod route schemas. Three transcribed
+   copies of 20 and 40 is a defect waiting for someone to change one of them.
+6. **The rate limiter** — still the only remaining *security* item fully in your
+   hands, and still one process's memory.
+7. **The `"unknown"` sentinel**, wherever it escapes the webhook.
+8. **`components/contact/Reach.tsx`** — mechanical, and it protects the thing
    two whole review rounds were about.
-6. **Real account deletion**, then a subscriber list or the removal of the
-   newsletter form. Either is honest; a form that looks like a subscription and
-   isn't, is not.
-7. **Make `verify.sql`'s backfill assertions run the migration's own `UPDATE`**
+9. **Real account deletion.** Separately: `newsletter_signups` now records who
+   asked, which is not the same as a newsletter — there is still no mailout, no
+   welcome email and no unsubscribe link, and no copy on the site may claim
+   otherwise until there is. Building the list or removing the form are both
+   honest; a form that looks like a subscription and isn't, is not.
+10. **Make `verify.sql`'s backfill assertions run the migration's own `UPDATE`**
    rather than a hand-copied `WHERE` clause.
-8. **Rebuild the webhook harness** before anything touches the builder payload.
+11. **Rebuild the webhook harness** before anything touches the builder payload.
+   It scored 7/26 against the old code, which is what made it meaningful, and it
+   now has three new behaviours to cover.
 
 **Waiting on the owner, and blocking nothing you can do yourself:** `git push
-origin master` for the three round-12 commits; running
-`0004_letter_eligible_default.sql` on the live project (after which `verify.sql`
-is 52 rows); and the catalogue data — 44 products still at the seed's $9.00, none
-with a filament recipe.
+origin master` — check `git log origin/master..master` rather than trusting a
+count written here, which has gone stale before; running
+`0004_letter_eligible_default.sql`, then `0005_sale_integrity.sql`, then
+`0006_enquiries.sql` on the live project (after which `verify.sql` is 86 rows); and the catalogue data — 44
+products still at the seed's $9.00, none with a filament recipe.
 
 ## Verification protocol — non-negotiable
 
@@ -354,10 +424,12 @@ blockers were live. Green checks measure what is being watched.
    `applied N migration(s)`; a drop in that number between runs is the signature
    of a migration silently going missing.
 
-   **`verify.sql` is one table of 52 rows and every one must be `t`. Count the
-   rows as well as the ticks** — 24 → 29 → 50 → 52 as the schema grew, so a
+   **`verify.sql` is one table of 86 rows and every one must be `t`. Count the
+   rows as well as the ticks** — 24 → 29 → 50 → 52 → 65 → 86 as the schema grew, so a
    shorter table is an older copy of the file, which is a green result that never
-   looked at part of the schema.
+   looked at part of the schema. A table that is short and a run that *aborts*
+   are different failures: an unapplied migration does not shorten the table, it
+   raises at the first assertion naming an object that is not there.
 
    ⚠️ **Two properties of the harness are load-bearing.** It must keep granting
    Supabase's **default privileges** — hosted Supabase grants every new `public`
@@ -368,7 +440,7 @@ blockers were live. Green checks measure what is being watched.
    applied to a real Supabase project at all. **Prove an assertion bites before
    believing it.**
 
-   **The schema is the four files in `supabase/migrations/`, plus
+   **The schema is the six files in `supabase/migrations/`, plus
    `supabase/storage.sql` run by hand. There is no `supabase/schema.sql`** — the
    docs used to say there was, and it cost real time. `storage.sql` is
    deliberately outside the harness: vanilla PostgreSQL has no `storage` schema,
@@ -489,13 +561,20 @@ prints names only, which is the only listing that should ever appear in a report
 
 Chase these; do not attempt them.
 
-1. **`git push origin master`** — the three round-12 commits are made locally
-   and not pushed, and nothing in them is live until she pushes. The device shell
-   has no network and no access to the Windows credential store, so this cannot
-   be done for her.
-2. **Run `0004_letter_eligible_default.sql`** in the Supabase SQL editor, then
-   re-run `verify.sql`, which should print **52** rows all `t`. The other four
-   SQL steps are already done.
+1. **`git push origin master`** — commits are made locally and not pushed, and
+   nothing in them is live until she pushes. The device shell has no network and
+   no access to the Windows credential store, so this cannot be done for her.
+   **Read `git log origin/master..master --oneline` for the current list**; the
+   count written into these docs has gone stale more than once, and rounds 13,
+   14 and 15 have landed since it last said "three".
+2. **Run `0004_letter_eligible_default.sql`, then `0005_sale_integrity.sql`,
+   then `0006_enquiries.sql`**, in that order, in the Supabase SQL editor, then
+   re-run `verify.sql`, which should print **86** rows all `t`. The other SQL
+   steps are already done. `0005` is the money one: it makes a lost confirmation
+   email recoverable on a Stripe redelivery, makes an oversell visible instead of
+   silently clamped at zero, and gives her a list of payments that owe a refund
+   on `/admin`. `0006` is the one that stops a contact-form message being lost
+   when the mail provider is unset or fails.
 3. **Fill in the catalogue.** 44 products, all still at the seed price of $9.00,
    **0 of 44 with a filament recipe**, and print times effectively all missing —
    so every cost, margin and suggested price in the studio reads "Not measured".

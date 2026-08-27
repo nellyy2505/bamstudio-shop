@@ -32,10 +32,15 @@ There is a **staff area at `/admin`** (round 11), the shop is **deployed** at
 `bamstudio-shop.fly.dev`, and the schema is applied on the live Supabase
 project. See *The staff area* below before touching anything under `app/admin/`.
 
-`WORKLOG.md` is the source of truth for project state: what was built, thirteen
+`WORKLOG.md` is the source of truth for project state: what was built, sixteen
 rounds of findings, what is deliberately still open, and — in **§0** — the ten
 launch blockers with their current status plus **the open list as it stands
-today**. All ten have been addressed;
+today**. Round 14 cut `/admin/inventory/measure`'s markup and gave the admin
+pages their own titles; round 15 was a security and truthfulness sweep — the
+response headers in `next.config.ts`, a throttle on `/order/confirmed`, six
+untrue customer-facing statements removed, and `0005_sale_integrity.sql` for the
+money-integrity defects; and round 16 made a customer's contact message a **row**
+before it is an email (`0006_enquiries.sql`). All ten blockers have been addressed;
 two are closed **for the claims they made only**, and §0 also separates what was
 verified by *running* it from what was verified by reading. Start there, not
 here. `SETUP.md` is the owner's deployment runbook.
@@ -143,7 +148,9 @@ those grants customers pay and no order is ever recorded), and that
 > `verify.sql` asserted against it, and the run stopped rather than failing, so
 > 29 assertions silently stopped existing. Observed: **29/29** (round 10),
 > **50/50** (round 11, each assertion proved to fail when broken), and 50 rows
-> all `t` against the live project. **52/52 has not been observed yet.**
+> all `t` against the live project. **Neither 52/52 nor 86/86 has been observed
+> from any session that wrote these docs** — every count after 50 is read off
+> `verify.sql`, not off a run.
 >
 > ⚠️ **`supabase/storage.sql` is deliberately not applied by the harness**, and
 > is not a migration: `storage` is a platform schema that vanilla PostgreSQL does
@@ -167,13 +174,23 @@ those grants customers pay and no order is ever recorded), and that
 > stand-in has to reproduce the hosted platform's *shape*, not just its API.
 > `WORKLOG.md` §5 round 10.
 >
-> ⚠️ **`verify.sql` returns ONE table, and it is now 52 rows.** It was eight
+> ⚠️ **`verify.sql` returns ONE table, and it is now 86 rows.** It was eight
 > separate statements, and the Supabase SQL editor shows only the last — so the
 > owner saw two rows, both `true`, and could not check her own database with the
 > tool the runbook names. Count rows as well as ticks: the file has grown 24 →
-> 29 (shipping) → 50 (the staff area) → 52 (the `letter_eligible` default), so a
-> shorter table is an older copy of the file, which is a green result that never
-> looked at part of the schema.
+> 29 (shipping) → 50 (the staff area) → 52 (the `letter_eligible` default) →
+> 65 (`0005_sale_integrity.sql`: the confirmation-email stamp, the observable
+> stock clamp and the refund register) → **86** (`0006_enquiries.sql`: the
+> contact-enquiry and newsletter-sign-up tables), so a shorter table is an older
+> copy of the file, which is a green result that never looked at part of the
+> schema. Counted from the file rather than taken from its header: 22
+> `insert into _checks` statements, 64 `union all` branches between them, 86
+> rows in the final select — which agrees with what the file says of itself.
+>
+> ⚠️ **A missing migration does not shorten the table, it stops the run.** The
+> first assertion naming an object that does not exist raises instead of
+> returning `f`. So "the table came back short" means an old copy of the file;
+> "the run aborted" means an unapplied migration. They are different failures.
 
 One command, self-bootstrapping, exits non-zero if any assertion is not `t`. It
 drives a **locally installed PostgreSQL 16** (`apt install postgresql-16`):
@@ -183,9 +200,13 @@ empty, applies the Supabase stand-ins the migration needs (`anon` /
 the migration, the seed and `verify.sql`, and prints the assertion table. It
 refuses to run against anything that is not Postgres 16.
 
-> **The schema is the four files in `supabase/migrations/`** — `0001_init.sql`,
-> `0002_shipping.sql`, `0003_admin.sql`, `0004_letter_eligible_default.sql`, in
-> that order, plus `supabase/storage.sql` by hand. **There is no
+> **The schema is the six files in `supabase/migrations/`** — `0001_init.sql`,
+> `0002_shipping.sql`, `0003_admin.sql`, `0004_letter_eligible_default.sql`,
+> `0005_sale_integrity.sql`, `0006_enquiries.sql`, in that order, plus
+> `supabase/storage.sql` by hand.
+> That list is what is in the directory as this was written; the harness globs
+> rather than reading it, so trust `ls supabase/migrations/` over this sentence.
+> **There is no
 > `supabase/schema.sql`.** This file and `WORKLOG.md` both used to say to pipe
 > `schema.sql`; it does not exist and never did, and that cost someone real
 > time.
@@ -273,7 +294,23 @@ the full table.
   no orders reports that it has taken no orders; a piece nobody has measured says
   "not measured" rather than printing a price derived from a floor. This was an
   explicit instruction from the owner, and three round-12 defects were breaches
-  of it.
+  of it. **A plausible zero is a false statement someone eventually decides on**
+  — round 15 removed six of them, including a search suggestion that printed
+  "0 reviews" under every product and a "Highest rated" sort over a column where
+  every row is `0`, which is really an arbitrary order dressed as a ranking.
+- **Overselling is allowed, and must stay visible.** The shop prints to order.
+  Stock only moves in the webhook, *after* payment, so a stock check at checkout
+  guards a window it does not own — two shoppers can both pass it, and the loser
+  would be refused after being charged. `decrement_stock` therefore sells anyway
+  and returns the shortfall, which accumulates on `products.oversold_units` and
+  surfaces on `/admin` as a print-this-first signal. It is not an error state.
+- **Never promise a tracking number in general copy.** Whether a basket goes as
+  a tracked parcel or an untracked Large Letter is not known until
+  `quoteBasket()` answers, so the FAQ, `/track` and any page describing postage
+  in the abstract must use `transitRangeLabel()` — the carrier's transit range
+  with no tracking claim. `transitLabel(methodId, tracked)` takes `tracked` as a
+  **required** argument for this reason; pass the quote's own boolean, never a
+  literal.
 
 Because the shop makes claims to customers, **a change that makes an on-site
 statement untrue is as serious as a crash.** §0.1 of the log is exactly that:
@@ -351,6 +388,117 @@ editing the workbook, re-run the script *and* re-run `seed.sql`.
 payment badges, the GST and support-email flags. Change a number there and it
 propagates to every page, the basket and the Stripe session together. Never
 inline one of these values in a component.
+
+**The basket limits follow that rule too, and there is one copy of them.**
+`BASKET_LIMITS.maxLineQuantity` (20) and `.maxLines` (40) are in `lib/config.ts`
+(line 222). This used to be a known defect and is not any more: the numbers were
+four hand-written literals in the Zod schemas of `app/api/checkout/route.ts` and
+`app/api/shipping/quote/route.ts`, transcribed a third time into a stopgap
+`components/cart/limits.ts`, with nothing making the three agree. That file is
+deleted, and both route schemas and `components/cart/CartProvider.tsx` import
+the constant instead. Change the number in `lib/config.ts` and nowhere else. The
+cart enforces them at all because a breaching basket used to be refused by
+checkout with a blanket `{ error: "Invalid basket." }` and by the quote route
+with a 400 the cart could only render as "Calculated at checkout" — a customer
+with no total and no reason. Stopping the basket being built that way, and
+naming the limit at the point it is reached, is the honest version.
+
+**Money integrity lives in `0005_sale_integrity.sql` and the code around it.**
+Four things it is worth knowing before touching the webhook or Reports:
+
+- **`orders.confirmation_email_sent_at`.** The confirmation used to be sent with
+  no record that it had been, so a send lost to a stopped machine was lost for
+  good. The webhook now stamps it with a `.is("confirmation_email_sent_at",
+  null)` filter, which makes a Stripe redelivery either recover a lost email or
+  do nothing — never send twice. `getStudioAttention()` counts website orders
+  that are numbered, past `pending`, and still unstamped.
+- **`order_items.unit_cost_cents` is written for web sales too**, from
+  `unitCostsAtSale()` in `app/admin/data.ts`, called by both
+  `app/api/checkout/route.ts` and the webhook. It used to be written only by the
+  market-stall form in `recordSale`, so the shop's main channel contributed
+  revenue and no cost, and Reports could not measure online profit at all. It is
+  **stamped, not derived**: the column records what the piece cost *when it
+  sold*, and computing it at read time would rewrite every historical margin the
+  next time filament or an accessory changed price. It is **null** for a product
+  with no print time or no filament recipe, because a 13c "cost" is a 97% margin
+  on a piece nobody has timed, and Reports already knows how to say so.
+- **`public.payment_incidents`.** A payment that clears for an order somebody
+  already cancelled used to be a `console.error` saying "refund this one by
+  hand" and a 200 to Stripe: the customer charged, nothing sent, and the only
+  record a log line on a platform nobody reads. It is now a row — RLS on with no
+  policy plus an explicit revoke, `service_role` only, `stripe_session_id`
+  unique so an `on conflict do nothing` insert records one incident however many
+  times Stripe delivers. `resolveRefundIncident` in `app/admin/actions.ts`
+  (guarded on `orders`) marks it issued. **The refund itself stays manual and
+  should**: refunding is a decision with a customer at the other end of it.
+- **`recordSale` no longer leaves an order with no lines counted as revenue**,
+  and `removePhoto` can no longer be steered by a form field into deleting any
+  object in the `product-photos` bucket — the product's own stored photo list is
+  the authority, deliberately not a path-prefix check, because a rule derived
+  from a naming convention stops holding the day the convention changes.
+
+**A customer's message is a row before it is an email** (`0006_enquiries.sql`).
+`/api/contact` handed the enquiry to Resend and stored it nowhere — its own
+comment said "the email IS the delivery" — and answered `{ ok: true, delivered:
+false }` on a failed send. Honest to the customer, and a total loss to the shop:
+the words existed only in the HTTP request. Three ordinary configurations lost
+them outright (no `RESEND_API_KEY`/`EMAIL_FROM`; no `NEXT_PUBLIC_SUPPORT_EMAIL`;
+Resend answering 4xx/5xx or not inside the 8s timeout), and this shop states in
+several places, the legal pages included, that it sends no order emails — so the
+contact form is one of very few channels a customer has, and a message reporting
+faulty goods is exactly the one that must not vanish. **Write the row first; the
+email is a notification about a row that already exists.** Do not reorder them.
+
+`contact_enquiries` and `newsletter_signups` are deliberately two tables. An
+enquiry is a piece of *work*: repeatable — a follow-up is a second thing said —
+ends in a reply, and carries `handled_at`/`handled_by`. A sign-up is a
+*membership*: the lower-cased address is the primary key so asking twice is
+idempotent, and it ends in an unsubscribe that a later `on conflict do nothing`
+insert must not silently undo. Folded into one table, half the columns are null
+for half the rows, the unique-address rule is wrong for enquiries and required
+for sign-ups, and clearing out answered enquiries would delete the mailing list.
+
+**Neither table has an anon insert grant**, and that is the decision worth
+keeping. The obvious alternative — `grant insert to anon` plus an insert-only
+RLS policy, letting the browser write its own row — was rejected because the
+anon key ships in the browser bundle, which makes that grant a public PostgREST
+endpoint accepting arbitrary rows: it walks straight past the route's zod
+validation, its rate limiter and its topic enum, leaving the CHECK constraints
+as the entire defence. A write-only grant is not harmless either: `insert …
+returning` and constraint-violation messages both leak, and a duplicate-key
+error on `newsletter_signups` would turn one into an oracle for "is this address
+on the list". `/api/contact` already runs server-side, so the service-role
+client writes the row the same code just validated. `notified_at` null means no
+notification was sent, **not** that the enquiry was lost — the reader asks
+`isEmailConfigured()` at read time rather than the schema mirroring a deployment
+setting it cannot see. The length bounds on those columns are duplicated from
+the zod schema in `app/api/contact/route.ts` on purpose — the route validates,
+the table is the backstop — and **the two must move together**. And there is
+still **no newsletter, no welcome email and no unsubscribe link**, so no copy on
+the site may promise one.
+
+**Security response headers are set in `next.config.ts`, on `/:path*` with no
+exclusions** — HSTS, the CSP, `X-Frame-Options: DENY`, `nosniff` and
+`Referrer-Policy`. The hole they close is specific rather than hygiene:
+`@supabase/ssr`'s cookie defaults carry no `secure` flag, and `force_https` in
+`fly.toml` is a *redirect*, so the session cookie has already gone out in clear
+before the redirect comes back. Three things not to undo:
+
+- **`script-src 'unsafe-inline'` is a documented compromise, not an oversight.**
+  Next streams the RSC payload through inline `<script>self.__next_f.push(...)`
+  tags on every response; the only supported alternative is a per-request nonce
+  in `proxy.ts`, which forces dynamic rendering on every page — a real bill on
+  one always-on 512 MB machine. Removing the token without doing the nonce work
+  breaks every page, checkout included.
+- **HSTS omits `preload` on purpose.** Preloading is a one-way door for a
+  pre-revenue sole trader, and `bamstudioshop.com` is bought but still parked.
+  Add it once the custom domain is live and settled.
+- **`/api/webhooks/stripe` is deliberately not excluded here**, even though
+  `proxy.ts` excludes it. The proxy's exclusion is about the *request* bytes
+  Stripe signs over; this config only adds *response* headers, which Stripe's
+  HTTP client discards. Copying the exclusion would take its shape without its
+  reason. Likewise `app/order/confirmed/page.tsx` keeps its own stricter
+  `referrer: "no-referrer"` metadata — that URL carries the Stripe session id.
 
 **Pages that make email claims are rendered per request — but not because they
 say so.** No page carries `export const dynamic`; the only one in the app is
@@ -605,6 +753,20 @@ customer's postal address** — order numbers are a sequence plus four hex
 characters. It should move to Upstash/Redis before launch; the call sites don't
 change. The general rule survives the fix: never let this be the only thing
 protecting data, and never grant a data-returning Postgres function to `anon`.
+
+**`/order/confirmed` is throttled too, and where the check sits is the point.**
+It was the last route family with no limit at all, and it reads a Stripe session
+by id. The `rateLimit()` call is *inside* the `if (sessionId)` branch, so a
+visit carrying no `session_id` calls Stripe not at all and spends nobody's
+allowance; and the throttled path returns **before** the Stripe calls, because
+throttling that still spends the quota protects nothing. Two consequences to
+preserve if you touch that page: the early return means `<ClearCartOnMount />`
+never renders, so a throttled basket survives exactly as an unpaid one does; and
+the copy on that path claims **nothing** about the payment, because we did not
+ask Stripe and do not know. Telling someone who has just been charged that no
+money was taken is the one mistake that page exists to avoid. A page cannot set
+a 429 or `Retry-After` the way a route handler can, so the wait is stated in the
+copy instead.
 
 **`clientKey()` no longer reads the first `x-forwarded-for` value — do not put
 that back.** Vercel's proxy overwrote the header; **Fly's proxy appends to it**,

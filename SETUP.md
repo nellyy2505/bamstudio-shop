@@ -90,8 +90,9 @@ Go to **Project Settings → API Keys** (and **Data API** for the URL):
 > project, along with the one-line statement that makes you the owner of the
 > studio, and `verify.sql` came back with all 50 rows saying `t` on 26 August.
 >
-> ⚠️ **One file is still to run: step 6.** It is new, it is quick, and it fixes
-> a default that would otherwise quietly undercharge you on postage.
+> ⚠️ **Three files are still to run: steps 6, 7 and 8.** All three are new, all
+> are quick, and all are safe to re-run. Run them in number order — `0004`, then
+> `0005`, then `0006` — and then re-run the check at step 9.
 
 1. ~~In Supabase, open **SQL Editor → New query**, copy all of
    `supabase/migrations/0001_init.sql`, paste, **Run**.~~ Done.
@@ -117,12 +118,41 @@ Go to **Project Settings → API Keys** (and **Data API** for the URL):
    had measured. Every difference is money you pay, and a lost letter cannot be
    traced. This file makes a new row default to "parcel" instead, and clears the
    flag on any row that got it by accident. It is safe to re-run.
-7. **Then re-run the check.** New query, copy all of `supabase/verify.sql`,
-   paste, **Run**. **Every row must say `t`, and there should now be 52 of
+7. ⚠️ **To do, and only after step 6: new query. Copy all of
+   `supabase/migrations/0005_sale_integrity.sql`, paste, Run.** This is the
+   money one. Three things it adds:
+   - **A record of whether a confirmation email actually went out.** If the
+     machine restarts mid-send, the email is currently just lost. After this,
+     Stripe re-delivering the payment can send it, and the studio overview can
+     tell you which orders are still waiting.
+   - **A running count of anything you sell more of than you had ready.** The
+     shop prints to order, so selling past the shelf is allowed on purpose — it
+     is a "print this one first" note, not an error. Before this, the count
+     silently stopped at zero and you would never have known.
+   - **A list of payments that took money you cannot honour** — someone's card
+     clearing for an order you had already cancelled. Until now that was one
+     line in a log nobody reads. It now shows on your studio overview until you
+     mark it refunded. **You still issue the refund yourself, in Stripe** —
+     nothing here moves money.
+8. ⚠️ **To do, and after step 7: new query. Copy all of
+   `supabase/migrations/0006_enquiries.sql`, paste, Run.** This one is about the
+   contact form. At the moment, when somebody writes to you through the shop,
+   their message is emailed to you and **stored nowhere** — so if the mail fails
+   to send, or you have not set up email yet, or there is no support address on
+   file, the words they typed are simply gone. After this, the message is saved
+   first and the email becomes a nudge about something already saved. It also
+   starts keeping the addresses of people who ask to hear about new drops.
+   **Neither of those is a mailing list you can send to yet** — there is still
+   no newsletter and no unsubscribe link, and nothing on the shop promises one.
+9. **Then re-run the check.** New query, copy all of `supabase/verify.sql`,
+   paste, **Run**. **Every row must say `t`, and there should now be 86 of
    them** — count the rows as well as the ticks, because a shorter table means
    an older copy of the file, which is a pass that never looked at part of your
-   database. It checks the things that otherwise fail silently in production —
-   most importantly that the webhook is allowed to allocate order numbers and
+   database. (It was 50 when you last ran it in August, 52 after step 6, 65
+   after step 7, and 86 after step 8.) If instead of a short table you get a red **error** naming
+   something that does not exist, that is a different problem: a file above has
+   not been run. It checks the things that otherwise fail silently in production
+   — most importantly that the webhook is allowed to allocate order numbers and
    move stock. Without those grants, customers can pay and no order is ever
    recorded. It writes a few throwaway rows and rolls them back, so it is safe
    to re-run any time.
@@ -133,7 +163,7 @@ Hover a column name to see what it is for. **Those numbers are estimates** — s
 "What only you can supply" for the three weighings that would replace the
 guesswork.
 
-> The schema is the four files in `supabase/migrations/`, in number order, and
+> The schema is the six files in `supabase/migrations/`, in number order, and
 > `supabase/storage.sql` afterwards. All of them are safe to re-run: if you
 > applied an earlier version, run it again and it adds anything missing rather
 > than starting over, leaving your data alone. `0001` also revokes a grant that
@@ -609,9 +639,25 @@ over from the old one.
 
 ### 5e. Point the webhook at production
 
+> ⚠️ **Type the `fly.dev` address, not `bamstudioshop.com`.** This is the one
+> step in this runbook where using your own domain "a bit early" is worse than
+> not having one. `bamstudioshop.com` is registered but **parked** — it does not
+> answer for the shop, and until you have done Step 5f the shop's address is
+> baked into the built image as `https://bamstudio-shop.fly.dev`. Point the
+> webhook at the parked domain and Stripe will happily take the customer's
+> money, then deliver the confirmation to a host that is not your shop: the
+> payment succeeds, **no order is ever recorded**, no order number is allocated,
+> no stock moves and nobody is emailed. You would find out from the customer.
+>
+> **The domain moves in this order, and not another:** rebuild with the new
+> `NEXT_PUBLIC_SITE_URL` and attach the domain to Fly (Step 5f, jobs 1 and 2)
+> — *then* come back here and edit this endpoint's URL (Step 5f, job 3). Never
+> the other way round. The signing secret does not change when you edit the URL,
+> so there is nothing to re-set on Fly afterwards.
+
 1. Stripe → **Developers → Webhooks → Add endpoint**.
-2. Endpoint URL: `https://bamstudio-shop.fly.dev/api/webhooks/stripe`
-   (or your real domain once you have one).
+2. Endpoint URL: **`https://bamstudio-shop.fly.dev/api/webhooks/stripe`** —
+   exactly this, today. See the warning above before substituting anything else.
 3. **Events to send** — select exactly these four:
    - `checkout.session.completed`
    - `checkout.session.async_payment_succeeded`
@@ -641,8 +687,11 @@ over from the old one.
    to wait, and there is no way to hurry it. Australian registrars: VentraIP,
    Crazy Domains, Netregistry.
 
-**Moving the shop to that domain is five jobs, and the first one is the one
-people miss:**
+**Moving the shop to that domain is five jobs. Do them in this order — the
+order is the whole point, because jobs 1 and 2 are what make the domain answer
+for the shop at all, and job 3 is what tells Stripe where to send the money's
+paperwork. Job 3 before jobs 1 and 2 means Stripe posting confirmations at a
+parked domain: cards charged, nothing recorded.**
 
 1. **Change the `NEXT_PUBLIC_SITE_URL` GitHub Variable and redeploy.** This is a
    **rebuild**, not a setting you can flip. That value is baked into the code
@@ -659,7 +708,11 @@ people miss:**
    Add the records it names at your registrar. The certificate issues by itself
    once DNS resolves.
 3. **Update Stripe's webhook endpoint** to the new URL (Developers → Webhooks →
-   your endpoint → edit). The signing secret does not change.
+   your endpoint → edit). The signing secret does not change, so nothing has to
+   be re-set on Fly. **Only once jobs 1 and 2 are done and the new address
+   actually serves the shop** — check it first with
+   `curl https://shop.yourdomain.com/api/health`, which must return
+   `{"ok":true}`. Until it does, leave the endpoint on `bamstudio-shop.fly.dev`.
 4. **Update Supabase**: Authentication → URL Configuration → **Site URL**, and
    add the new `/auth/callback` to the **Redirect URLs** allow-list. Also add
    the new origin to Google Cloud → Credentials → your OAuth client →
@@ -727,9 +780,24 @@ Three things worth knowing before you use it:
   Orders. That is what moves a customer's `/track` page from *printing* to
   *packed* to *shipped* — it is no longer a hand edit in the Supabase tables.
 
-The one thing the studio cannot do yet: **refund a cancelled order that was paid
-anyway.** If that ever happens it is logged, and the refund is done by hand in
-Stripe.
+- **The Overview now tells you when money is owed back.** Once
+  `0005_sale_integrity.sql` has been run (Step 1c, step 7), a payment that
+  cleared for an order you had already cancelled appears there as a refund owed,
+  with the amount, and stays until you mark it done. It used to be one line in a
+  server log. The same panel shows any order still waiting on its confirmation
+  email, and anything you have sold more of than you had ready to ship.
+
+Two things the studio still cannot do:
+
+- **It cannot issue a refund.** It tells you one is owed and records that you
+  have dealt with it; **the refund itself is done by hand in Stripe**, and that
+  is on purpose — refunding is a conversation with a customer, not something
+  software should decide alone.
+- **It cannot un-sell an oversell.** Selling more than you had ready is allowed
+  here, because you print to order and the payment has already gone through by
+  the time stock moves. The count on the Overview is a "print this one first"
+  note. Nothing clears it automatically — you clear it once the backlog is
+  printed.
 
 ---
 
@@ -739,9 +807,12 @@ Do these in order on launch day:
 
 0. ~~Rotate the Supabase JWT secret.~~ ✅ **Done, 26 August.** Nothing further is
    needed there.
-0b. **Run `0004_letter_eligible_default.sql`, then re-run `verify.sql`** and
-   check it prints **52** rows, every one `t` (Step 1c step 6). The other SQL
-   files are already applied.
+0b. **Run `0004_letter_eligible_default.sql` and then
+   `0005_sale_integrity.sql`, in that order, then re-run `verify.sql`** and
+   check it prints **86** rows, every one `t` (Step 1c, steps 6–8). `0005` is
+   the one that makes a lost confirmation email recoverable, makes an oversell
+   visible instead of silently clamped, and gives you a list of payments that
+   owe a refund. The other SQL files are already applied.
 0c. **Push the three commits sitting on your computer** (Step 5a) — the deploy
    only runs on a push, so until then the live shop is missing three fixes.
 1. **Fill in "My price"** in the workbook for every product, then run
@@ -824,12 +895,16 @@ Do these in order on launch day:
 > restart will not pick it up; and
 > `fly secrets set SUPABASE_SERVICE_ROLE_KEY='...' -a bamstudio-shop`.
 
-### Do this first — the three commits, and one SQL file
+### Do this first — the commits, and two SQL files
 
-> 1. **`git push origin master`** (Step 5a). Three fixes made on 26 August are
->    sitting on your computer only, and the live shop does not have them.
-> 2. **Run `supabase/migrations/0004_letter_eligible_default.sql`** and re-run
->    `verify.sql`, expecting 52 rows all `t` (Step 1c).
+> 1. **`git push origin master`** (Step 5a). Fixes made on 26 August and since
+>    are sitting on your computer only, and the live shop does not have them.
+>    **Check what is actually unpushed before you trust that number** —
+>    `git status` and `git log origin/master..master --oneline` are the only
+>    honest answer, and this line has gone stale before.
+> 2. **Run `supabase/migrations/0004_letter_eligible_default.sql`, then
+>    `supabase/migrations/0005_sale_integrity.sql`**, and re-run `verify.sql`,
+>    expecting **86** rows all `t` (Step 1c).
 > 3. **Fill in the studio.** Your 44 products are all still priced at the seed's
 >    $9.00, none of them has a filament recipe, and almost none has a print time
 >    — so every cost, margin and suggested price in the studio says "Not
