@@ -424,6 +424,6 @@ fi
 
 echo "OK — all $TOTAL assertions passed."
 echo
-echo "A note on the count: verify.sql should return 86 rows as of 0006. A"
+echo "A note on the count: verify.sql should return 126 rows as of 0007. A"
 echo "SHORTER table is not a better result — it means an older copy of"
 echo "verify.sql that never looked at part of the schema."

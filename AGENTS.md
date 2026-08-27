@@ -13,7 +13,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Repo rules that outrank a habit
 
-`CLAUDE.md` is the full brief and imports this file. These eight are here because
+`CLAUDE.md` is the full brief and imports this file. These nine are here because
 they are the ones an agent gets wrong from memory rather than from reading:
 
 - **`requireStaff(capability)` is the first statement of every page, route
@@ -35,17 +35,23 @@ they are the ones an agent gets wrong from memory rather than from reading:
   `next build` sees the server-action boundary and proves a route group resolves
   to the URL you expect.
 - **`./scripts/verify-sql.sh` applies every file in `supabase/migrations/`**, not
-  a list, and `supabase/verify.sql` is one table of **86** rows that must all
+  a list, and `supabase/verify.sql` is one table of **126** rows that must all
   print `t`. Count the rows as well as the ticks — 24 → 29 → 50 → 52 → 65
-  (`0005_sale_integrity.sql`) → **86** (`0006_enquiries.sql`) — so a shorter
+  (`0005_sale_integrity.sql`) → 86 (`0006_enquiries.sql`) → **126**
+  (`0007_lucky_scoop.sql`) — so a shorter
   table is an older copy of the file, and an older copy is a green result that
   never looked at part of the schema. **A missing migration does not shorten the
   table, it aborts the run**: the first assertion naming an object that is not
-  there raises. There are **six** migrations as this was written:
+  there raises. There are **seven** migrations as this was written:
   `0001_init.sql`, `0002_shipping.sql`, `0003_admin.sql`,
   `0004_letter_eligible_default.sql`, `0005_sale_integrity.sql`,
-  `0006_enquiries.sql` — but this file has fallen behind the directory before,
-  so trust `ls supabase/migrations/` over this list.
+  `0006_enquiries.sql`, `0007_lucky_scoop.sql` — but this file has fallen behind
+  the directory before, so trust `ls supabase/migrations/` over this list.
+  **126/126 has been observed** against a real local PostgreSQL 16, and so have
+  `node scripts/check-costing.mjs`, `node scripts/check-scoop.mjs` (34
+  assertions) and `node scripts/check-webhook.mjs` (91 assertions across 12
+  scenarios). The line these docs used to carry — "the count has never been
+  observed above 50" — is no longer true; do not reinstate it.
 - **`decrement_stock(uuid, integer)` returns the SHORTFALL, not void.** Since
   `0005_sale_integrity.sql` it takes `for update` on the product row, then
   returns how many units were sold that the ready-to-ship buffer did not have —
@@ -67,6 +73,46 @@ they are the ones an agent gets wrong from memory rather than from reading:
   `app/admin/data.ts`. It is a record of what the piece cost *when it sold*;
   never derive it at read time, and leave it **null** for a product nobody has
   measured rather than writing a packaging-only figure.
+- **A Lucky Scoop is SOLD BEFORE ITS CONTENTS ARE DECIDED, and that inverts
+  three rules you would otherwise apply from memory** (`0007_lucky_scoop.sql`,
+  `lib/scoop.ts`, `lib/scoop-line.ts`).
+  - **No stock comes off at the sale, and `unit_cost_cents` is NULL on a scoop
+    line.** At the moment money changes hands nobody knows which products go in
+    it, so there is nothing to decrement and no recipe to cost from. Stock moves
+    later, in the studio's pack panel, one `decrement_stock` per piece, guarded
+    by `scoop_packs.stock_applied` — the compare-and-set shape
+    `orders.stock_applied` uses. **The missing decrement in the webhook is the
+    design, not a bug**; scoop lines are structurally excluded from stock
+    claiming there. Do not "fix" it, and do not write a zero into the cost.
+  - **The overselling rule above does NOT apply to scoops, and both rules are
+    true at once.** Overselling is right for printed items because a shortfall
+    can be reprinted. A scoop's promise is "these exist now", so a tier simply
+    **stops being offered** when its pool cannot fill it — a listing decision
+    asked at read time in `lib/scoop.ts` (`tierAvailability`, `scoopsAvailable`),
+    never a refused decrement. Nothing in the scoop path rejects a sale after
+    payment.
+  - **`lib/scoop.ts` contains no randomiser and must not.** A person picks the
+    pieces out of a bowl, on camera. There is no draw in the schema either. Do
+    not add one until the owner asks.
+  - **Four new tables and one column**: `scoop_tiers` (the tier is the product —
+    deliberately *not* a `products` row, because a tier's price starts null, its
+    stock is a property of other rows, its cost is unknowable until packed and
+    its weight is a chosen worst case), `scoop_tier_products` (the eligible pool
+    as **explicit rows, never a category filter** — a filter silently admits a
+    pet bowl the day somebody renames a category, and the visible pool is what
+    makes "five pieces drawn from these twelve" a true description),
+    `scoop_packs`, `scoop_pack_items`, and `order_items.scoop_tier_id`
+    (mutually exclusive with `product_id` by CHECK).
+  - **The basket line is a discriminated union** — `ProductBasketLine |
+    ScoopBasketLine` in `components/cart/CartProvider.tsx`, each carrying the
+    other's discriminant as `never`, narrowed only by `isScoopLine` /
+    `isProductLine`. **Widening it into one type with an optional
+    `scoop_tier_id` is not an acceptable simplification**: a widened type still
+    carries `product_id: string`, so a scoop line must put *something* there,
+    and every candidate is either a real id that checkout would price and
+    decrement or an empty string that reads as a product to every
+    `if (line.product_id)` in the codebase. The union is what puts the schema's
+    CHECK in front of the compiler.
 - **`/contact` and `/newsletter` write a row BEFORE they attempt an email**
   (`0006_enquiries.sql`). `/api/contact` used to hand the message to Resend and
   store it nowhere — on a failed send the customer's words existed only in the

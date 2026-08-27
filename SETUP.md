@@ -110,8 +110,11 @@ Go to **Project Settings → API Keys** (and **Data API** for the URL):
    else. It is **not** part of the automatic system below; it is a one-off and
    it has been done.)
 
-`0004`, `0005` and `0006` are written and **have not been run**. They are what
-the automatic system will apply the first time you use it.
+`0004`, `0005`, `0006` and `0007` are written and **have not been run**. They
+are what the automatic system will apply the first time you use it. `0007` is
+**Lucky Scoop** — the scoop tiers, the pool of designs each one draws from, and
+the record of what actually went into each scoop. There is a plain-language
+section on running it further down, under **The studio — `/admin`**.
 
 ---
 
@@ -195,9 +198,17 @@ Then run it again, this time:
 | **I have taken a backup** | ✅ tick — you did, at step 7 |
 | **numbers already run by hand** | `0001 0002 0003 0004` |
 
-That tells your database "you have already had those four, do not run them
-again", then runs `0005` and `0006`, then checks all 86 assertions and goes red
-if any of them fails. **Green means done.**
+That tells your database "you have already had those three, do not run them
+again", then runs `0004`, `0005`, `0006` and `0007`, then checks all 126
+assertions and goes red if any of them fails. **Green means done.**
+
+> **Four numbers, and why exactly these four.** `0001` to `0004` are the ones
+> you pasted into the SQL editor by hand — they are the struck-through list at
+> the top of this step. Naming a migration here tells your database it already
+> has that change, so it is never applied again. Name one that never actually
+> ran and its change is lost for good; leave out one that did run and it is
+> applied a second time. `0005`, `0006` and `0007` are **not** in the list,
+> because they have never been run — they are what this first run applies.
 
 **`0001 0002 0003 0004` goes in that box exactly once, ever.** After this first
 run your database keeps its own list of what it has had. From then on you leave
@@ -207,8 +218,8 @@ all three boxes empty.
 
 Every push to `master` runs the migrations first and only deploys the code if
 they worked. Adding a new migration is: put a new file in
-`supabase/migrations/`, named `0007_something.sql` (**digits, then an
-underscore** — a name like `0007b_fix.sql` is silently ignored by the tool, so
+`supabase/migrations/`, named `0008_something.sql` (**digits, then an
+underscore** — a name like `0008b_fix.sql` is silently ignored by the tool, so
 `scripts/migrate.sh` checks the names and refuses to run rather than let that
 happen), push it, and that is the whole procedure.
 
@@ -222,11 +233,11 @@ to fix the database without deploying code.
 | Paste each migration into the SQL editor, in the right order | Push. `scripts/migrate.sh` applies whatever is missing, oldest first |
 | Remember which ones you had already run | The database keeps the list, in `supabase_migrations.schema_migrations` |
 | Remember to re-run `verify.sql` afterwards | It runs automatically, every time, and a red assertion stops the deploy |
-| Squint at 86 rows looking for an `f` | It names the failing ones and fails the run |
+| Squint at 126 rows looking for an `f` | It names the failing ones and fails the run |
 
 `supabase/verify.sql` is still exactly what it was and you can still paste it
 into the SQL editor whenever you want reassurance. **Every row must say `t`, and
-there should be 86 of them** — count the rows as well as the ticks, because a
+there should be 126 of them** — count the rows as well as the ticks, because a
 shorter table means an older copy of the file, which is a pass that never looked
 at part of your database. It writes a few throwaway rows and rolls them back, so
 it is safe to run against the live shop any time.
@@ -253,7 +264,7 @@ Hover a column name to see what it is for. **Those numbers are estimates** — s
 guesswork.
 
 > **Never edit a migration file that has already run.** If `0005` is wrong, the
-> fix is a new `0007`, not a change to `0005`. Once a file has been applied, the
+> fix is a new `0008`, not a change to `0005`. Once a file has been applied, the
 > repo and the live database agree about it; editing it makes them disagree with
 > no way to tell which is right, and that is a worse problem than the one being
 > fixed. Every file in `supabase/migrations/` says this at the top, in its own
@@ -867,10 +878,10 @@ statement run in the SQL editor put your account in the `staff` table, which is
 the only way the first person ever gets in. There is no "sign up as staff" page,
 by design.
 
-Nine screens: **Overview**, **Orders** (including *Record a sale* for a market or
-TikTok order you took in person), **Products**, **Inventory** (the print queue,
-the filament buy list, and *Measure the catalogue*), **Reports**, **Colours**,
-**Settings** and **Studio access**.
+Ten screens: **Overview**, **Orders** (including *Record a sale* for a market or
+TikTok order you took in person), **Products**, **Lucky Scoop**, **Inventory**
+(the print queue, the filament buy list, and *Measure the catalogue*),
+**Reports**, **Colours**, **Settings** and **Studio access**.
 
 Three things worth knowing before you use it:
 
@@ -895,6 +906,118 @@ Three things worth knowing before you use it:
   server log. The same panel shows any order still waiting on its confirmation
   email, and anything you have sold more of than you had ready to ship.
 
+### Lucky Scoop — how it works, start to finish
+
+**Nothing here works until `0007` has been applied** (Step 1c, steps 6–8). Until
+then the Lucky Scoop screen has no tables to read, and the shop shows no scoops.
+
+**A scoop is the one thing you sell before you know what is in it.** Everything
+else in the shop is printed after it is ordered, so its cost is known before the
+sale. A scoop is the other way round: somebody buys "Pet scoop, five pieces",
+and only later — when you draw the pieces out of the bowl and pack them — does
+anyone know what went in. Everything below follows from that, and it is why the
+scoop screens behave differently from the rest of the studio.
+
+**1. Make a tier.** **Studio → Lucky Scoop → New tier.** A *tier* is the thing a
+customer actually buys — not "a scoop" but "Pet scoop, five pieces, $X". You
+give it:
+
+- a **name** and a **web address** (the customer sees `…/scoop/pet-scoop`);
+- a **theme** — pet, household, clickers & keyrings, or a mixed bowl. **The
+  customer chooses the theme; the draw only decides which pieces come out of
+  it.** That is deliberate: at the stall the colour board decides which category
+  you get, but online, selling somebody pet things when they wanted clickers is
+  not something "it's lucky" excuses. Keep the board in the video, where it is
+  theatre and not a term of sale;
+- **pieces in a scoop** — five is where you started;
+- a **price**, a **packed weight** and a **packed thickness**.
+
+**2. Fill its pool.** On the tier's page, tick the designs this scoop may draw
+from. This is a list of actual products, not a category — on purpose. If it were
+a category, then the day something large got filed under it, that thing would
+quietly start turning up in scoops, and nobody would be told. The pool is also
+what the customer sees: the tier's page lists every design in it, and that list
+is the description of what they are buying. **The pool must hold at least as
+many designs as the scoop promises pieces** — five pieces needs five designs at
+minimum.
+
+**3. Why it will not switch on.** A tier cannot be made active without **a
+price** and **a packed weight**, and the database itself refuses it. That is not
+an obstacle to work around:
+
+- **No price** means nobody has priced it. The box is left blank rather than set
+  to zero, because a zero would show a customer a free scoop. If you are not
+  sure what to charge, the tier page shows a suggestion once every design in the
+  pool has a measured cost — and says how many are still unmeasured until then.
+  It will not guess from a half-measured pool.
+- **No packed weight** means nobody has put a test pack on the scales. Postage
+  is priced on weight, and a scoop has no product behind it to take a weight
+  from, so the tier carries its own. **Give the heaviest pack you would
+  plausibly send, not the average** — you wear the difference on any pack that
+  comes out heavier, and that is the direction to be wrong in. This is also why
+  scoops are for small things only: a bowl that could produce either a charm or
+  a pet bowl has no honest weight. **A scoop always goes as a tracked parcel,
+  never as a Large Letter** — a Large Letter is untracked and uninsured, and if a
+  scoop goes missing there is no reprint, because the pieces that were in it were
+  drawn from the bowl and are gone.
+- **Too small a pool** means the pool holds fewer designs than the scoop
+  promises pieces.
+
+The screen tells you which of the three is stopping you.
+
+**4. A tier goes quiet when the bowl runs low, and that is correct.** A tier is
+only offered while its pool can actually fill a scoop — at least as many
+different designs in stock as the scoop promises pieces. When it cannot, the
+tier stops being listed on the shop and the studio shows you why. **This is the
+opposite of how the rest of the shop behaves**, and deliberately: everything
+else keeps selling when the shelf is empty, because you can print another one. A
+scoop promises pieces that exist *now*, and you cannot print a surprise on
+Tuesday to fill Monday's order without deciding for the customer what they got.
+Print more of the designs in the pool and the tier comes back on its own.
+
+**5. Record what went in — and note that stock has not moved yet.** When a scoop
+order comes in, the order's page in **Orders** has a **Lucky Scoop** panel with
+one entry per scoop bought (two scoops on one line are two draws, two videos and
+two bags). Draw the pieces, then record them: tick what went in and how many of
+each, and add the video link and a note if you have them.
+
+**Recording the pack is the moment everything happens.** It is when the pieces
+come off your stock counts and when the scoop's cost is worked out from what
+actually went in. Nothing came off the shelf at the sale, because at the sale
+nobody knew what would be in it. Saving the panel twice cannot take the same
+pieces off twice.
+
+**6. You cannot mark the order posted until every scoop on it is recorded.** The
+studio will refuse and name the scoop. This is a guard rather than red tape:
+once the bag is sealed and in the post, nobody can go back and look, and an
+order posted without its pack recorded leaves your stock counts wrong for ever
+and its cost unknowable.
+
+**What the pack panel is relaxed about, on purpose:** if a charm broke or the
+last one had already gone and you put in something that was not on the list,
+record what you **actually** posted. What was sent is a fact; the pool is a
+policy. And the video link is optional — it is not required before you can post
+the order, because whether every scoop is filmed is your decision, not the
+software's.
+
+**Three things only you can decide, and the shop deliberately says nothing about
+any of them until you do:**
+
+1. **May a scoop contain two of the same charm?** Nothing on the site says
+   either way, and nothing in the studio stops you.
+2. **How is the video promised?** Is "we film every scoop" a promise you are
+   making, or just a thing you usually do? The site does not currently claim it,
+   and the video field is optional so the software does not decide this for you.
+3. **Is a change of mind on a scoop accepted?** The refunds page has **two
+   paragraphs already drafted** for you, one accepting and one declining, sitting
+   as a note in `app/legal/refunds/page.tsx`. Pick one and someone can drop it
+   in. If you decline, it has to be said **before** people buy, so it also
+   belongs on the tier's page. Until you pick, the page says nothing in either
+   direction, which favours the customer — the safe way round.
+
+None of these affects a customer's rights if a scoop turns up faulty, short, or
+with a piece that was not on the bowl's list. Those are already covered.
+
 Two things the studio still cannot do:
 
 - **It cannot issue a refund.** It tells you one is owed and records that you
@@ -918,12 +1041,14 @@ Do these in order on launch day:
 0b. **Do the one-time database setup in Step 1c, steps 6–8** — add the
    `SUPABASE_DB_URL` secret, take a backup, then run **Actions → Run
    migrations** once with `0001 0002 0003 0004` in the "already run by hand"
-   box. That applies `0004`, `0005` and `0006` and checks all **86** assertions
-   for you. You never paste SQL into the Supabase editor again after this.
-   `0005` is the one that makes a lost confirmation email recoverable, makes an
-   oversell visible instead of silently clamped, and gives you a list of
-   payments that owe a refund; `0006` stops a customer's contact-form message
-   from existing only inside an email that might not send.
+   box. That applies `0004`, `0005`, `0006` and `0007` and checks all **126**
+   assertions for you. You never paste SQL into the Supabase editor again after
+   this. `0005` is the one that makes a lost confirmation email recoverable,
+   makes an oversell visible instead of silently clamped, and gives you a list
+   of payments that owe a refund; `0006` stops a customer's contact-form message
+   from existing only inside an email that might not send; `0007` is Lucky
+   Scoop, and until it is applied the Lucky Scoop screens have no tables to read
+   and the shop shows no scoops at all.
 0c. **Push the three commits sitting on your computer** (Step 5a) — the deploy
    only runs on a push, so until then the live shop is missing three fixes.
 1. **Fill in "My price"** in the workbook for every product, then run
@@ -1006,7 +1131,7 @@ Do these in order on launch day:
 > restart will not pick it up; and
 > `fly secrets set SUPABASE_SERVICE_ROLE_KEY='...' -a bamstudio-shop`.
 
-### Do this first — the commits, and two SQL files
+### Do this first — the commits, and the one-time database setup
 
 > 1. **`git push origin master`** (Step 5a). Fixes made on 26 August and since
 >    are sitting on your computer only, and the live shop does not have them.
@@ -1016,7 +1141,7 @@ Do these in order on launch day:
 > 2. **Do the one-time database setup** — Step 1c, steps 6–8. Add the
 >    `SUPABASE_DB_URL` secret, take a backup, and run **Actions → Run
 >    migrations** once with `0001 0002 0003 0004` in the "already run by hand"
->    box. That applies `0004`, `0005` and `0006` and checks all **86**
+>    box. That applies `0004`, `0005`, `0006` and `0007` and checks all **126**
 >    assertions. After this, migrations run themselves on every deploy and the
 >    deploy stops if the database is not what the code expects.
 > 3. **Fill in the studio.** Your 44 products are all still priced at the seed's

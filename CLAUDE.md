@@ -39,8 +39,12 @@ today**. Round 14 cut `/admin/inventory/measure`'s markup and gave the admin
 pages their own titles; round 15 was a security and truthfulness sweep — the
 response headers in `next.config.ts`, a throttle on `/order/confirmed`, six
 untrue customer-facing statements removed, and `0005_sale_integrity.sql` for the
-money-integrity defects; and round 16 made a customer's contact message a **row**
-before it is an email (`0006_enquiries.sql`). All ten blockers have been addressed;
+money-integrity defects; round 16 made a customer's contact message a **row**
+before it is an email (`0006_enquiries.sql`); and **round 17 built Lucky Scoop**
+(`0007_lucky_scoop.sql`) — the one product this shop sells before it knows what
+is in it, which inverts the stock and costing rules everywhere it appears — and
+rebuilt the webhook harness these docs had listed as lost since round 7.
+All ten blockers have been addressed;
 two are closed **for the claims they made only**, and §0 also separates what was
 verified by *running* it from what was verified by reading. Start there, not
 here. `SETUP.md` is the owner's deployment runbook.
@@ -55,7 +59,16 @@ npx tsc --noEmit   # typecheck
 node scripts/generate-seed.mjs [workbook.xlsx]   # regenerate the catalogue
 node scripts/check-costing.mjs                   # lib/costing.ts vs the workbook's
                                                  # own cached values
+node scripts/check-scoop.mjs                     # lib/scoop.ts — the Lucky Scoop
+                                                 # rules. 34 assertions
+node scripts/check-webhook.mjs                   # the Stripe webhook and the scoop
+                                                 # half of checkout, against the REAL
+                                                 # route modules. 91 assertions across
+                                                 # 12 scenarios
 ./scripts/verify-sql.sh                          # every migration + seed + verify.sql
+./scripts/migrate.sh                             # what the deploy itself runs: applies
+                                                 # the missing migrations to a real
+                                                 # database, then verify.sql
 ```
 
 **`npm run build` is on the check list, not a formality.** `npx tsc --noEmit`
@@ -147,10 +160,13 @@ those grants customers pay and no order is ever recorded), and that
 > behind twice — `0002_shipping.sql` sat unapplied for two rounds while
 > `verify.sql` asserted against it, and the run stopped rather than failing, so
 > 29 assertions silently stopped existing. Observed: **29/29** (round 10),
-> **50/50** (round 11, each assertion proved to fail when broken), and 50 rows
-> all `t` against the live project. **Neither 52/52 nor 86/86 has been observed
-> from any session that wrote these docs** — every count after 50 is read off
-> `verify.sql`, not off a run.
+> **50/50** (round 11, each assertion proved to fail when broken), 50 rows all
+> `t` against the live project, and **126/126** in round 17 against a real local
+> PostgreSQL 16 from an empty database. **These docs used to say the count had
+> never been observed above 50. That is no longer true — do not reinstate it**,
+> and do not distrust 126 on the strength of a sentence that has since been
+> corrected. 52/52, 65/65 and 86/86 were each superseded before anyone ran
+> them; 126 is the first count after 50 that has actually printed.
 >
 > ⚠️ **`supabase/storage.sql` is deliberately not applied by the harness**, and
 > is not a migration: `storage` is a platform schema that vanilla PostgreSQL does
@@ -174,18 +190,24 @@ those grants customers pay and no order is ever recorded), and that
 > stand-in has to reproduce the hosted platform's *shape*, not just its API.
 > `WORKLOG.md` §5 round 10.
 >
-> ⚠️ **`verify.sql` returns ONE table, and it is now 86 rows.** It was eight
+> ⚠️ **`verify.sql` returns ONE table, and it is now 126 rows.** It was eight
 > separate statements, and the Supabase SQL editor shows only the last — so the
 > owner saw two rows, both `true`, and could not check her own database with the
 > tool the runbook names. Count rows as well as ticks: the file has grown 24 →
 > 29 (shipping) → 50 (the staff area) → 52 (the `letter_eligible` default) →
 > 65 (`0005_sale_integrity.sql`: the confirmation-email stamp, the observable
-> stock clamp and the refund register) → **86** (`0006_enquiries.sql`: the
-> contact-enquiry and newsletter-sign-up tables), so a shorter table is an older
-> copy of the file, which is a green result that never looked at part of the
-> schema. Counted from the file rather than taken from its header: 22
-> `insert into _checks` statements, 64 `union all` branches between them, 86
-> rows in the final select — which agrees with what the file says of itself.
+> stock clamp and the refund register) → 86 (`0006_enquiries.sql`: the
+> contact-enquiry and newsletter-sign-up tables) → **126**
+> (`0007_lucky_scoop.sql`: the tiers, their pools, and what went into a packed
+> scoop), so a shorter table is an older copy of the file, which is a green
+> result that never looked at part of the schema. **126 was observed, not read**:
+> the run printed 126 rows all `t`.
+>
+> One thing the scoop block does that nothing else in the file does: it briefly
+> `set role`s to `anon` to count what the shopfront can actually see. RLS is
+> invisible from the `postgres` role, which bypasses it, so a policy asserted any
+> other way is asserted by reading its source rather than by running it. The role
+> is reset immediately and the whole thing is inside the same rollback.
 >
 > ⚠️ **A missing migration does not shorten the table, it stops the run.** The
 > first assertion naming an object that does not exist raises instead of
@@ -200,10 +222,14 @@ empty, applies the Supabase stand-ins the migration needs (`anon` /
 the migration, the seed and `verify.sql`, and prints the assertion table. It
 refuses to run against anything that is not Postgres 16.
 
-> **The schema is the six files in `supabase/migrations/`** — `0001_init.sql`,
+> **The schema is the seven files in `supabase/migrations/`** — `0001_init.sql`,
 > `0002_shipping.sql`, `0003_admin.sql`, `0004_letter_eligible_default.sql`,
-> `0005_sale_integrity.sql`, `0006_enquiries.sql`, in that order, plus
-> `supabase/storage.sql` by hand.
+> `0005_sale_integrity.sql`, `0006_enquiries.sql`, `0007_lucky_scoop.sql`, in
+> that order, plus `supabase/storage.sql` by hand.
+> **`0007` is written and is NOT applied to the production database.** Migrations
+> now run themselves on deploy — `scripts/migrate.sh`, called by the `migrate`
+> job that `deploy` has a `needs:` on — so it lands when the owner next pushes,
+> and the deploy stops if `verify.sql` goes red afterwards.
 > That list is what is in the directory as this was written; the harness globs
 > rather than reading it, so trust `ls supabase/migrations/` over this sentence.
 > **There is no
@@ -224,19 +250,39 @@ docker run -d --rm --name pg -e POSTGRES_PASSWORD=test postgres:16-alpine
 # docker exec -i pg psql -U postgres
 ```
 
-### The webhook — and the harness that is not in this repo
+### The webhook — and the harness that IS now in this repo
+
+```bash
+node scripts/check-webhook.mjs      # 91 assertions across 12 scenarios
+```
 
 The Stripe webhook is the highest-consequence file in the project and neither
-script above touches it. It was exercised by a **behavioural harness of 43
-scenarios** that loads the real route module against a fake Supabase client and
-a fake Stripe, asserts on the calls it makes, and reports the HTTP status. It
-was last run at **43/43**.
+`verify-sql.sh` nor the checkout replay touches it. **`scripts/check-webhook.mjs`
+does, and it is in the repo** — with its four fakes in
+`scripts/webhook-harness/`. It loads the **real** route modules through `jiti`,
+so the TypeScript and the `@/` aliases resolve exactly as Next resolves them,
+and only four edges are faked: Supabase, Stripe, the mail provider and the
+costing tables. Nothing in the routes is copied or re-implemented — a test that
+asserts against a copy of the code is a test that passes after the original is
+broken. Last run **91/91 across 12 scenarios**, with five deliberate mutations
+of the routes each proved to fail it.
 
-**It lived in `/tmp/webhook-harness/` and does not survive the session it was
-written in.** If it is gone, that is expected — rebuild it rather than assuming
-the path is covered. Four files: a loader that transpiles the route, a Supabase
-stub with a seeded fake database, the scenarios, and a typecheck. What it
-covers, so a rebuild has a target:
+It covers the money path as Lucky Scoop left it: a scoop line written with
+`scoop_tier_id` and no `product_id`, a scoop kept out of stock claiming
+entirely, a mixed basket, the Stripe-rebuild path resolving a scoop by its
+metadata marker rather than by slug against `products`, a tier RLS will not
+publish refused with 409, and an empty basket refused with 400. What it
+deliberately does not cover is listed at the bottom of the file: Stripe
+signature verification, real PostgreSQL, real Resend, and the delayed-payment,
+expired-session and paid-while-cancelled branches.
+
+**This closes a long-standing item.** These docs said for several rounds that a
+**43-scenario harness lived in `/tmp/webhook-harness/`, did not survive its
+session, and had to be rebuilt before the webhook's payload changed again.** The
+payload changed (a line with no product row) and the rebuild is the file above.
+It is smaller than 43 scenarios and does not pretend otherwise. The old
+harness's coverage list is kept below, because it is the target for the parts
+still missing rather than a description of what runs today:
 
 - the `23505` duplicate-insert paths — existing row genuinely finished, still
   pending/unnumbered/itemless, and the re-read itself erroring;
@@ -304,6 +350,46 @@ the full table.
   would be refused after being charged. `decrement_stock` therefore sells anyway
   and returns the shortfall, which accumulates on `products.oversold_units` and
   surfaces on `/admin` as a print-this-first signal. It is not an error state.
+- **…except for a Lucky Scoop, and both rules are true at once.** Overselling is
+  right for everything else because a shortfall can be reprinted; the buffer is
+  pieces already printed, not the only ones that exist. **A scoop breaks that
+  premise** — its promise is "these exist now, and five of them are going in a
+  bag", and you cannot print a surprise on Tuesday to satisfy Monday's order
+  without deciding for the customer what they got. So a tier **stops being
+  offered** when its pool cannot fill it. That is a *listing* decision asked at
+  read time in `lib/scoop.ts`, not a refused decrement: nothing in the scoop
+  path rejects a sale after payment, and `decrement_stock` is untouched. The
+  race is smaller, not gone — two shoppers can still both see the last fillable
+  scoop, and the pack panel is where a human finds out.
+- **A scoop is sold before its contents are decided.** No stock comes off at the
+  sale and `order_items.unit_cost_cents` stays **null** until the studio records
+  the pack; the cost is then summed from the pieces that actually went in
+  (`scoop_pack_items.unit_cost_cents`, stamped per piece). This is the opposite
+  of every other product in the shop, and the absent decrement in the webhook is
+  the design. `packCost()` answers **null, not a partial sum**, when any piece is
+  unmeasured — a flattering partial total is the plausible zero above wearing a
+  different hat.
+- **Nothing draws the pieces. A person does, out of a bowl, on camera.**
+  `lib/scoop.ts` contains no randomiser, the schema has no notion of a draw, and
+  neither may acquire one until the owner asks. The theme is the *customer's*
+  choice; only which pieces come out is left to the draw, because selling
+  somebody pet things when they wanted clickers is not made lawful by calling it
+  lucky.
+- **The eligible pool is explicit rows, never a category filter**
+  (`scoop_tier_products`). A filter is a rule about a column somebody edits
+  elsewhere: the day a pet bowl is filed under a clicker scoop's category it
+  silently joins the pool, nothing raises, and the first anyone knows is a $2
+  scoop that cost $9 to make and does not fit the postage band. Rows also make
+  the promise describable — the tier page lists the pool, and under the ACL a
+  visible pool is what makes "five pieces drawn from these twelve" true.
+- **Three scoop decisions are the owner's and are deliberately unrecorded in the
+  copy**: whether a scoop may contain duplicates, how the video is promised, and
+  whether a change of mind on a scoop is accepted. The shopfront says nothing in
+  either direction on all three, on purpose. `app/legal/refunds/page.tsx` carries
+  two drafted paragraphs in a comment for her to choose between, and
+  `scoop_packs.video_url` is nullable so that a `not null` does not decide the
+  video question for her. **Do not "complete" any of the three by guessing** —
+  silence favours the customer, which is the safe direction to be wrong in.
 - **Never promise a tracking number in general copy.** Whether a basket goes as
   a tracked parcel or an untracked Large Letter is not known until
   `quoteBasket()` answers, so the FAQ, `/track` and any page describing postage
@@ -402,6 +488,29 @@ checkout with a blanket `{ error: "Invalid basket." }` and by the quote route
 with a 400 the cart could only render as "Calculated at checkout" — a customer
 with no total and no reason. Stopping the basket being built that way, and
 naming the limit at the point it is reached, is the honest version.
+
+**The basket line is a DISCRIMINATED UNION, and widening it is not a
+simplification.** `components/cart/CartProvider.tsx` exports
+`BasketLine = ProductBasketLine | ScoopBasketLine`, each member carrying the
+other's key as `never`, and `isScoopLine` / `isProductLine` are the only way to
+ask which one you are holding. The obvious "tidy-up" — one type with an optional
+`scoop_tier_id` — is the thing to refuse: a widened type still carries
+`product_id: string`, so a scoop line has to put *something* there, and every
+candidate is either a real product id that checkout would price and decrement or
+an empty string that reads as a product to every `if (line.product_id)` in the
+codebase. The union puts `order_items`' own CHECK constraint in front of the
+compiler, so `app/cart/CartView.tsx` cannot post a basket without deciding, per
+line, which body it is building. Three details that look accidental and are not:
+both guards are exported because `!isScoopLine(x)` does not narrow inside a
+`.filter()` callback; `NewBasketLine` is spelled out member by member rather
+than as `Omit<BasketLine, "key">`, because `Omit` over a union collapses it to
+the shared keys and throws away every discriminant; and the storage key is
+**still** `bamstudio.cart.v1`, because bumping it would have emptied the basket
+of every shopper mid-purchase at the moment of deploy. Checkout takes the two
+halves as separate fields — `lines` and `scoop_lines` — validated by separate
+Zod schemas, and `lib/scoop-line.ts` is the one place a scoop becomes a line
+(its `variant_label`, its stand-in artwork, its Stripe metadata marker, and its
+postage line, which is always a **parcel** and never a Large Letter).
 
 **Money integrity lives in `0005_sale_integrity.sql` and the code around it.**
 Four things it is worth knowing before touching the webhook or Reports:

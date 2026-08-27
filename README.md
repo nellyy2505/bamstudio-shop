@@ -49,13 +49,20 @@ app/
   collections/                the six colourways
   search/                     search results
   cart/                       basket → Stripe Checkout
+  scoop/                      Lucky Scoop — the tier list and /scoop/[slug].
+                              Present only while a tier is active, priced and
+                              fillable; the shop shows nothing otherwise
   order/confirmed/            post-payment confirmation
   track/                      guest order tracking
   login/ signup/ forgot-password/ reset-password/ auth/
   account/                    orders, favourites, addresses, settings
   admin/                      the staff area — overview, orders, products,
+                              scoops/ (Lucky Scoop tiers and their pools),
                               inventory (print queue, buy list, and
                               measure/), reports, colours, settings, access.
+                              orders/[id]/ScoopPackPanel.tsx records what went
+                              into each scoop — the only moment a scoop's stock
+                              moves and its cost is known.
                               Every page, route and action calls requireStaff()
   (admin-join)/admin/join/    accepting a staff invitation. A route group, so
                               the URL is /admin/join but the page is NOT
@@ -76,7 +83,11 @@ components/
   layout/                     Header, Footer, SearchBar
   product/                    ProductCard, QuickAdd, Favourite
   builder/                    Keycap, KeycapWord
-  cart/CartProvider.tsx       basket state (localStorage-backed)
+  cart/CartProvider.tsx       basket state (localStorage-backed). The line is a
+                              DISCRIMINATED UNION — ProductBasketLine |
+                              ScoopBasketLine, narrowed by isScoopLine — and
+                              widening it into one type is not a simplification;
+                              AGENTS.md says why
   ProductArt.tsx              the illustrated product artwork
 lib/
   config.ts                   prices, shipping, builder bundles — business rules
@@ -96,6 +107,15 @@ lib/
                               The role lives in public.staff, never on profiles
   costing.ts                  a transcription of the workbook's Products sheet
                               (columns T–AA). Fractional cents; nulls stay null
+  scoop.ts                    the Lucky Scoop rules — when a tier may be sold,
+                              how many scoops a pool can fill, what a pack cost,
+                              what a tier might be worth. Pure, like costing.ts.
+                              THERE IS NO RANDOMISER HERE and there must not be:
+                              a person draws the pieces, on camera
+  scoop-line.ts               a scoop as a *line* — its variant label, its
+                              stand-in artwork, the Stripe metadata marker that
+                              survives a rebuild, and its postage line (always a
+                              parcel, never a Large Letter)
   types.ts  format.ts  stripe.ts  safe-next.ts  supabase/
 supabase/
   migrations/0001_init.sql    THE schema — RLS policies, helper functions,
@@ -115,19 +135,39 @@ supabase/
                               contact_enquiries and newsletter_signups —
                               the customer's message is a row before it is
                               an email. service_role only, both ways
+  migrations/0007_lucky_scoop.sql
+                              scoop_tiers, scoop_tier_products (the pool, as
+                              explicit rows and never a category filter),
+                              scoop_packs, scoop_pack_items, and
+                              order_items.scoop_tier_id. Tiers and pools are
+                              public; packs are service_role only. NOT YET
+                              APPLIED to the production database
   storage.sql                 the product-photos bucket. NOT a migration and
                               deliberately not run by verify-sql.sh — run it
                               by hand once in the Supabase SQL editor
   seed.sql                    catalogue, generated from the workbook
-  verify.sql                  schema smoke test — one table of 86 rows, and
-                              every one must print `t`
+  verify.sql                  schema smoke test — one table of 126 rows, and
+                              every one must print `t`. Observed 126/126
+                              against a real PostgreSQL 16
 scripts/
   generate-seed.mjs           regenerates seed.sql + fallback-data.ts
   check-costing.mjs           lib/costing.ts against the workbook's own
                               cached values
+  check-scoop.mjs             lib/scoop.ts — the Lucky Scoop rules. 34
+                              assertions, no database and no browser
+  check-webhook.mjs           the Stripe webhook and the scoop half of
+                              checkout, against the REAL route modules through
+                              jiti — only Supabase, Stripe, the mailer and the
+                              costing tables are faked. 91 assertions across 12
+                              scenarios; the fakes live in webhook-harness/
+  migrate.sh                  what the deploy runs: applies the migrations a
+                              database has not had, oldest first, then
+                              verify.sql — and fails the deploy if any
+                              assertion comes back false
   verify-sql.sh               applies every file in migrations/ + the seed +
                               verify.sql to a local Postgres 16 and checks
-                              every assertion
+                              every assertion. --rehearse runs migrate.sh
+                              against a throwaway database
   replay-checkout.mjs         replays the real CartView payloads at /api/checkout
 proxy.ts                      Next 16's renamed middleware: refreshes the
                               Supabase auth cookie, guards /account and /admin
@@ -137,7 +177,11 @@ proxy.ts                      Next 16's renamed middleware: refreshes the
 Dockerfile                    deps → build → runtime; node:22-slim
 fly.toml                      app, region, machine size, health check
 .dockerignore                 what never enters the build context
-.github/workflows/deploy.yml  push to master → flyctl deploy --remote-only
+.github/workflows/deploy.yml  push to master → migrate job (migrate.sh: apply
+                              + verify) → deploy job, which `needs:` it, so a
+                              red assertion means no rollout at all
+.github/workflows/migrate.yml the migrate job on its own, also runnable from
+                              the Actions tab without deploying
 ```
 
 ## Deployment shape
@@ -575,6 +619,66 @@ If the order cannot be staged (a database blip), checkout **fails and expires
 the Stripe session** rather than letting someone pay for an order we have no
 record of and cannot print.
 
+## Lucky Scoop
+
+The one product this shop sells **before it knows what is in it**. A customer
+buys a **tier** — "Pet scoop, five pieces" — and gets a set number of pieces
+drawn by hand from a pool of designs the tier publishes in full. Schema and
+reasoning: `supabase/migrations/0007_lucky_scoop.sql`. Rules: `lib/scoop.ts`
+(pure, checked by `scripts/check-scoop.mjs`). The line: `lib/scoop-line.ts`.
+
+**Everything about it follows from the sale coming before the contents.**
+
+- **No stock moves at the sale, and `unit_cost_cents` stays null.** There is no
+  recipe to cost a scoop from at checkout, and nothing to decrement. Stock comes
+  off when the studio records the pack — one `decrement_stock` per piece, guarded
+  by `scoop_packs.stock_applied` so a re-saved panel cannot take the same pieces
+  twice — and the cost is summed then, from `scoop_pack_items.unit_cost_cents`
+  stamped per piece. `packCost()` answers **null, not a partial sum**, when any
+  piece is unmeasured. An order cannot be marked posted while a scoop on it is
+  unrecorded.
+- **The overselling rule does not apply here, and both rules are true at once.**
+  Everything else keeps selling with an empty shelf because it is printed to
+  order and a shortfall can be reprinted. A scoop promises pieces that exist
+  *now*, so a tier simply **stops being offered** when its pool cannot fill it —
+  a listing decision asked at read time, never a refused decrement.
+  `scoopsAvailable()` counts **distinct** in-stock designs, which is the reading
+  that is safe whether or not duplicates are eventually allowed.
+- **Nothing draws the pieces.** A person does, out of a bowl, on camera. There is
+  no randomiser in `lib/scoop.ts` and no notion of a draw in the schema. The
+  *theme* is the customer's choice; only which pieces come out is left to the
+  draw, because selling somebody pet things when they wanted clickers is not
+  excused by calling it lucky.
+- **The pool is explicit rows, never a category filter.** A filter is a rule
+  about a column edited elsewhere: rename a category and a pet bowl silently
+  joins a clicker scoop's pool. Rows also make the promise describable — the
+  tier page lists the pool, and a visible pool is what makes "five pieces drawn
+  from these twelve" a true description.
+- **A tier is not a `products` row**, deliberately: its price starts null, its
+  stock is a property of other rows, its cost is unknowable until it is packed,
+  and its weight is a chosen worst case. It cannot be activated without a price
+  and a packed weight, and its pool must hold at least as many designs as it
+  promises pieces — a deferred constraint trigger enforces the last one.
+- **A scoop is always quoted as a parcel.** `scoop_tiers` has no
+  `letter_eligible` column: a Large Letter is untracked and uninsured, and if a
+  scoop goes missing there is no reprint, because the pieces were drawn from the
+  bowl and are gone. One scoop makes the whole basket a parcel.
+- **The basket line is a discriminated union.** `ProductBasketLine |
+  ScoopBasketLine` in `components/cart/CartProvider.tsx`, narrowed only by
+  `isScoopLine` / `isProductLine`; checkout takes `lines` and `scoop_lines`
+  separately. Widening it into one type with an optional `scoop_tier_id` is not
+  an acceptable simplification — see `AGENTS.md`.
+
+**Nothing scoop-shaped appears until a tier is active, priced and fillable.**
+Nothing is seeded, so `/scoop`, the home highlight card, the FAQ answer and the
+sitemap entries are all conditional; the refunds page is the deliberate
+exception and states the terms unconditionally, because a policy is read after
+the sale as often as before it. **Three terms are the owner's to decide and the
+copy says nothing in either direction on any of them**: whether a scoop may
+contain duplicates, how the video is promised, and whether a change of mind on a
+scoop is accepted — two drafted paragraphs wait in a comment in
+`app/legal/refunds/page.tsx`.
+
 ## The staff area
 
 `/admin` is where the shop is run from: Overview, Orders (including a form for
@@ -647,9 +751,12 @@ npx tsc --noEmit # typecheck
 ./scripts/verify-sql.sh          # every migration + seed + assertions on local
                                  # Postgres 16. It globs supabase/migrations/ —
                                  # there is no list to keep in step — and prints
-                                 # how many it applied. verify.sql is 86 rows;
+                                 # how many it applied. verify.sql is 126 rows;
                                  # count the rows as well as the ticks
 node scripts/check-costing.mjs   # lib/costing.ts vs the workbook's cached values
+node scripts/check-scoop.mjs     # the Lucky Scoop rules — 34 assertions
+node scripts/check-webhook.mjs   # the webhook + the scoop half of checkout,
+                                 # against the real routes — 91 assertions
 node scripts/replay-checkout.mjs # replay the real client baskets at /api/checkout
 
 fly status -a bamstudio-shop     # is the machine up, and where
