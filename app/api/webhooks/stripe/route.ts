@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { getStripe, siteUrl } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/server";
 import { isEmailConfigured, maskEmail, sendEmail } from "@/lib/email";
+import { captureException, captureMessage } from "@/lib/observability";
 import { PRINT_LEAD_TIME, SHIPPING, SHOP } from "@/lib/config";
 // The studio's own costing, reused rather than re-implemented: one definition
 // of what a piece costs, whether the sale came from the website or from a
@@ -32,6 +33,47 @@ export const dynamic = "force-dynamic";
  * a real mailbox. Every reader must go through `hasCustomerEmail` instead.
  */
 const NO_CUSTOMER_EMAIL = "unknown";
+
+/**
+ * Reports a failure without letting the report delay Stripe.
+ *
+ * `after()` for the same reason `queueOrderConfirmation` uses it: this route's
+ * response is the signal that tells Stripe whether to retry, and it must not
+ * wait on a third party. The fallback is a detached promise — weaker only in
+ * that the platform may not wait for it before freezing the instance, which on
+ * a Fly machine with `auto_stop_machines = "off"` and a 30s `kill_timeout` it
+ * will. `after()` throws outside a request scope, which is exactly the case
+ * when this is called from inside another `after()` task.
+ *
+ * WHAT NEVER GOES IN A REPORT FROM THIS FILE, and it is not the obvious list:
+ *
+ *   * `session.id`. It looks like an opaque Stripe identifier and it is in
+ *     fact a credential — `/order/confirmed?session_id=...` reads a
+ *     customer's name, address and basket back out of Stripe with nothing
+ *     else, which is why that page sets `referrer: "no-referrer"`. It stays in
+ *     the log, on infrastructure the studio controls, and goes no further.
+ *   * the shipping address, the phone, the email, the customer's name.
+ *
+ * What DOES go: the internal order UUID and the customer-facing order number
+ * (neither opens anything on its own — /track needs the number AND the
+ * matching email), amounts in cents, order status, and provider failure
+ * reasons. Enough to find the order in the studio and know what it cost.
+ */
+function report(task: () => Promise<unknown>) {
+  const guarded = async () => {
+    try {
+      await task();
+    } catch {
+      // The reporter is contracted never to throw. If it ever does, it must
+      // not be the thing that turns a confirmed order into a Stripe retry.
+    }
+  };
+  try {
+    after(guarded);
+  } catch {
+    void guarded();
+  }
+}
 
 /** True only for an address we could actually deliver to. */
 function hasCustomerEmail(email: string | null | undefined): email is string {
@@ -349,6 +391,25 @@ async function recordPaidWhileCancelled(
   console.error(
     `Order ${orderId} is ${status}; payment for session ${session.id} arrived ` +
       "anyway. Recorded as a refund owed — issue it by hand in Stripe.",
+  );
+
+  // ...and neither is the studio overview somewhere anyone is looking at 3am,
+  // which is the whole argument for this line. Money has been taken for goods
+  // that will not ship, and every existing signal — a log line, a row on a
+  // screen — requires somebody to go and look. `fatal` because the customer is
+  // out of pocket until a person acts. No session id: see `report` above.
+  report(() =>
+    captureMessage("Payment taken for a cancelled order — refund owed", {
+      scope: "stripe-webhook",
+      level: "fatal",
+      route: "/api/webhooks/stripe",
+      tags: {
+        orderId,
+        orderStatus: status,
+        amountCents: session.amount_total ?? null,
+        currency: session.currency ?? null,
+      },
+    }),
   );
 }
 
@@ -1243,6 +1304,14 @@ async function sendOrderConfirmation(
       `Could not read order ${orderNumber} to confirm it by email:`,
       error.message,
     );
+    report(() =>
+      captureMessage("Order could not be read to send its confirmation", {
+        scope: "stripe-webhook",
+        level: "error",
+        route: "/api/webhooks/stripe",
+        tags: { orderNumber, orderId, reason: error.message },
+      }),
+    );
     return;
   }
 
@@ -1266,6 +1335,17 @@ async function sendOrderConfirmation(
     console.error(
       `Order ${orderNumber} has no address to confirm to — nothing sent.`,
     );
+    report(() =>
+      captureMessage("Paid order has no address to confirm to", {
+        scope: "stripe-webhook",
+        level: "error",
+        route: "/api/webhooks/stripe",
+        // The order number, never the column's contents. `hasCustomerEmail`
+        // being false means it is empty or the NO_CUSTOMER_EMAIL sentinel, and
+        // which of the two it is is the only fact worth carrying.
+        tags: { orderNumber, orderId, sentinel: order?.email === NO_CUSTOMER_EMAIL },
+      }),
+    );
     return;
   }
 
@@ -1274,6 +1354,14 @@ async function sendOrderConfirmation(
     // A confirmation listing nothing is worse than no confirmation: it tells a
     // customer their order is fine when we cannot see what is on it.
     console.error(`Order ${orderNumber} has no items — no confirmation sent.`);
+    report(() =>
+      captureMessage("Paid order has no line items — no confirmation sent", {
+        scope: "stripe-webhook",
+        level: "error",
+        route: "/api/webhooks/stripe",
+        tags: { orderNumber, orderId },
+      }),
+    );
     return;
   }
 
@@ -1324,6 +1412,30 @@ async function sendOrderConfirmation(
       `sent (${result.reason}):`,
     result.detail,
   );
+  // The 2am Resend 429 this whole round is named after. The customer has paid,
+  // the order is correct, and the only notification they were ever going to
+  // get did not arrive. The stamp is deliberately NOT written above, so a later
+  // Stripe delivery re-queues the send — but Stripe's retries run out, and
+  // after that nobody finds out until the customer asks.
+  //
+  // The masked address is in the log line above and NOT here: `result.detail`
+  // is already scrubbed by lib/email.ts, and `scrub()` in lib/observability.ts
+  // takes a second pass at it, because provider errors quote the address they
+  // rejected.
+  report(() =>
+    captureMessage("Order confirmation email was not sent", {
+      scope: "stripe-webhook",
+      level: "error",
+      route: "/api/webhooks/stripe",
+      tags: {
+        orderNumber,
+        orderId,
+        reason: result.reason,
+        status: result.status,
+        detail: result.detail,
+      },
+    }),
+  );
 }
 
 /**
@@ -1361,6 +1473,18 @@ function queueOrderConfirmation(
       // customer or Stripe ever sees. A missing email is a far smaller problem
       // than a redelivered webhook, so it stops here.
       console.error(`Order ${orderNumber} confirmation email failed:`, error);
+      // Detached from the request, so `onRequestError` in instrumentation.ts
+      // never sees this one — the runtime's unhandled-rejection handler would
+      // be the only other witness. Nested `after()` is not available inside an
+      // `after()` task, which is why `report` falls back to a bare promise.
+      report(() =>
+        captureException(error, {
+          scope: "stripe-webhook",
+          level: "error",
+          route: "/api/webhooks/stripe",
+          tags: { orderNumber, task: "confirmation-email" },
+        }),
+      );
     }
   };
 
@@ -1376,6 +1500,14 @@ function queueOrderConfirmation(
     console.error(
       `Could not schedule the confirmation email for ${orderNumber}:`,
       error,
+    );
+    report(() =>
+      captureException(error, {
+        scope: "stripe-webhook",
+        level: "error",
+        route: "/api/webhooks/stripe",
+        tags: { orderNumber, task: "confirmation-email-schedule" },
+      }),
     );
     void task();
   }
@@ -1631,6 +1763,27 @@ export async function POST(request: Request) {
   } catch (error) {
     // A 500 asks Stripe to retry, which is what we want here.
     console.error(`Handling ${event.type} failed:`, error);
+    // Every database failure in this file throws up to here, so this one line
+    // covers order insert/update/read failures, stock claiming, item writes
+    // and order-number allocation. `onRequestError` will not fire — the throw
+    // is caught, and a caught error is invisible to Next's hook — so this is
+    // the only place it can be reported from.
+    //
+    // Stripe retries with backoff for about three days and then stops. That is
+    // the window in which somebody has to notice; a 500 on its own notifies
+    // nobody at all.
+    report(() =>
+      captureException(error, {
+        scope: "stripe-webhook",
+        level: "fatal",
+        route: "/api/webhooks/stripe",
+        // Event TYPE, not event id and not session id: the type is a fixed
+        // Stripe enum and groups usefully, the ids do not group at all and one
+        // of them opens a customer's order. `livemode` separates a real
+        // customer's money from a test card.
+        tags: { eventType: event.type, livemode: event.livemode },
+      }),
+    );
     return NextResponse.json({ error: "handler failed" }, { status: 500 });
   }
 

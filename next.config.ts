@@ -87,6 +87,19 @@ const isProduction = process.env.NODE_ENV === "production";
  *      add the `wss://` form of the same origin if that ever changes, or the
  *      socket fails silently.
  *
+ *      **Error reporting is deliberately absent from this list.** Adding an
+ *      error tracker is the usual reason a `connect-src` grows a third-party
+ *      ingest host, and it did not happen here: `lib/observability.ts` posts to
+ *      Sentry from the SERVER, so the browser never contacts it and this
+ *      directive needs no widening. That was one of the reasons for writing
+ *      the reporter against Sentry's HTTP envelope endpoint instead of taking
+ *      `@sentry/nextjs`, whose client SDK would have needed either
+ *      `https://*.ingest.sentry.io` here or a `tunnelRoute` that forwards
+ *      caller-supplied bodies onward. The trade — no browser-side error
+ *      reporting at all — is argued in full in that file. If browser reporting
+ *      is ever genuinely wanted, this is the line it has to change, and
+ *      `script-src` still must not be touched.
+ *
  *  form-action 'self'
  *      Checked before writing it: no form in this codebase posts off-origin.
  *      Checkout reaches Stripe by `window.location.href = data.url`

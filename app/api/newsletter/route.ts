@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { SHOP } from "@/lib/config";
 import { isEmailConfigured, maskEmail, sendEmail } from "@/lib/email";
-import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { clientKey, rateLimitDurable } from "@/lib/rate-limit";
+import { captureMessage } from "@/lib/observability";
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
@@ -77,6 +78,18 @@ async function storeSignup(email: string): Promise<boolean> {
         address: maskEmail(email),
         reason: error.message,
       });
+      // NOTE the difference from the log line directly above: the log gets a
+      // MASKED address because it is on infrastructure the studio controls and
+      // it is what lets a "I signed up and heard nothing" complaint be matched
+      // to a failure. The error report gets NO address at all, masked or
+      // otherwise — it leaves the country and lands in a third party's system,
+      // so the rule there is stricter, not the same.
+      void captureMessage("Newsletter sign-up could not be stored", {
+        scope: "newsletter",
+        level: "error",
+        route: "/api/newsletter",
+        tags: { code: error.code ?? null, reason: error.message },
+      }).catch(() => {});
       return false;
     }
     return true;
@@ -86,6 +99,12 @@ async function storeSignup(email: string): Promise<boolean> {
       address: maskEmail(email),
       reason: error instanceof Error ? error.message : "unknown",
     });
+    void captureMessage("Newsletter sign-up could not be stored", {
+      scope: "newsletter",
+      level: "error",
+      route: "/api/newsletter",
+      tags: { reason: error instanceof Error ? error.message : "unknown" },
+    }).catch(() => {});
     return false;
   }
 }
@@ -110,7 +129,9 @@ async function markNotified(email: string): Promise<void> {
 }
 
 export async function POST(request: Request) {
-  const limit = rateLimit(clientKey(request, "newsletter"), 5, 60_000);
+  // Durable when a shared store is configured, identical to before when it
+  // is not — see lib/rate-limit.ts.
+  const limit = await rateLimitDurable(clientKey(request, "newsletter"), 5, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
       { ok: false, error: "Too many messages. Please wait a minute." },
@@ -184,6 +205,14 @@ export async function POST(request: Request) {
       address: maskEmail(body.email),
       reason: failure,
     });
+    // Somebody asked to hear about new drops and there is no record of it
+    // anywhere. No address in the payload — see the note in `storeSignup`.
+    void captureMessage("Newsletter sign-up lost — neither recorded nor forwarded", {
+      scope: "newsletter",
+      level: "error",
+      route: "/api/newsletter",
+      tags: { sendFailure: failure },
+    }).catch(() => {});
   }
 
   // 200 either way, for the same reason as /api/contact: the submission was

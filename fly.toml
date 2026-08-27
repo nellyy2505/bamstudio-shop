@@ -109,11 +109,21 @@ kill_timeout = "30s"
   #     report dies half-finished." Here that report is the only notification
   #     a paying customer gets.
   #
-  #  2. lib/rate-limit.ts is a plain in-process Map. It is currently the ONLY
-  #     protection on POST /api/track, which hands back a customer's postal
-  #     address to anyone holding an order number and an email. A machine that
-  #     stops resets every bucket, so an attacker who can provoke an idle stop
-  #     wins their full retry budget back, repeatedly, for free.
+  #  2. lib/rate-limit.ts is the ONLY protection on POST /api/track, which
+  #     hands back a customer's postal address to anyone holding an order
+  #     number and an email. A machine that stops resets every in-process
+  #     bucket, so an attacker who can provoke an idle stop wins their full
+  #     retry budget back, repeatedly, for free.
+  #
+  #     THIS ONE IS NOW FIXABLE WITHOUT CODE. Setting UPSTASH_REDIS_REST_URL
+  #     and UPSTASH_REDIS_REST_TOKEN as Fly secrets moves the counters for
+  #     /api/track, /api/contact and /api/newsletter into a shared store that a
+  #     restart does not touch (lib/rate-limit.ts, `rateLimitDurable`). Four
+  #     call sites — checkout, shipping quotes, search suggestions and the
+  #     confirmation page — are still on the in-process path and are one
+  #     `await` each. Note what that does NOT do: reason (1) is untouched and
+  #     stands entirely on its own, so **autostop stays off either way**. Do
+  #     not read a configured Redis as permission to flip it.
   #
   # "suspend" is not a safe middle ground. It does snapshot RAM, so the rate
   # limiter's Map would survive it — but Fly is explicit that "on resume, the
@@ -123,9 +133,9 @@ kill_timeout = "30s"
   # the socket, which is the half that mattered.
   #
   # If this app ever needs to scale to zero, both problems have to be fixed
-  # first: move the email send onto a durable queue, and move the rate limiter
-  # into shared storage (Redis/Upstash — lib/rate-limit.ts says the call site
-  # does not change). Until then, one machine stays up.
+  # first: move the email send onto a durable queue, and finish moving the rate
+  # limiter into shared storage (half done — see (2) above; the remaining four
+  # call sites are one `await` each). Until then, one machine stays up.
   # -------------------------------------------------------------------------
   auto_stop_machines = "off"
   # Fly's docs recommend keeping autostop and autostart both enabled or both
@@ -146,6 +156,11 @@ kill_timeout = "30s"
   # every interval, forever, on the one 512 MB machine — self-inflicted load on
   # the app and on Supabase's rate limits, in exchange for no extra signal.
   # /api/health is a cheap liveness endpoint that touches nothing.
+  # The check reads the STATUS ONLY. /api/health also returns `uptimeSeconds`
+  # now, which is for a person running `curl` — a machine that is up but has
+  # been up for eleven seconds is crash-looping, and every individual poll of a
+  # crash-loop still passes. Fly cannot express that condition, so do not try to
+  # encode it here; the endpoint stays a plain 200 and the field is a hint.
   [[http_service.checks]]
     path = "/api/health"
     method = "GET"

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { SHOP } from "@/lib/config";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
-import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { clientKey, rateLimitDurable } from "@/lib/rate-limit";
+import { captureMessage } from "@/lib/observability";
 import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
@@ -95,6 +96,17 @@ async function storeEnquiry(
       // deliberately not logged: that was the §0.9 PII-in-the-log-stream
       // defect, and this path handles nothing but PII.
       console.error("[contact] enquiry NOT stored", { reason: error.message });
+      // A failed write on the one channel a customer has for "my order is
+      // wrong". Nothing throws here on purpose, so nothing else would ever
+      // report it. The row values are NOT attached — this function handles
+      // nothing but PII — only PostgREST's text about the statement, which
+      // `scrub()` cleans on the way out because it quotes rejected values.
+      void captureMessage("Contact enquiry could not be stored", {
+        scope: "contact",
+        level: "error",
+        route: "/api/contact",
+        tags: { code: error.code ?? null, reason: error.message },
+      }).catch(() => {});
       return null;
     }
     return data?.id ?? null;
@@ -104,6 +116,14 @@ async function storeEnquiry(
     console.error("[contact] enquiry NOT stored", {
       reason: error instanceof Error ? error.message : "unknown",
     });
+    void captureMessage("Contact enquiry could not be stored", {
+      scope: "contact",
+      level: "error",
+      route: "/api/contact",
+      tags: {
+        reason: error instanceof Error ? error.message : "unknown",
+      },
+    }).catch(() => {});
     return null;
   }
 }
@@ -132,7 +152,9 @@ async function markNotified(id: string): Promise<void> {
 }
 
 export async function POST(request: Request) {
-  const limit = rateLimit(clientKey(request, "contact"), 5, 60_000);
+  // Durable when a shared store is configured, identical to before when it
+  // is not — see lib/rate-limit.ts. One `await`, same arguments, same result.
+  const limit = await rateLimitDurable(clientKey(request, "contact"), 5, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
       { ok: false, error: "Too many messages. Please wait a minute." },
@@ -219,6 +241,30 @@ export async function POST(request: Request) {
       topic: body.topic,
       reason: failure,
     });
+    // The message survives and IS readable: /admin/enquiries now lists these
+    // rows for owner and studio (the `reports` capability), and an unnotified
+    // one is on the "still to deal with" filter waiting to be found. So this is
+    // no longer the lost enquiry the comment here used to call it — that
+    // sentence was written while the screen was still owed in HANDOFF.md, and a
+    // reader who believed it would over-rate the severity below.
+    //
+    // It stays a REPORT rather than a warning anyway, for the reason that
+    // survived the screen: nothing pushes. Being findable by somebody who
+    // thinks to open a studio page is not the same as being told, and the topic
+    // enum here covers faulty goods and missing parcels — things a customer is
+    // waiting on. The report is the push the email failed to be.
+    //
+    // "not_configured" is excluded: on a deploy with no mail provider every
+    // page already tells the customer so, and reporting a state the owner chose
+    // is noise.
+    if (failure !== "not_configured") {
+      void captureMessage("Contact enquiry stored but the studio was not notified", {
+        scope: "contact",
+        level: "warning",
+        route: "/api/contact",
+        tags: { topic: body.topic, sendFailure: failure },
+      }).catch(() => {});
+    }
   } else if (delivered) {
     console.warn("[contact] enquiry NOT stored, emailed only", {
       topic: body.topic,
@@ -228,6 +274,16 @@ export async function POST(request: Request) {
       topic: body.topic,
       reason: failure,
     });
+    // The original §0.9 defect reproducing itself: a customer typed a message
+    // and there is now no copy of it anywhere. `topic` is a fixed dropdown
+    // enum and identifies nobody; the name, the address and the message body
+    // are deliberately absent, here as in the log line above.
+    void captureMessage("Contact enquiry lost — neither stored nor delivered", {
+      scope: "contact",
+      level: "fatal",
+      route: "/api/contact",
+      tags: { topic: body.topic, sendFailure: failure },
+    }).catch(() => {});
   }
 
   // 200 in all four cases, for the reason it always was: the customer did

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
-import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { clientKey, rateLimitDurable } from "@/lib/rate-limit";
+import { captureException, captureMessage } from "@/lib/observability";
 import type {
   ArtKey,
   OrderStatus,
@@ -145,7 +146,15 @@ export async function POST(request: Request) {
   // it is no longer decorative: `lookup_order` is revoked from `anon`, and the
   // route holds the service-role key, so PostgREST with the public key is no
   // longer a way around it.
-  const limit = rateLimit(clientKey(request, "track"), 10, 60_000);
+  //
+  // `rateLimitDurable` rather than `rateLimit`: this is THE endpoint the
+  // durable store was added for. In-process counters reset on every restart
+  // and every deploy, which handed anyone guessing order numbers their full
+  // budget back for free. Same arguments, same `ok`/`retryAfter`; the `await`
+  // is the only difference, and lib/rate-limit.ts explains why that one word
+  // could not be avoided. With no store configured this is byte-for-byte the
+  // old behaviour.
+  const limit = await rateLimitDurable(clientKey(request, "track"), 10, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
       { found: false, error: "Too many attempts. Please wait a minute." },
@@ -182,6 +191,17 @@ export async function POST(request: Request) {
     console.error(
       `track lookup unavailable: ${missing.join(" and ")} not set — see SETUP.md`,
     );
+    // A misconfigured deploy answers every genuine customer with "no such
+    // order" and looks perfectly healthy from outside. That is precisely the
+    // failure nobody finds out about, so it is reported rather than only
+    // logged. The names of unset variables are configuration, not secrets, and
+    // nothing from the request goes with them — no order number, no email.
+    await captureMessage("Order tracking is unavailable: missing configuration", {
+      scope: "track",
+      level: "error",
+      route: "/api/track",
+      tags: { missing: missing.join(",") },
+    });
     return miss();
   }
 
@@ -203,6 +223,17 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error("lookup_order failed:", error.message);
+      // A failed database read that the customer is shown as "no such order".
+      // The message is a FIXED string so every occurrence groups as one issue;
+      // PostgREST's text goes in a tag, where `scrub()` can get at it — its
+      // messages quote the values a statement was given, and the two values
+      // this statement is given are an order number and a customer's email.
+      await captureMessage("Order lookup failed against the database", {
+        scope: "track",
+        level: "error",
+        route: "/api/track",
+        tags: { code: error.code ?? null, reason: error.message },
+      });
       return miss();
     }
 
@@ -219,6 +250,15 @@ export async function POST(request: Request) {
     // Includes `createAdminClient()` throwing on a missing key, which the
     // guard above should already have caught. The caller learns nothing.
     console.error("order tracking failed:", error);
+    // Caught here, so `onRequestError` in instrumentation.ts never sees it —
+    // this route swallows its failures by design so a probe cannot tell a
+    // broken deployment from a wrong order number. Reported explicitly for
+    // exactly that reason: nothing else would ever surface it.
+    await captureException(error, {
+      scope: "track",
+      level: "error",
+      route: "/api/track",
+    });
     return miss();
   }
 }

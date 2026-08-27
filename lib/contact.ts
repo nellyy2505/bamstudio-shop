@@ -82,10 +82,20 @@ export const canReachStudio: boolean = hasStudioMailbox || hasSocialAccount;
  * already exists. This is the "does the owner hear about it" test now, not the
  * "does it still exist tomorrow" test.
  *
- * It still gates whether the box is offered, and it still has to. Nothing in
- * this codebase reads either table — there is no studio screen for enquiries
- * yet — so the notification is the only way anyone finds out one arrived. Where
- * this is false, a submitted message is stored and seen by nobody.
+ * It still gates whether the box is offered, and it still has to — but the
+ * reason has narrowed, and the old one no longer holds. This used to say
+ * "nothing in this codebase reads either table — there is no studio screen for
+ * enquiries yet — so the notification is the only way anyone finds out one
+ * arrived", and concluded that where this is false a message is "seen by
+ * nobody". `/admin/enquiries` now lists both tables (`listEnquiries`,
+ * `listSignups`), so a stored row IS readable: by owner and studio, who hold
+ * the `reports` capability, and not by Packing.
+ *
+ * What is left is the difference between a message that arrives and a message
+ * that waits. Where this is false the row survives and can be found, but
+ * nobody is TOLD it exists, so it is seen whenever somebody next thinks to open
+ * the screen — which for a faulty-goods claim is not the same as promptly.
+ * That is still reason enough not to offer the box.
  *
  * @param canSendEmail `isEmailConfigured()`, read on the server. Passing a
  *   public build flag here instead is the defect this module exists to stop:
@@ -94,8 +104,9 @@ export const canReachStudio: boolean = hasStudioMailbox || hasSocialAccount;
  *
  * Asserts: it is honest to render the form/sign-up box and to say "our contact
  * form reaches the same inbox". Misusing it — rendering the form when this is
- * false — leaves enquiries, faulty-goods claims included, in a table no screen
- * lists and no notification points at.
+ * false — leaves enquiries, faulty-goods claims included, sitting on
+ * `/admin/enquiries` with nothing pointing at them, waiting on somebody
+ * choosing to look.
  */
 export function formsReachStudio(canSendEmail: boolean): boolean {
   return canSendEmail && hasStudioMailbox;

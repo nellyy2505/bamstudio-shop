@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { searchProducts } from "@/lib/queries";
-import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { clientKey, rateLimitDurable } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -30,7 +30,16 @@ const SUGGEST_WINDOW_MS = 10_000;
 
 /** Typeahead suggestions for the header search. */
 export async function GET(request: Request) {
-  const limit = rateLimit(
+  // Durable, and note the `await`. What is being defended is the sequential
+  // scan behind `searchProducts`, and a scripted loop that could reset its
+  // allowance by waiting for a deploy would be defended only on paper. The
+  // 10s window makes the store call proportionally the most expensive of the
+  // migrated call sites, which is why the ceiling matters: 500ms hard timeout,
+  // breaker after three failures, in-process bucket underneath either way
+  // (lib/rate-limit.ts). Forget the `await` and `limit.ok` is `undefined` —
+  // every keystroke 429s and the typeahead goes silent. Nothing in the lint
+  // config would say so; this is a read-it-and-check.
+  const limit = await rateLimitDurable(
     clientKey(request, "suggest"),
     SUGGEST_LIMIT,
     SUGGEST_WINDOW_MS,

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { BASKET_LIMITS, BUILDER_MAX_LETTERS, SHIPPING } from "@/lib/config";
 import { loadProductsBySlug, loadScoopTiersBySlug } from "@/lib/queries";
-import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { clientKey, rateLimitDurable } from "@/lib/rate-limit";
 import { toShippingLines } from "@/lib/shipping/lines";
 import { toScoopShippingLines } from "@/lib/scoop-line";
 import { quoteBasket } from "@/lib/shipping/quote";
@@ -91,7 +91,17 @@ export async function POST(request: Request) {
   // A cart re-quotes on every basket edit, so this is looser than checkout's
   // 10/60s. It reads no customer data and returns no customer data — the only
   // thing being protected is the carrier call underneath, which is cached.
-  const limit = rateLimit(clientKey(request, "shipping-quote"), 60, 60_000);
+  //
+  // Durable, and `await`ed: the carrier call is a paid third-party request, and
+  // an allowance that resets on every deploy is not much of a budget. Without
+  // the `await` this reads a Promise, `!limit.ok` is true, and the cart shows
+  // "calculated at checkout" to everyone — nothing in the lint config catches
+  // it, so it is checked by reading. lib/rate-limit.ts bounds the store call.
+  const limit = await rateLimitDurable(
+    clientKey(request, "shipping-quote"),
+    60,
+    60_000,
+  );
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many requests. Please wait a moment." },
@@ -123,11 +133,19 @@ export async function POST(request: Request) {
    *
    * A SCOOP THAT HAS STOPPED BEING SELLABLE STILL QUOTES HERE, deliberately.
    * `availability.sellable` is a decision about whether the shop may take money
-   * for a tier; it is not a fact about what the parcel weighs. Refusing to
-   * weigh an emptied bowl would replace a real postage figure with "calculated
-   * at checkout" and tell the customer nothing about the actual problem, which
-   * checkout then states plainly when they try to pay. Products behave the same
-   * way — an oversold one still quotes.
+   * for a tier — switched on, and priced — and it is not a fact about what the
+   * parcel weighs. Refusing to weigh a tier the owner has since switched off
+   * would replace a real postage figure with "calculated at checkout" and tell
+   * the customer nothing about the actual problem, which checkout then states
+   * plainly when they try to pay. Products behave the same way — an oversold
+   * one still quotes.
+   *
+   * This used to read "refusing to weigh an emptied bowl", from the days when
+   * `sellable` folded in whether the pool could fill a scoop off the shelf.
+   * That gate is gone: the shop prints to order, so a short bowl is printed up
+   * before packing and never reaches this route as a refusal at all. Nothing
+   * about stock has quoted, or should quote, differently from any other product
+   * (lib/scoop.ts).
    */
   const lines = [
     ...toShippingLines(body.lines, products),

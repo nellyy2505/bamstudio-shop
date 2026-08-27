@@ -178,6 +178,44 @@ export default async function OrderConfirmedPage({
     // no `session_id` calls Stripe not at all, so it costs nothing to serve and
     // must not spend anyone's allowance. Only the visits that would hit Stripe
     // are counted.
+    //
+    // ─────────────────────────────────────────────────────────────────────
+    // DELIBERATELY `rateLimit()` AND NOT `rateLimitDurable()`. This is the
+    // one of the five throttled surfaces that stays in-process, and it was
+    // considered rather than overlooked: /api/track, /api/contact,
+    // /api/newsletter, /api/checkout, /api/shipping/quote and
+    // /api/search/suggest all take the durable path.
+    //
+    // 1. The check exists to make a throttled visit COST NOTHING — that is
+    //    the paragraph immediately above, and the early return below. A
+    //    durable decision is itself a network round trip, so the guard would
+    //    start spending the thing it was put here to save. On a route
+    //    handler that trade is obviously worth it; on the guard whose entire
+    //    argument is "costs nothing", it inverts the argument.
+    // 2. What durability buys is "a restart does not hand back an
+    //    allowance", and the allowance here opens Stripe session retrieval —
+    //    reachable only with a `session_id`, which is a long Stripe-issued
+    //    random string and not a public incrementing sequence. Contrast
+    //    /api/track, where the key space is ~65k guesses and a fresh
+    //    allowance is the whole attack. There is nothing here to enumerate,
+    //    so the durable version would be protecting against an attacker who
+    //    can already do the thing anyway.
+    // 3. This page renders inside a customer's payment redirect, and the
+    //    copy tells them to refresh it while they wait for their order
+    //    number. lib/rate-limit.ts bounds the store at 500ms with a breaker
+    //    after three failures, which is a real ceiling and not a small one:
+    //    a sick store can add up to 1.5s across three refreshes before the
+    //    breaker opens, landing on somebody who has just been charged and is
+    //    watching a page for a number. Elsewhere that latency lands on a
+    //    background quote or a typeahead.
+    // 4. Durability also cuts the wrong way for a legitimate visitor here:
+    //    the counter surviving a restart means a customer refreshing hard is
+    //    thirty from being told to wait, with nothing to forgive them.
+    //
+    // If a future reader wants uniformity, the honest way to get it is to
+    // stop counting refreshes and cache the Stripe read instead — not to
+    // put a network hop in front of the last page a paying customer sees.
+    // ─────────────────────────────────────────────────────────────────────
     const limit = rateLimit(
       await confirmationKey(),
       CONFIRM_LIMIT,
