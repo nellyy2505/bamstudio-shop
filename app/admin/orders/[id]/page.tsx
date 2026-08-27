@@ -6,8 +6,11 @@ import { AdminForm, SubmitButton } from "../../AdminForm";
 import { setOrderStatus } from "../../actions";
 import { CHANNEL_LABEL, PageHead, Panel, StatusPill, Unknown } from "../../ui";
 import { DispatchPanel } from "./DispatchPanel";
+import { ScoopPackPanel } from "./ScoopPackPanel";
 import {
   getOrder,
+  getOrderScoops,
+  listPoolCandidates,
   type OrderDetail,
   type OrderLine,
   type PaymentIncident,
@@ -56,8 +59,21 @@ export default async function OrderDetailPage({
   const staff = await requireStaff("orders");
 
   const { id } = await params;
-  const order = await getOrder(id);
+  const [order, scoops] = await Promise.all([getOrder(id), getOrderScoops(id)]);
   if (!order) notFound();
+
+  /*
+   * The whole catalogue, and only when a scoop on this order still has to be
+   * packed. It is there for the "something else went in" slot — the pool alone
+   * cannot record a charm that broke and was swapped — and an order with no
+   * scoops on it, or with every scoop already recorded, does not pay for the
+   * read or render a single option of it.
+   */
+  const needsCatalogue =
+    order.status !== "cancelled" &&
+    order.status !== "pending" &&
+    scoops.lines.some((line) => line.packs.some((pack) => pack.recordedPieces === 0));
+  const catalogue = needsCatalogue ? await listPoolCandidates() : [];
 
   const showCosts = can(staff.role, "reports");
   const units = order.lines.reduce((sum, line) => sum + line.quantity, 0);
@@ -167,6 +183,18 @@ export default async function OrderDetailPage({
         </dl>
       </Panel>
 
+      {/*
+        * Directly under what was ordered, because on an order with a scoop on
+        * it this is the rest of that sentence: the line above says "Pet scoop,
+        * five pieces" and this is the only place that can ever say which five.
+        */}
+      <ScoopPackPanel
+        scoops={scoops}
+        showCosts={showCosts}
+        catalogue={catalogue}
+        orderStatus={order.status}
+      />
+
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title="Where it goes">
           <AddressBlock order={order} />
@@ -251,7 +279,7 @@ export default async function OrderDetailPage({
           </div>
         </Panel>
 
-        <DispatchPanel order={order} />
+        <DispatchPanel order={order} scoops={scoops} />
       </div>
     </div>
   );

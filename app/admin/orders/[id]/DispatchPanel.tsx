@@ -2,7 +2,7 @@ import { Alert, Field, Pill, inputClass } from "@/components/ui";
 import { AdminForm, SubmitButton } from "../../AdminForm";
 import { markShipped, undoDispatch } from "../../actions";
 import { Panel, Unknown } from "../../ui";
-import type { OrderDetail } from "../../data";
+import type { OrderDetail, OrderScoops } from "../../data";
 
 /**
  * Recording a dispatch — the one moment an order picks up a tracking number.
@@ -241,7 +241,59 @@ function RecordedDispatch({ order }: { order: OrderDetail }) {
   );
 }
 
-export function DispatchPanel({ order }: { order: OrderDetail }) {
+/**
+ * A parcel with an unrecorded scoop in it cannot be posted.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * WHY THE FORM IS REPLACED RATHER THAN LEFT WITH A WARNING ABOVE IT.
+ *
+ * `markShipped` refuses this outright — it is the real guard, and it has to be,
+ * because a server action is a public endpoint and a panel is markup. But a
+ * button that is always going to be refused is a button that gets pressed, and
+ * the tracking number is typed in before it is. So the form is not drawn at all
+ * until the scoops are recorded, and what stands in its place says which scoop
+ * and why.
+ *
+ * WHY THE RULE EXISTS AT ALL, in her words rather than the schema's: a scoop is
+ * sold before anyone knows what is in it, so packing it is the only moment its
+ * stock comes off and the only moment its cost is known. Post it first and the
+ * shelf counts are wrong for ever and the margin on that order is unknowable —
+ * and by then the bag is sealed and in the post.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+function ScoopsFirst({ scoops }: { scoops: OrderScoops }) {
+  if (scoops.unreadable) {
+    return (
+      <Alert tone="error">
+        The Lucky Scoops on this order could not be read, so it is not safe to mark it posted —
+        &ldquo;we could not check&rdquo; is not the same as &ldquo;there is nothing to check&rdquo;.
+        Reload the page.
+      </Alert>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Alert tone="error">
+        Record what went in first: {scoops.outstanding.join(", ")}.
+      </Alert>
+      <p className="text-[13.5px] text-muted">
+        A scoop is sold before anybody knows what is in it, so packing it is the only moment its
+        stock comes off the shelf and the only moment it can be costed. The panel above is where
+        that is recorded; this one comes back as soon as it is.
+      </p>
+    </div>
+  );
+}
+
+export function DispatchPanel({
+  order,
+  scoops,
+}: {
+  order: OrderDetail;
+  /** The scoops on this order. See `ScoopsFirst` for what blocks a dispatch. */
+  scoops: OrderScoops;
+}) {
   if (order.status === "cancelled") {
     return (
       <Panel title="Post this parcel">
@@ -317,6 +369,27 @@ export function DispatchPanel({ order }: { order: OrderDetail }) {
             </AdminForm>
           </div>
         </div>
+      </Panel>
+    );
+  }
+
+  /*
+   * Scoped to the transition this rule is about. The `shipped` branch above is
+   * how a wrong tracking number is corrected, and refusing to fix the number on
+   * a parcel that has already gone helps nobody — `markShipped` scopes its own
+   * guard the same way, so the two cannot disagree.
+   */
+  if (scoops.unreadable || scoops.outstanding.length > 0) {
+    return (
+      <Panel
+        title="Post this parcel"
+        note={
+          scoops.unreadable
+            ? "Not yet — the scoops on this order could not be read."
+            : "Not yet — there is a scoop on this order whose contents nobody has written down."
+        }
+      >
+        <ScoopsFirst scoops={scoops} />
       </Panel>
     );
   }

@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireStaff, type Capability } from "@/lib/auth/staff";
-import { MEASURE_COLOUR_SLOTS, unitCostsAtSale } from "./data";
+import { getOrderScoops, MEASURE_COLOUR_SLOTS, unitCostsAtSale } from "./data";
+import { activationBlockers, packCost } from "@/lib/scoop";
+import { SCOOP_THEMES, type ScoopTheme } from "@/lib/types";
 import { siteUrl } from "@/lib/stripe";
 import {
   hashToken,
@@ -920,6 +922,62 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
     const id = text(form, "id");
     if (!id) return fail("No order given.");
 
+    const admin = createAdminClient();
+
+    /*
+     * ──────────── A SCOOP CANNOT BE POSTED BEFORE IT IS RECORDED ────────────
+     *
+     * 0007_lucky_scoop.sql leaves this to the application on purpose, and says
+     * why: it is a rule about a status TRANSITION, so it needs both the old
+     * status and the new one, and a trigger enforcing it would also block every
+     * hand repair the studio has to be able to make from the Supabase table
+     * editor.
+     *
+     * What is at stake is not tidiness. A scoop is sold before its contents are
+     * decided, so recording the pack is the only moment its stock comes off and
+     * the only moment its cost is stamped. A parcel posted before that leaves
+     * the shelf counts overstated for ever, the margin on that order unknowable,
+     * and the pieces themselves unrecorded — and by then the bag is sealed and
+     * in the post, so nobody can go back and look.
+     *
+     * SCOPED TO ORDERS THAT ARE NOT ALREADY POSTED. This form is also how a
+     * wrong tracking number is corrected, and refusing to fix the number on a
+     * parcel that has already gone helps nobody — the transition this rule is
+     * about has already happened.
+     *
+     * A FAILED READ REFUSES. "We could not check" is not "there is nothing to
+     * check", and this is the guard, not the panel.
+     */
+    const { data: before, error: beforeError } = await admin
+      .from("orders")
+      .select("status")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (beforeError) {
+      return fail(
+        "This order could not be read, so it is not safe to mark it posted. " +
+          "Nothing has been changed — reload and try again.",
+      );
+    }
+
+    if (before && before.status !== "shipped") {
+      const scoops = await getOrderScoops(id);
+      if (scoops.unreadable) {
+        return fail(
+          "The Lucky Scoops on this order could not be read, so it is not " +
+            "safe to mark it posted. Nothing has been changed — reload and try again.",
+        );
+      }
+      if (scoops.outstanding.length > 0) {
+        return fail(
+          `Record what went in first: ${scoops.outstanding.join(", ")}. A scoop is ` +
+            "sold before anyone knows what is in it, so packing it is the only " +
+            "moment its stock comes off and its cost is worked out. Nothing has been posted.",
+        );
+      }
+    }
+
     const mode = text(form, "tracking_mode");
     const typed = normaliseTracking(text(form, "tracking_number"));
 
@@ -953,7 +1011,6 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
     }
 
     const trackingNumber = mode === "tracked" ? typed : null;
-    const admin = createAdminClient();
 
     /*
      * Two parcels never share an article id, so the same number on two orders
@@ -1312,6 +1369,646 @@ export async function resolveRefundIncident(
   });
 }
 
+/* ------------------------------------------------------------ lucky scoop */
+
+/**
+ * Create or edit a Lucky Scoop tier, pool and all.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * WHY "catalogue" AND NOT "inventory" OR "orders".
+ *
+ * This action writes a PRICE, a piece count and a packed weight. Those are the
+ * three numbers a tier is sold on: the first is what a customer is charged, the
+ * second is what they are promised, and the third is what Australia Post prices
+ * the parcel on — the studio wears the difference when it is set too low. They
+ * are the same kind of fact as `products.price` and `products.weight_grams`,
+ * which `saveProduct` writes under "catalogue", and `saveMeasurement` chose
+ * "catalogue" over "inventory" for exactly this reason: counting a shelf is an
+ * observation, authoring what something costs and sells for is not.
+ *
+ * The pool is in here rather than in an action of its own for the same reason.
+ * Adding a $9 pet bowl to a $12 scoop's pool changes what that scoop earns just
+ * as surely as retyping its price does; a pool edit is a pricing decision
+ * wearing a checkbox. Recording what went in a parcel is a different authority
+ * again — see `recordScoopPack`, which is "orders" and which Packing holds.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+export async function saveScoopTier(_prev: FormState, form: FormData): Promise<FormState> {
+  return guard("catalogue", async () => {
+    const id = text(form, "id");
+    const admin = createAdminClient();
+
+    const name = text(form, "name");
+    const slug = text(form, "slug");
+    if (!name) return fail("A tier needs a name — “Pet scoop, five pieces”.");
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      return fail("The web address can only use lowercase letters, numbers and hyphens.");
+    }
+
+    const theme = text(form, "theme");
+    if (!SCOOP_THEMES.some((option) => option.value === theme)) {
+      return fail("Choose which theme this scoop draws from.");
+    }
+
+    const pieceCount = Number.parseInt(text(form, "piece_count"), 10);
+    if (!Number.isFinite(pieceCount) || pieceCount < 1 || pieceCount > 50) {
+      return fail("How many pieces does this scoop promise? A whole number between 1 and 50.");
+    }
+
+    /*
+     * A blank price stays NULL all the way to the column, and 0 is refused.
+     *
+     * `optionalNumber` is not used here because the field is typed in dollars,
+     * so it has to go through `dollarsToCents`. The two failure modes are
+     * separated on purpose: "that is not a number" and "zero is not a price"
+     * are different mistakes and the second one is the dangerous one — the
+     * database refuses a 0, and if it ever stopped refusing it, a zero would
+     * render on the shopfront as a free scoop.
+     */
+    const rawPrice = text(form, "price");
+    let priceCents: number | null = null;
+    if (rawPrice !== "") {
+      priceCents = dollarsToCents(rawPrice);
+      if (priceCents === null) return fail("The price has to be a number, like 12.50.");
+      if (priceCents === 0) {
+        return fail(
+          "A scoop cannot be priced at nothing — $0.00 reads as free. Leave the " +
+            "price empty until you have decided, which says “not priced yet”.",
+        );
+      }
+    }
+
+    const weight = optionalNumber(form, "packed_weight_grams");
+    if (weight === undefined || (weight !== null && weight <= 0)) {
+      return fail(
+        "Packed weight has to be a number of grams above zero, or blank if you " +
+          "have not put a test pack on the scales yet.",
+      );
+    }
+    const thickness = optionalNumber(form, "packed_thickness_mm");
+    if (thickness === undefined || (thickness !== null && thickness <= 0)) {
+      return fail("Packed thickness has to be a number of millimetres above zero, or blank.");
+    }
+
+    /*
+     * The pool arrives as one checkbox per product, and an unticked checkbox is
+     * simply absent from the payload — so "she cleared the pool" and "this POST
+     * is not from that form" look identical. The sentinel is what tells them
+     * apart, the same defence `saveMeasurement` makes by counting its slots: a
+     * server action is a public HTTP endpoint, and without this a hand-made
+     * request could empty a live tier's pool by omitting a field.
+     */
+    if (text(form, "pool_submitted") !== "1") {
+      return fail("That form was incomplete. Reload the page and try again.");
+    }
+    const pool = [...new Set(form.getAll("pool").map(String).filter(Boolean))];
+
+    const active = bool(form, "active");
+
+    /*
+     * The three activation rules, asked in her words BEFORE the write.
+     *
+     * 0007 enforces all three — two as a CHECK on the row, the third as a
+     * constraint trigger over the pool — but a constraint speaks Postgres. It
+     * would reach this screen as "new row for relation "scoop_tiers" violates
+     * check constraint "scoop_tiers_activation_check"", which tells the person
+     * running the shop nothing about what to do next.
+     */
+    if (active) {
+      const blockers = activationBlockers(
+        { pieceCount, priceCents, packedWeightGrams: weight },
+        pool.length,
+      );
+      if (blockers.length > 0) {
+        return fail(
+          `This tier cannot be switched on yet — ${blockers.join(", and ")}. ` +
+            "Nothing has been saved, so untick “listed in the shop” to keep it as a draft.",
+        );
+      }
+    }
+
+    /*
+     * Every product in the pool is checked to exist BEFORE anything is written,
+     * for the reason `saveMeasurement` checks its colours: the pool is written
+     * as an insert and a delete with no transaction across them, so an id that
+     * failed its foreign key would leave the pool half-changed.
+     */
+    if (pool.length > 0) {
+      const { data: known, error: knownError } = await admin
+        .from("products")
+        .select("id")
+        .in("id", pool);
+      if (knownError) return fail(friendly(knownError.message));
+      if ((known?.length ?? 0) !== pool.length) {
+        return fail("One of those products no longer exists. Reload the page and try again.");
+      }
+    }
+
+    const fields = {
+      slug,
+      name,
+      blurb: text(form, "blurb"),
+      theme: theme as ScoopTheme,
+      piece_count: pieceCount,
+      price_cents: priceCents,
+      packed_weight_grams: weight === null ? null : Math.round(weight),
+      packed_thickness_mm: thickness === null ? null : Math.round(thickness),
+      sort_order: intOr(form, "sort_order", 0),
+      active,
+    };
+
+    let tierId = id;
+
+    if (!tierId) {
+      // A new tier is inserted INACTIVE whatever was ticked, because its pool
+      // does not exist yet and the pool guard would refuse the row. The `active`
+      // field is written a few statements below, once the pool is in place.
+      const { data, error } = await admin
+        .from("scoop_tiers")
+        .insert({ ...fields, active: false })
+        .select("id")
+        .single();
+      if (error) return fail(friendly(error.message));
+      tierId = data.id as string;
+    }
+
+    /*
+     * THE POOL IS DIFFED, NOT REPLACED, AND THE ORDER OF THE TWO HALVES MATTERS.
+     *
+     * `saveProduct` replaces a filament recipe wholesale and says why. That
+     * cannot be done here: `scoop_tier_products_pool_guard` fires on DELETE, and
+     * a wholesale replace deletes every row first — which on an active tier is a
+     * pool of zero at the moment the trigger looks, so it would refuse an edit
+     * that ends up perfectly legal. The guard deliberately does NOT fire on
+     * insert, so adding first and removing second means it only ever sees the
+     * final set, which `activationBlockers` above has already checked.
+     *
+     * The delete is scoped to the exact ids being removed rather than "not in
+     * the new set", so it cannot take a row somebody else added between the read
+     * that drew the form and this write.
+     */
+    const { data: current, error: currentError } = await admin
+      .from("scoop_tier_products")
+      .select("product_id")
+      .eq("tier_id", tierId);
+    if (currentError) return fail(friendly(currentError.message));
+
+    const before = new Set((current ?? []).map((row) => row.product_id as string));
+    const added = pool.filter((productId) => !before.has(productId));
+    const removed = [...before].filter((productId) => !pool.includes(productId));
+
+    const writePool = async (): Promise<string | null> => {
+      if (added.length > 0) {
+        const { error } = await admin
+          .from("scoop_tier_products")
+          .insert(added.map((productId) => ({ tier_id: tierId, product_id: productId })));
+        if (error) return friendly(error.message);
+      }
+      if (removed.length > 0) {
+        const { error } = await admin
+          .from("scoop_tier_products")
+          .delete()
+          .eq("tier_id", tierId)
+          .in("product_id", removed);
+        if (error) return friendly(error.message);
+      }
+      return null;
+    };
+
+    const writeTier = async (): Promise<string | null> => {
+      const { data, error } = await admin
+        .from("scoop_tiers")
+        .update(fields)
+        .eq("id", tierId)
+        .select("id");
+      if (error) return friendly(error.message);
+      if (!data || data.length === 0) return "That tier no longer exists.";
+      return null;
+    };
+
+    /*
+     * Which half goes first depends on which way the tier is moving.
+     *
+     * Switching ON: the pool has to be there before the row says `active`, or
+     * the trigger on `scoop_tiers` refuses the update. Switching OFF or staying
+     * off: the row has to be inactive before the pool shrinks, or the trigger on
+     * `scoop_tier_products` refuses the delete. Both orders are legal for the
+     * ordinary case where nothing about `active` or the pool's size changed.
+     */
+    const failure = active
+      ? ((await writePool()) ?? (await writeTier()))
+      : ((await writeTier()) ?? (await writePool()));
+    if (failure) return fail(failure);
+
+    revalidatePath("/admin/scoops");
+    revalidatePath(`/admin/scoops/${tierId}`);
+    // The shopfront lists the sellable tiers and shows each pool, so both change
+    // when any of this does.
+    revalidatePath("/scoop");
+    revalidatePath(`/scoop/${slug}`);
+
+    if (!active) {
+      const blockers = activationBlockers(
+        { pieceCount, priceCents, packedWeightGrams: weight },
+        pool.length,
+      );
+      const saved = id ? "Saved" : "Tier created";
+      return ok(
+        blockers.length > 0
+          ? `${saved}, as a draft. Before it can be switched on: ${blockers.join(", and ")}.`
+          : `${saved}, as a draft. It is ready to switch on whenever you are.`,
+      );
+    }
+
+    return ok(id ? "Saved. It is live in the shop." : "Tier created and live in the shop.");
+  });
+}
+
+/**
+ * Record what actually went into one packed scoop.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * WHY "orders" AND NOT "catalogue" OR "inventory".
+ *
+ * This is the same authority `recordSale` has, and for the same reason: it
+ * RECORDS what physically happened to an order. It stamps a cost, but it does
+ * not author one — the figure comes from `unitCostsAtSale`, the same helper the
+ * checkout and the webhook use, and nothing here can change what a piece costs.
+ * It moves stock, but as a consequence of a parcel being packed rather than as
+ * a count of a shelf.
+ *
+ * "orders" is also the capability Packing holds, and packing a scoop is
+ * literally the job that role exists for. Guarding this with "catalogue" or
+ * "inventory" would lock the packing helper out of the one screen she is there
+ * to use — while `lib/auth/staff.ts`'s promise, that Packing never sees a cost
+ * or a margin, is kept where it is actually kept: the panel does not RENDER a
+ * cost to a role without "reports". The action reading one on the server is not
+ * the same thing as showing it.
+ * ────────────────────────────────────────────────────────────────────────────
+ *
+ * PRESSING SAVE TWICE MUST NOT TAKE THE SAME PIECES OFF THE SHELF TWICE.
+ * `scoop_packs.stock_applied` is the claim flag 0007 provides for exactly this,
+ * and it is used the way `orders.stock_applied` is used in the Stripe webhook:
+ * a compare-and-set taken BEFORE any decrement, and handed back only while
+ * nothing has landed yet. Once the claim is spent this action will not touch
+ * the pieces or the stock again — a second press saves the video link and says
+ * so.
+ */
+export async function recordScoopPack(_prev: FormState, form: FormData): Promise<FormState> {
+  return guard("orders", async () => {
+    const staff = await requireStaff("orders");
+    const admin = createAdminClient();
+
+    const orderItemId = text(form, "order_item_id");
+    if (!orderItemId) return fail("No scoop given.");
+
+    const packIndex = Number.parseInt(text(form, "pack_index"), 10);
+    if (!Number.isFinite(packIndex) || packIndex < 1) return fail("Which scoop is this?");
+
+    // The order id comes off the line, never off the form. It decides what gets
+    // revalidated, and a request body is not allowed to steer that.
+    const { data: lineRow, error: lineError } = await admin
+      .from("order_items")
+      .select(
+        "id, order_id, quantity, scoop_tier_id, orders(status), scoop_tiers(piece_count)",
+      )
+      .eq("id", orderItemId)
+      .maybeSingle();
+
+    if (lineError) return fail(friendly(lineError.message));
+    if (!lineRow) return fail("That order line no longer exists.");
+    if (!lineRow.scoop_tier_id) {
+      return fail("That line is not a Lucky Scoop, so there is nothing to pack.");
+    }
+
+    /*
+     * Not for a cancelled order, and not for an unpaid checkout.
+     *
+     * Recording a pack takes real pieces off the shelf. On a cancelled order —
+     * including the one the studio is told not to post because the payment
+     * cleared against it and is owed back — nothing is going in a bag, so the
+     * decrement would be pure drift in the stock count. `pending` is not an
+     * order at all; it is a checkout somebody abandoned.
+     */
+    const orderRow = Array.isArray(lineRow.orders) ? lineRow.orders[0] : lineRow.orders;
+    const orderStatus = (orderRow?.status as string) ?? "";
+    if (orderStatus === "cancelled") {
+      return fail(
+        "This order is cancelled, so nothing should be packed for it. Recording " +
+          "a scoop would take the pieces off the shelf for a parcel that is not going out.",
+      );
+    }
+    if (orderStatus === "pending") {
+      return fail("This is an unpaid checkout, not an order. There is nothing to pack.");
+    }
+
+    const quantity = Math.max(1, Number(lineRow.quantity ?? 1));
+    if (packIndex > quantity) {
+      return fail(`This line is ${quantity} scoop${quantity === 1 ? "" : "s"}, so there is no scoop ${packIndex}.`);
+    }
+
+    const tier = Array.isArray(lineRow.scoop_tiers) ? lineRow.scoop_tiers[0] : lineRow.scoop_tiers;
+    const orderId = lineRow.order_id as string;
+
+    const videoUrl = text(form, "video_url") || null;
+    if (videoUrl && videoUrl.length > 500) {
+      return fail("That video link is too long to store. Paste the short share link instead.");
+    }
+    const note = text(form, "note") || null;
+    if (note && note.length > 2000) return fail("That note is longer than this field can hold.");
+
+    const { data: existing, error: existingError } = await admin
+      .from("scoop_packs")
+      .select("id, stock_applied")
+      .eq("order_item_id", orderItemId)
+      .eq("pack_index", packIndex)
+      .maybeSingle();
+    if (existingError) return fail(friendly(existingError.message));
+
+    /*
+     * Already recorded: the video link and the note are still hers to change —
+     * she films after the parcel is packed — but the pieces and the stock are
+     * settled. Undoing a stock movement needs a compensating one, which nothing
+     * in this shop has, so this refuses to pretend rather than quietly writing a
+     * new piece list over a claim that has already been spent.
+     */
+    if (existing?.stock_applied) {
+      const { error } = await admin
+        .from("scoop_packs")
+        .update({ video_url: videoUrl, note })
+        .eq("id", existing.id as string);
+      if (error) return fail(friendly(error.message));
+
+      revalidatePath(`/admin/orders/${orderId}`);
+      return ok(
+        "This scoop was already recorded and its stock has come off, so the " +
+          "pieces were left alone. The video link and the note are saved.",
+      );
+    }
+
+    /*
+     * The pieces, as parallel arrays — the shape the measuring screen uses. The
+     * lengths are checked against each other rather than against a fixed count:
+     * a pool is however big she made it, and the panel renders one row per pool
+     * product plus a slot for something that was not in the pool at all.
+     */
+    const productIds = form.getAll("piece_product").map(String);
+    const quantities = form.getAll("piece_quantity").map(String);
+    if (productIds.length !== quantities.length) {
+      return fail("That form was incomplete. Reload the page and try again.");
+    }
+
+    const pieces = new Map<string, number>();
+    for (let i = 0; i < productIds.length; i += 1) {
+      const productId = productIds[i].trim();
+      const raw = quantities[i].trim();
+      if (!productId) {
+        // A quantity typed against the "something else" slot with no product
+        // chosen. Refused rather than dropped: this is the one row where the
+        // number and the product are typed separately.
+        if (raw !== "" && Number(raw) > 0) {
+          return fail("There is a number typed with no product chosen. Pick the piece, or clear the number.");
+        }
+        continue;
+      }
+      if (raw === "") continue;
+
+      const count = Number(raw);
+      if (!Number.isInteger(count) || count < 0) {
+        return fail("How many of each piece went in has to be a whole number.");
+      }
+      if (count === 0) continue;
+      // Two of the same charm is one row with a quantity of 2 (0007), so the
+      // same product listed twice adds up rather than colliding on the key.
+      pieces.set(productId, (pieces.get(productId) ?? 0) + count);
+    }
+
+    if (pieces.size === 0) {
+      return fail(
+        "Nothing has been recorded — put a number against at least one piece. " +
+          "This is what takes the stock off and what makes the margin real.",
+      );
+    }
+
+    const ids = [...pieces.keys()];
+    const { data: known, error: knownError } = await admin
+      .from("products")
+      .select("id")
+      .in("id", ids);
+    if (knownError) return fail(friendly(knownError.message));
+    if ((known?.length ?? 0) !== ids.length) {
+      return fail("One of those products no longer exists. Reload the page and try again.");
+    }
+
+    /*
+     * The cost of each piece AT THIS MOMENT, stamped onto the row. Null for a
+     * piece nobody has measured, which makes the whole scoop's cost unknown
+     * rather than cheap — `packCost` refuses a partial sum for the same reason
+     * the reports refuse one.
+     *
+     * A piece that is not in the tier's pool is NOT refused. The migration says
+     * why: a pool is a policy that is edited over time, and what went into a
+     * parcel last week is a fact. The panel shows it back with a note.
+     */
+    const costs = await unitCostsAtSale(ids);
+
+    let packId = existing?.id as string | undefined;
+    if (!packId) {
+      const { data: created, error } = await admin
+        .from("scoop_packs")
+        .insert({
+          order_item_id: orderItemId,
+          pack_index: packIndex,
+          // Copied from the tier rather than joined to it, so editing the tier
+          // next month cannot change what this customer was promised.
+          piece_count: Number(tier?.piece_count ?? 0) || 1,
+          packed_by: staff.userId,
+        })
+        .select("id")
+        .single();
+
+      if (error) {
+        // 23505 on (order_item_id, pack_index) is the double-press this table's
+        // unique constraint exists to catch. Take up the row the other press
+        // made rather than reporting a failure for work that succeeded.
+        if (error.code !== "23505") return fail(friendly(error.message));
+        const { data: raced } = await admin
+          .from("scoop_packs")
+          .select("id, stock_applied")
+          .eq("order_item_id", orderItemId)
+          .eq("pack_index", packIndex)
+          .maybeSingle();
+        if (!raced) return fail(friendly(error.message));
+        if (raced.stock_applied) {
+          return ok("This scoop had already been recorded, so nothing was changed.");
+        }
+        packId = raced.id as string;
+      } else {
+        packId = created.id as string;
+      }
+    }
+
+    // Replaced wholesale: this only ever runs before the claim is taken, so
+    // there is no stock movement to keep in step with it, and a piece taken off
+    // the list has to actually disappear.
+    const { error: clearError } = await admin
+      .from("scoop_pack_items")
+      .delete()
+      .eq("pack_id", packId);
+    if (clearError) return fail(friendly(clearError.message));
+
+    const { error: itemsError } = await admin.from("scoop_pack_items").insert(
+      [...pieces].map(([productId, count]) => ({
+        pack_id: packId,
+        product_id: productId,
+        quantity: count,
+        unit_cost_cents: costs.get(productId) ?? null,
+      })),
+    );
+    if (itemsError) return fail(friendly(itemsError.message));
+
+    /*
+     * THE CLAIM. Compare-and-set on `stock_applied`, taken before a single unit
+     * moves, exactly as `claimStock` does in the Stripe webhook. Two presses
+     * race here and one of them updates no rows — that one decrements nothing.
+     */
+    const { data: claimed, error: claimError } = await admin
+      .from("scoop_packs")
+      .update({
+        stock_applied: true,
+        video_url: videoUrl,
+        note,
+        packed_at: new Date().toISOString(),
+        packed_by: staff.userId,
+      })
+      .eq("id", packId)
+      .eq("stock_applied", false)
+      .select("id");
+
+    if (claimError) return fail(friendly(claimError.message));
+    if (!claimed || claimed.length === 0) {
+      revalidatePath(`/admin/orders/${orderId}`);
+      return ok("This scoop had already been recorded, so no stock was taken twice.");
+    }
+
+    let applied = 0;
+    let oversoldUnits = 0;
+    for (const [productId, count] of pieces) {
+      const { data: shortfall, error } = await admin.rpc("decrement_stock", {
+        p_product_id: productId,
+        p_quantity: count,
+      });
+
+      if (error) {
+        console.error(
+          `[admin] Stock decrement failed for scoop pack ${packId}, product ` +
+            `${productId} (${applied} piece(s) already applied):`,
+          error.message,
+        );
+        if (applied === 0) {
+          // Nothing has landed, so the claim can go back and the whole movement
+          // can be attempted again cleanly. Once one decrement has gone through,
+          // releasing would let a retry double-count it — the webhook's rule.
+          await admin
+            .from("scoop_packs")
+            .update({ stock_applied: false })
+            .eq("id", packId)
+            .eq("stock_applied", true);
+          return fail(
+            "The stock did not move, so nothing has been recorded as packed. " +
+              "Try again in a moment.",
+          );
+        }
+        revalidatePath(`/admin/orders/${orderId}`);
+        revalidatePath("/admin/inventory");
+        return fail(
+          `The pieces are recorded, but the stock count only moved for ${applied} of ` +
+            `${pieces.size}. Correct the rest on the inventory page.`,
+        );
+      }
+
+      applied += 1;
+      // An oversell is not an error in this shop (0005) — it is a print-this-
+      // first signal. For a scoop it is also the sentence that says the bowl was
+      // emptier than the screen thought, which is worth knowing before the next
+      // one is sold.
+      oversoldUnits += Math.max(0, Number(shortfall ?? 0));
+    }
+
+    /*
+     * The line's cost each, from what actually went in.
+     *
+     * Only written when EVERY scoop on the line has been recorded and every
+     * piece in every one of them has a measured cost. A line of two scoops has
+     * one `unit_cost_cents`, so the figure is the two packs' total divided by
+     * the two — exact arithmetic on real numbers, not an average standing in for
+     * a gap. Anything short of that leaves the column alone rather than writing
+     * a total that understates itself.
+     */
+    const { data: allPacks } = await admin
+      .from("scoop_packs")
+      .select("id, scoop_pack_items(product_id, quantity, unit_cost_cents)")
+      .eq("order_item_id", orderItemId);
+
+    if ((allPacks?.length ?? 0) === quantity) {
+      let total = 0;
+      let allMeasured = true;
+      for (const pack of allPacks ?? []) {
+        const cost = packCost(
+          ((pack.scoop_pack_items ?? []) as Record<string, unknown>[]).map((item) => ({
+            productId: item.product_id as string,
+            quantity: Number(item.quantity ?? 0),
+            unitCostCents:
+              item.unit_cost_cents === null || item.unit_cost_cents === undefined
+                ? null
+                : Number(item.unit_cost_cents),
+          })),
+        );
+        if (cost === null) {
+          allMeasured = false;
+          break;
+        }
+        total += cost;
+      }
+
+      if (allMeasured) {
+        await admin
+          .from("order_items")
+          .update({ unit_cost_cents: Math.round(total / quantity) })
+          .eq("id", orderItemId);
+      }
+    }
+
+    revalidatePath(`/admin/orders/${orderId}`);
+    revalidatePath("/admin/orders");
+    revalidatePath("/admin/inventory");
+    revalidatePath("/admin/scoops");
+    revalidatePath("/admin/reports");
+
+    const oversoldNote =
+      oversoldUnits > 0
+        ? ` ${oversoldUnits} of them went past what the shelf said was there — print those first.`
+        : "";
+
+    /*
+     * What this scoop cost is either known or it is not, and the message says
+     * which. A piece nobody has measured makes the whole pack's cost unknown
+     * rather than cheap (`packCost` refuses a partial sum), and telling her it
+     * is "costed" when one piece is missing is the plausible-looking claim this
+     * project treats as a defect.
+     */
+    const unmeasured = ids.filter((productId) => costs.get(productId) === null).length;
+
+    return ok(
+      unmeasured > 0
+        ? `Recorded, and the stock is off the shelf. What it cost is still unknown — ` +
+            `${unmeasured} of the pieces that went in ${unmeasured === 1 ? "has" : "have"} ` +
+            `never been measured.${oversoldNote}`
+        : `Recorded. The stock is off the shelf and this scoop is costed.${oversoldNote}`,
+    );
+  });
+}
+
 /* --------------------------------------------------------- studio access */
 
 /**
@@ -1612,6 +2309,16 @@ function friendly(message: string): string {
   if (lower.includes("products_slug_key")) return "Another product already uses that web address.";
   if (lower.includes("colours_name_key")) return "There is already a colour with that name.";
   if (lower.includes("staff_invitations_token_hash_key")) return "Try again — that was a one-in-a-billion collision.";
+  if (lower.includes("scoop_tiers_slug_key")) return "Another scoop tier already uses that web address.";
+  if (lower.includes("scoop_tiers_activation_check")) {
+    return (
+      "A tier cannot be listed in the shop without a price and a packed weight. " +
+      "Fill both in, or keep it as a draft."
+    );
+  }
+  // `scoop_tier_pool_is_big_enough` raises its own sentence, naming the tier and
+  // both numbers, and carries a hint. Passing it through says more than any
+  // replacement would.
   if (lower.includes("violates foreign key") && lower.includes("colour")) {
     return "That colour is used by a product, so it cannot be deleted. Turn it off instead.";
   }
