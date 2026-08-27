@@ -1,25 +1,28 @@
 -- Schema smoke test.
 --
 -- Run this in the Supabase SQL editor after applying every file in
--- supabase/migrations/ in order and then seed.sql. It returns ONE table of 52
+-- supabase/migrations/ in order and then seed.sql. It returns ONE table of 86
 -- rows and every `pass` must be `t`. These are the guarantees that only fail
 -- in production — a missing grant here means paid orders are never recorded,
 -- and you would first hear about it from a customer.
 --
 -- Count the rows as well as the ticks. This file has grown with the schema —
 -- 24 assertions, then 29 with shipping, 50 with the staff area, 52 with the
--- letter_eligible default — so a shorter table than 52 means an older copy of
--- this file, and an older copy is a green result that never looked at part of
--- the schema. That reads like a pass and is not one.
+-- letter_eligible default, 65 with 0005 (the confirmation-email stamp, the
+-- observable stock clamp and the refund register), 86 with 0006 (the enquiry
+-- and sign-up tables) — so a shorter table than 86 means an older copy of this
+-- file, and an older copy is a green result that never looked at part of the
+-- schema. That reads like a pass and is not one.
 --
 -- A migration that is not applied does not shorten the table, it stops the run:
 -- the first assertion that names a missing object raises instead of returning
 -- `f`. `scripts/verify-sql.sh` applies every file in supabase/migrations/
 -- rather than a hand-written list, because the list fell behind twice.
 --
--- It writes four throwaway orders (one with an order item) and one throwaway
--- product inside a transaction it rolls back, so it is safe to run against a
--- live database, though quiet hours are still kinder.
+-- It writes six throwaway orders (one with an order item), two throwaway
+-- products, one throwaway payment incident, one throwaway enquiry and one
+-- throwaway newsletter sign-up inside a transaction it rolls back, so it is
+-- safe to run against a live database, though quiet hours are still kinder.
 
 begin;
 
@@ -49,10 +52,12 @@ select 'personalised products have a mode', count(*) filter (
          where is_personalised and personalisation_mode is null) = 0            from public.products
 union all
 -- 16 since 0003_admin.sql added staff, staff_invitations, colours,
--- filament_stock, shop_settings, accessories and product_filament. A new table
--- that forgets to enable RLS lands in `public` readable by the anon key, so
--- this count is deliberately exact rather than `>=`.
-select 'row-level security everywhere',    count(*) = 16 from pg_tables
+-- filament_stock, shop_settings, accessories and product_filament; 17 since
+-- 0005_sale_integrity.sql added payment_incidents; 19 since 0006_enquiries.sql
+-- added contact_enquiries and newsletter_signups. A new table that forgets to
+-- enable RLS lands in `public` readable by the anon key, so this count is
+-- deliberately exact rather than `>=`.
+select 'row-level security everywhere',    count(*) = 19 from pg_tables
          where schemaname = 'public' and rowsecurity = true
 union all
 -- A client must never be able to write a review: the old policy let any
@@ -365,6 +370,352 @@ select 'a hand-added product is not letter-eligible',
        (select letter_eligible from public.products
          where slug = 'verify-default-probe') = false;
 
+-- 0005_sale_integrity.sql, part 1: the confirmation email is recoverable.
+--
+-- The mail used to get exactly one attempt, queued from inside the branch of
+-- assignOrderNumber that only the delivery which *allocated* the number can
+-- reach. Every Stripe redelivery therefore skipped it, and nothing recorded
+-- whether it had ever gone out — a lost send was lost with the process that
+-- dropped it, leaving a paid customer with no order number and /track needing
+-- one. The column below is what makes a retry able to tell.
+--
+-- Two rows, failing for different reasons: the first catches the column being
+-- dropped or renamed, the second catches it acquiring a default (a `now()`
+-- there would mark every order as confirmed by email the instant it is staged,
+-- which is the same silence with a tick beside it).
+insert into public.orders
+  (email, status, subtotal, shipping, total, shipping_address, stripe_session_id)
+values
+  ('verify@example.test', 'confirmed', 1100, 0, 1100, '{}'::jsonb, 'cs_verify_mail');
+
+insert into _checks (check_name, pass)
+select 'orders record when mail was sent' as check,
+       exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'orders'
+                  and column_name = 'confirmation_email_sent_at') as pass
+union all
+select 'a new order has no mail stamp',
+       (select confirmation_email_sent_at is null from public.orders
+         where stripe_session_id = 'cs_verify_mail');
+
+-- 0005, part 2: stock is moved in SQL, and the clamp is observable.
+--
+-- decrement_stock was `set stock_on_hand = greatest(0, stock_on_hand - qty)`
+-- returning void, so selling the last one twice succeeded twice in silence;
+-- recordSale was worse, reading the count in JavaScript and writing back
+-- `Math.max(0, read - qty)`, which discards any decrement that lands in
+-- between. The clamp stays — a shelf cannot hold minus one — but the shortfall
+-- is now returned to the caller and accumulated on the row, because this shop
+-- prints to order and an oversell is a print-this-first signal, not an error.
+insert into public.products
+  (slug, sku, name, short_name, category, theme, art, tint, price, rating, stock_on_hand)
+values
+  -- rating 0 for the same reason as the probe below: 'no fabricated ratings'
+  -- has already run, but a row that would break it if this block moved is a
+  -- trap rather than a test.
+  ('verify-stock-probe', 'VERIFY-001', 'Verify stock probe', 'Stock probe',
+   'Clicker keychain', 'mono', 'clicker', 'sky', 100, 0, 3);
+
+-- Each sale is run in its own statement and its result written down before the
+-- next one, for the reason the stock-claim block above gives: everything in one
+-- statement shares one snapshot, so a read UNIONed alongside the call that
+-- changed the row would report the value from *before* it and print `t` without
+-- testing anything.
+create temp table _stock (
+  step      text primary key,
+  shortfall integer,
+  on_hand   integer,
+  oversold  integer
+);
+
+-- Two of the three on the shelf: an ordinary sale.
+insert into _stock (step, shortfall)
+select 'within', public.decrement_stock(
+  (select id from public.products where slug = 'verify-stock-probe'), 2);
+
+update _stock set
+  on_hand  = (select stock_on_hand  from public.products where slug = 'verify-stock-probe'),
+  oversold = (select oversold_units from public.products where slug = 'verify-stock-probe')
+ where step = 'within';
+
+-- Two more, when one is left: the sale the old function took twice in silence.
+insert into _stock (step, shortfall)
+select 'oversell', public.decrement_stock(
+  (select id from public.products where slug = 'verify-stock-probe'), 2);
+
+update _stock set
+  on_hand  = (select stock_on_hand  from public.products where slug = 'verify-stock-probe'),
+  oversold = (select oversold_units from public.products where slug = 'verify-stock-probe')
+ where step = 'oversell';
+
+insert into _stock (step, shortfall)
+select 'unknown', public.decrement_stock(
+  '00000000-0000-0000-0000-000000000000'::uuid, 1);
+
+insert into _checks (check_name, pass)
+select 'a sale within stock takes what it asked' as check,
+       (select shortfall from _stock where step = 'within') = 0 as pass
+union all
+select 'that sale left the right count',
+       (select on_hand from _stock where step = 'within') = 1
+union all
+select 'selling two of the last one is reported',
+       (select shortfall from _stock where step = 'oversell') = 1
+union all
+select 'stock never goes negative',
+       (select on_hand from _stock where step = 'oversell') = 0
+union all
+-- The whole point of the change: the shop is not protected from finding out.
+select 'the oversell is recorded, not just clamped',
+       (select oversold from _stock where step = 'oversell') = 1
+union all
+-- A product that is not there is a different answer from a sale that took
+-- nothing, and nulls stay null.
+select 'an unknown product answers null',
+       (select shortfall from _stock where step = 'unknown') is null;
+
+-- 0005, part 3: a payment that owes a refund is a row, not a log line.
+--
+-- A cancelled order that is paid anyway used to produce one `console.error`
+-- saying "refund this one by hand" and a 200 to Stripe. The customer was
+-- charged, received nothing, and the only record was on a platform nobody
+-- reads. `stripe_session_id` is unique so the webhook can record it once
+-- however many times Stripe redelivers, and the table is service-role only
+-- because it holds a payment intent and an amount charged.
+insert into public.payment_incidents
+  (stripe_session_id, amount_cents, kind, order_status, detail)
+values
+  ('cs_verify_incident', 2400, 'paid_while_cancelled', 'cancelled', 'verify');
+
+insert into public.payment_incidents
+  (stripe_session_id, amount_cents, kind, order_status, detail)
+values
+  ('cs_verify_incident', 2400, 'paid_while_cancelled', 'cancelled', 'redelivery')
+-- No conflict target on purpose. `on conflict (stripe_session_id)` would raise
+-- if that unique constraint were ever dropped, aborting the run instead of
+-- printing an `f`; the bare form inserts a second row in that case and the
+-- assertion below goes red, which is what it is for.
+on conflict do nothing;
+
+insert into _checks (check_name, pass)
+select 'a redelivered payment records one incident' as check,
+       (select count(*) from public.payment_incidents
+         where stripe_session_id = 'cs_verify_incident') = 1 as pass
+union all
+-- Open means unresolved, and unresolved is what the studio overview shows.
+-- Phrased as a NOT EXISTS rather than reading the column out of a subquery:
+-- if the unique constraint above were dropped there would be two rows here,
+-- and a scalar subquery would raise — aborting the run instead of letting the
+-- row above print the `f` it is there to print.
+select 'a new incident is unresolved',
+       not exists (select 1 from public.payment_incidents
+                    where stripe_session_id = 'cs_verify_incident'
+                      and resolved_at is not null)
+union all
+select 'anon cannot read payment incidents',
+       not has_table_privilege('anon', 'public.payment_incidents', 'select')
+union all
+select 'signed-in cannot read payment incidents',
+       not has_table_privilege('authenticated', 'public.payment_incidents', 'select')
+union all
+select 'the webhook can record an incident',
+       has_table_privilege('service_role', 'public.payment_incidents', 'insert');
+
+-- 0006_enquiries.sql: the customer's message is a row before it is an email.
+--
+-- /api/contact used to hand the enquiry to Resend and store it nowhere — its
+-- own comment said "the email IS the delivery" — and answered
+-- `{ ok: true, delivered: false }` when the send failed. An unset
+-- RESEND_API_KEY, an unset NEXT_PUBLIC_SUPPORT_EMAIL, a provider 5xx or an
+-- 8-second timeout each destroyed the only copy of what the customer typed.
+-- This shop states in its own legal pages that it sends no order emails, so
+-- the form is one of very few channels a customer has, and a message reporting
+-- faulty goods is the one that must not vanish. The rows below assert that the
+-- table exists, that it accepts the shape the route writes, that it refuses
+-- what the route refuses, and that nobody holding the browser key can reach it.
+insert into public.contact_enquiries (name, email, topic, order_number, message)
+values
+  ('Verify Customer', 'verify@example.test', 'returns', 'BS-VERIFY-0001',
+   'The clicker arrived with a cracked hinge and will not click.');
+
+insert into _checks (check_name, pass)
+select 'an enquiry is stored as a row' as check,
+       (select count(*) from public.contact_enquiries
+         where email = 'verify@example.test') = 1 as pass
+union all
+-- Null means no notification has gone out for this enquiry, in the same shape
+-- as orders.confirmation_email_sent_at. A `now()` default here would mark every
+-- enquiry as notified the instant it is written, which is the old silence with
+-- a tick beside it.
+--
+-- Phrased as NOT EXISTS rather than reading the column out of a scalar
+-- subquery, for the reason the payment-incident block above gives: a schema
+-- change that produced two matching rows would make a scalar subquery *raise*,
+-- aborting the run instead of letting the row above print the `f` it is there
+-- to print.
+select 'a new enquiry has no notify stamp',
+       not exists (select 1 from public.contact_enquiries
+                    where email = 'verify@example.test'
+                      and notified_at is not null)
+union all
+-- Open means unanswered, and unanswered is what a studio inbox screen shows.
+select 'a new enquiry is unanswered',
+       not exists (select 1 from public.contact_enquiries
+                    where email = 'verify@example.test'
+                      and handled_at is not null);
+
+-- The length bound bites. Both assertions below run the offending insert inside
+-- a subtransaction and catch the violation: a bare insert would abort the whole
+-- run rather than print an `f`, and a run that stops is not a run that failed.
+--
+-- The bound matters because this is an unauthenticated endpoint that now writes
+-- rows. lib/rate-limit.ts allows 5 posts per minute per IP, held in one
+-- process's memory and reset by every deploy, so the row size is the other half
+-- of what a flood costs: 2000 characters caps a worst-case row at a little over
+-- 2 KB, which is what makes 5/min a number you can multiply.
+do $$
+begin
+  begin
+    insert into public.contact_enquiries (name, email, topic, message)
+    values ('Bot', 'bot@example.test', 'other', repeat('x', 2001));
+    insert into _checks (check_name, pass)
+    values ('an over-long message is refused', false);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('an over-long message is refused', true);
+  end;
+end $$;
+
+-- The topic enum is a copy of the route's zod enum. A value the dropdown cannot
+-- produce is a value that did not come from the form, and `topic` is the one
+-- field the route is allowed to log precisely because it cannot be free text.
+do $$
+begin
+  begin
+    insert into public.contact_enquiries (name, email, topic, message)
+    values ('Bot', 'bot@example.test', 'refund-me-now', 'ten characters');
+    insert into _checks (check_name, pass)
+    values ('an invented topic is refused', false);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('an invented topic is refused', true);
+  end;
+end $$;
+
+-- Who may reach it. A name, an email address and free text a stranger typed:
+-- service_role only, in and out. The four `not has_table_privilege` rows are
+-- the insert-path decision made testable — the browser writes nothing directly,
+-- the route writes it server-side after validating and rate-limiting it. Adding
+-- `grant insert to anon` to make a client-side submit "easier" turns this table
+-- into a public PostgREST endpoint and takes two of these rows red with it.
+insert into _checks (check_name, pass)
+select 'anon cannot read enquiries' as check,
+       not has_table_privilege('anon', 'public.contact_enquiries', 'select') as pass
+union all
+select 'signed-in cannot read enquiries',
+       not has_table_privilege('authenticated', 'public.contact_enquiries', 'select')
+union all
+select 'anon cannot write enquiries',
+       not has_table_privilege('anon', 'public.contact_enquiries', 'insert')
+union all
+select 'signed-in cannot write enquiries',
+       not has_table_privilege('authenticated', 'public.contact_enquiries', 'insert')
+union all
+-- ...and the counterpart. Without these two the route cannot store an enquiry
+-- at all, and every message is back to living or dying by one Resend call.
+select 'the route can record an enquiry',
+       has_table_privilege('service_role', 'public.contact_enquiries', 'insert')
+union all
+select 'the studio can read enquiries',
+       has_table_privilege('service_role', 'public.contact_enquiries', 'select');
+
+-- 0006, the other half: a sign-up is a membership, not a message.
+--
+-- Its own table because the rules differ. An address is unique — asking twice
+-- is one fact stated twice — while an enquiry repeats freely, and folding them
+-- together would leave half the columns null for half the rows and make
+-- clearing out answered enquiries delete the mailing list. Note what is NOT
+-- asserted anywhere, because it does not exist: a newsletter, a welcome email
+-- or an unsubscribe link. This table records who asked. Nothing sends to it.
+insert into public.newsletter_signups (email) values ('verify@example.test');
+
+-- The second submission, exactly as the route makes it. No conflict target on
+-- purpose, for the reason the payment-incident block gives: `on conflict
+-- (email)` would raise if the primary key were ever dropped, aborting the run
+-- instead of printing an `f`.
+insert into public.newsletter_signups (email) values ('verify@example.test')
+on conflict do nothing;
+
+insert into _checks (check_name, pass)
+select 'asking twice records one address' as check,
+       (select count(*) from public.newsletter_signups
+         where email = 'verify@example.test') = 1 as pass
+union all
+select 'a new sign-up has no notify stamp',
+       not exists (select 1 from public.newsletter_signups
+                    where email = 'verify@example.test'
+                      and notified_at is not null);
+
+-- An address that has been taken off must stay off. `on conflict do nothing`
+-- is what guarantees it: an upsert that overwrote the row would silently
+-- resurrect an unsubscribed address the next time anybody typed it into the
+-- footer box — including anybody who is not its owner.
+update public.newsletter_signups
+   set unsubscribed_at = now()
+ where email = 'verify@example.test';
+
+insert into public.newsletter_signups (email) values ('verify@example.test')
+on conflict do nothing;
+
+-- NOT EXISTS again, and it does double duty: with the primary key intact there
+-- is one row and this reads "it is still stamped", while a schema that lost the
+-- key leaves a second, unstamped row behind and this goes red instead of
+-- raising.
+insert into _checks (check_name, pass)
+select 'an unsubscribe survives a repeat sign-up' as check,
+       not exists (select 1 from public.newsletter_signups
+                    where email = 'verify@example.test'
+                      and unsubscribed_at is null) as pass;
+
+-- The address IS the primary key, so it has to be stored in one canonical form
+-- or the key deduplicates nothing: Mia@example.com and mia@example.com would be
+-- two rows, and the unsubscribe above would only cover one of them. The route
+-- lower-cases in its zod transform; this CHECK is what stops that being
+-- forgotten silently.
+do $$
+begin
+  begin
+    insert into public.newsletter_signups (email) values ('Verify@Example.test');
+    insert into _checks (check_name, pass)
+    values ('a mixed-case address is refused', false);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('a mixed-case address is refused', true);
+  end;
+end $$;
+
+insert into _checks (check_name, pass)
+select 'anon cannot read sign-ups' as check,
+       not has_table_privilege('anon', 'public.newsletter_signups', 'select') as pass
+union all
+select 'signed-in cannot read sign-ups',
+       not has_table_privilege('authenticated', 'public.newsletter_signups', 'select')
+union all
+-- A write-only grant would not be harmless here: a duplicate-key error is an
+-- oracle for "is this address on the list", answerable by anyone holding the
+-- key that ships in the browser bundle.
+select 'anon cannot write sign-ups',
+       not has_table_privilege('anon', 'public.newsletter_signups', 'insert')
+union all
+select 'signed-in cannot write sign-ups',
+       not has_table_privilege('authenticated', 'public.newsletter_signups', 'insert')
+union all
+select 'the route can record a sign-up',
+       has_table_privilege('service_role', 'public.newsletter_signups', 'insert')
+union all
+select 'the studio can read sign-ups',
+       has_table_privilege('service_role', 'public.newsletter_signups', 'select');
+
 -- Search is bounded: a lone wildcard must not match the whole catalogue.
 insert into _checks (check_name, pass)
 select 'search rejects a bare wildcard' as check,
@@ -373,7 +724,7 @@ union all
 select 'search ignores empty input',
        (select count(*) from public.search_products('   ')) = 0;
 
--- Every assertion, in one result set. `pass` must be `t` on all 52 rows.
+-- Every assertion, in one result set. `pass` must be `t` on all 86 rows.
 select check_name as check, pass from _checks order by ord;
 
 rollback;

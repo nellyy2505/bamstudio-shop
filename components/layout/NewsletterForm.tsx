@@ -5,10 +5,23 @@ import { useState } from "react";
 import { Icon } from "@/components/ui";
 
 /**
- * There is no subscriber list — no table, no audience, no unsubscribe link and
- * no newsletter. All /api/newsletter does is email the studio to say someone
- * asked to be added, so nothing here may promise a mailout, a welcome email or
- * a frequency. `delivered` says only whether that one notification landed.
+ * There is still no newsletter — no mailout, no welcome email and no
+ * unsubscribe link anywhere on this site — so nothing here may promise one, or
+ * a frequency.
+ *
+ * What did change (0006_enquiries.sql) is that the address is now kept.
+ * /api/newsletter writes it to `public.newsletter_signups` before it emails the
+ * studio, so a mail provider that is unconfigured or down no longer throws the
+ * request away. That table is a record that somebody asked; it is not a list
+ * anything sends to.
+ *
+ * The two response flags say different things and both are used below.
+ * `delivered` says only that the studio was emailed about the request — never
+ * that anyone read it. `stored` says the address is on record and will still be
+ * there tomorrow — never that it is subscribed to anything, because nothing
+ * sends to it. "That did not reach the studio and nothing was saved" was this
+ * component's undelivered copy and is false whenever `stored` is true, which is
+ * why the two cases are now worded apart.
  *
  * The Footer decides whether this form is offered at all; it renders only where
  * the request can actually reach someone. That decision needs the server-side
@@ -29,6 +42,10 @@ export function NewsletterForm() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>("idle");
   const [error, setError] = useState<string | null>(null);
+  // Kept separately from `state` because it is orthogonal to it: an address can
+  // be on record whether or not the studio was told, and the undelivered copy
+  // is only true in one of those two cases.
+  const [stored, setStored] = useState(false);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -55,9 +72,11 @@ export function NewsletterForm() {
         return;
       }
 
-      // 200 either way: `delivered` is the only thing that says whether the
-      // request reached a human, so the two outcomes get different copy.
+      // 200 either way. `delivered` says whether the studio was notified and
+      // `stored` whether the address is on record; they are independent, and
+      // the copy below may only claim the one it has.
       setEmail("");
+      setStored(body.stored === true);
       setState(body.delivered ? "done" : "undelivered");
     } catch {
       setError("We could not reach the studio. Check your connection and try again.");
@@ -70,8 +89,9 @@ export function NewsletterForm() {
       <p className={noteClass}>
         <Icon name="check" size={16} className="mt-0.5 shrink-0" />
         <span>
-          Passed on to the studio. There is no automatic list yet, so one of us
-          adds addresses by hand.
+          {stored
+            ? "Your address is on record and the studio has been told. There is still no newsletter, so nothing goes out to it yet."
+            : "Passed on to the studio, though we could not put your address on record here — so it may not be kept. There is no newsletter yet either way."}
         </span>
       </p>
     );
@@ -81,14 +101,26 @@ export function NewsletterForm() {
     return (
       <p className={noteClass}>
         <Icon name="help" size={16} className="mt-0.5 shrink-0" />
-        <span>
-          That did not reach the studio and nothing was saved. Try again in a
-          minute, or{" "}
-          <Link href="/contact" className="underline underline-offset-2">
-            say hello here
-          </Link>
-          .
-        </span>
+        {stored ? (
+          <span>
+            Your address is on record, but we could not tell the studio, so
+            nobody has seen it yet. There is still no newsletter and nothing
+            goes out to it. If you need an answer to something,{" "}
+            <Link href="/contact" className="underline underline-offset-2">
+              say hello here
+            </Link>
+            .
+          </span>
+        ) : (
+          <span>
+            That did not reach the studio and nothing was saved. Try again in a
+            minute, or{" "}
+            <Link href="/contact" className="underline underline-offset-2">
+              say hello here
+            </Link>
+            .
+          </span>
+        )}
       </p>
     );
   }

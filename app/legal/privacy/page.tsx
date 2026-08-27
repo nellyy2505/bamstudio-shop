@@ -131,7 +131,7 @@ export default function PrivacyPage() {
     <LegalShell
       title="Privacy policy"
       intro={`How ${SHOP.name} handles the personal information you give us when you order, sign up or send us a message.`}
-      updated="25 August 2026"
+      updated="27 August 2026"
     >
       <h2>Who we are</h2>
       {/* The registered business name and postal address are the owner's real
@@ -174,15 +174,20 @@ export default function PrivacyPage() {
           {!FORM_DELIVERS && !hasStudioMailbox
             ? " however you reach us"
             : ""}, including the order number you quote.
+          {FORM_DELIVERS
+            ? " A message sent through the contact form is saved in our database: your name, your email address, the topic you picked, the order number if you gave one, what you wrote, and the date it arrived."
+            : ""}
         </li>
-        {/* True whether or not the signup form stays on the site: there is no
-            subscriber table, so an address sent to us is only ever a message
-            someone reads. */}
+        {/* This used to say the address "reaches us as a message and nothing
+            else. There is no subscriber database behind this site." Both
+            sentences stopped being true with 0006_enquiries.sql, which adds
+            public.newsletter_signups. What has NOT changed is that nothing
+            sends to it — see the marketing section below. */}
         <li>
-          <strong>Asking to hear about new drops</strong> — if you send us your
-          email address to be added to a future mailing list, that address
-          reaches us as a message and nothing else. There is no subscriber
-          database behind this site.
+          <strong>Asking to hear about new drops</strong> — if you give us your
+          email address to hear about new designs, we save that address, the
+          date you asked and which part of the site you asked from. We do not
+          keep a name with it. There is no newsletter, so nothing is sent to it.
         </li>
         <li>
           <strong>Account details</strong> — if you create an account, your email
@@ -227,8 +232,9 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Accounts and order records</strong> — Supabase, which stores
-          your order history, profile and sign-in details, and sends the account
-          emails described below.
+          your order history, profile and sign-in details, the messages sent
+          through our contact form and any address given to hear about new
+          drops, and sends the account emails described below.
         </li>
         <li>
           <strong>Website hosting</strong> — the provider that serves these pages
@@ -270,8 +276,10 @@ export default function PrivacyPage() {
         Some of these providers store data outside Australia, including in the
         United States and the European Union. Two of our designers are based in
         Vietnam; they work on artwork and product files and do not need access to
-        customer records. By ordering, you consent to your information being
-        stored and processed overseas by the providers listed above.
+        customer records. By ordering — or by sending us a message or your email
+        address through this site, both of which are now saved with the same
+        providers — you consent to your information being stored and processed
+        overseas by the providers listed above.
       </p>
 
       <h2>Email we send, and marketing</h2>
@@ -284,9 +292,14 @@ export default function PrivacyPage() {
             the Resend secrets are set. That is an automatic order email by any
             reading, so the denial has to be gated on SENDS_CONFIRMATION. This
             paragraph was previously ungated and false in the launch config. */}
+      {/* "There is no mailing list" was true until 0006_enquiries.sql and is
+          not any more: addresses are kept. What is still true, and is the part
+          that matters to a reader, is that nothing sends to them — there is no
+          code anywhere in this project that mails a subscriber. */}
       <p>
-        We do not send marketing email. There is no mailing list and no
-        newsletter — if you have ticked a preference in your account, it records
+        We do not send marketing email. There is no newsletter: we keep the
+        addresses that have asked to hear about new drops, and nothing is sent
+        to them. If you have ticked a preference in your account, it records
         what you would like for the day we can send it, and nothing goes out in
         the meantime. We never send dispatch, tracking, restock or
         review-reminder emails.
@@ -297,9 +310,13 @@ export default function PrivacyPage() {
           : "The only email this site sends by itself is about your account: confirming your email address when you sign up, and the link that resets your password when you ask for one. Those are part of signing in, not marketing. No order confirmation is sent — your order number is shown on screen after you pay instead."}
       </p>
       <p>
-        If we ever do start a newsletter, it will only go to people who asked for
-        it, every message will carry an unsubscribe link, and this page will be
-        updated before the first one is sent.
+        There is no unsubscribe link on this site, because there is nothing yet
+        to unsubscribe from. If you would rather we did not keep your address in
+        the meantime, ask us using the details under &quot;Accessing and
+        correcting your information&quot; below. If we ever do start a
+        newsletter, it will only go to people who asked for it, every message
+        will carry an unsubscribe link, and this page will be updated before the
+        first one is sent.
       </p>
 
       <h2>Cookies</h2>
@@ -314,23 +331,55 @@ export default function PrivacyPage() {
       </p>
 
       <h2>How long we keep it</h2>
+      {/* Both branches of this used to say a contact-form message "is not saved
+          on this site", and the last sentence said there was no subscriber list
+          to keep. 0006_enquiries.sql makes all three false. No retention period
+          is stated here because none is set: nothing prunes either table, and a
+          period this shop does not enforce would be a worse sentence than an
+          honest "until we delete it". If a period is ever decided, say it here
+          and build the thing that applies it in the same change. */}
       <p>
         Order and payment records are kept for at least five years, which is the
         period Australian tax law requires.{" "}
         {FORM_DELIVERS
-          ? "A contact-form message is not saved on this site — it is forwarded straight to the studio inbox, where it stays until we delete it."
-          : "Contact-form messages are not saved on this site."}{" "}
-        There is no subscriber list, so there is nothing there to keep.
+          ? "A message sent through our contact form is kept in our database, and so is an address given to hear about new drops."
+          : "Any address we have been given to hear about new drops is kept in our database."}{" "}
+        We have not set a period after which either is deleted, and nothing
+        removes them on its own — they stay until we delete them by hand. You
+        can ask us to delete yours at any time; see below.
       </p>
 
       <h2>Security</h2>
+      {/* The access sentence is the schema, in plain words: both tables have
+          row-level security on with no policy and are revoked from the anon and
+          authenticated roles, so only the service-role key reaches them. The
+          "no screen lists them" half is equally load-bearing — there is no
+          admin page for enquiries yet, so the notification email is the only
+          thing that tells anyone one arrived. Delete that sentence the day the
+          screen ships, not before. */}
       <p>
         The site runs over HTTPS, payment details never touch our systems, and
         access to order records is restricted to the people who need it to fill
-        orders. No system is perfectly secure, but if a data breach ever occurs
-        that is likely to cause you serious harm, we will notify you and the
-        Office of the Australian Information Commissioner.
+        orders.{" "}
+        {FORM_DELIVERS
+          ? "Messages sent through the contact form, and addresses given to hear about new drops, are stored"
+          : "Addresses given to hear about new drops are stored"}{" "}
+        where only the studio&apos;s own administrative key can reach them — the
+        key this website runs on cannot read them at all. No system is perfectly
+        secure, but if a data breach ever occurs that is likely to cause you
+        serious harm, we will notify you and the Office of the Australian
+        Information Commissioner.
       </p>
+      {FORM_DELIVERS ? (
+        <p>
+          Being plain about who reads a message and when: there is no screen in
+          the studio that lists these messages yet, so what tells us one has
+          arrived is the email the site sends us about it. If that email does
+          not go out, your message is saved but nobody has seen it — the form
+          says so at the time, and it is worth reaching us another way rather
+          than waiting on a reply.
+        </p>
+      ) : null}
 
       <h2>Accessing and correcting your information</h2>
       <p>

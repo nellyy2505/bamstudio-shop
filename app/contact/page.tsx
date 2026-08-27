@@ -34,10 +34,13 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 /**
- * /api/contact delivers an enquiry by emailing the studio mailbox, and nothing
- * persists it — so without sending capability *and* a mailbox, a submitted
- * message reaches nobody and is stored nowhere. Offering the box anyway is how
- * a faulty-goods claim gets silently swallowed, so where this is false the page
+ * /api/contact writes the enquiry to `public.contact_enquiries` and then emails
+ * the studio mailbox about it (0006_enquiries.sql). The row means a message now
+ * outlives a mail provider that is unconfigured or down — but nothing on this
+ * site reads that table, so the email is still the only way anyone finds out an
+ * enquiry arrived. Without sending capability *and* a mailbox, a submitted
+ * message is stored and seen by nobody. Offering the box anyway is how a
+ * faulty-goods claim gets silently swallowed, so where this is false the page
  * shows the channels that do work instead.
  *
  * This is a server component, so the capability is `isEmailConfigured()` — the

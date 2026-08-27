@@ -71,19 +71,31 @@ export const canReachStudio: boolean = hasStudioMailbox || hasSocialAccount;
 /**
  * Does a message typed into a form on this site actually reach a human?
  *
- * Covers both submission forms, because both work the same way: `/api/contact`
- * and `/api/newsletter` each forward to `SHOP.supportEmail` through Resend and
- * neither persists anything, so the send IS the delivery. Without the mailbox
- * there is nowhere to send it; without the secrets nothing is sent.
+ * Covers both submission forms, because both notify the same way: `/api/contact`
+ * and `/api/newsletter` each email `SHOP.supportEmail` through Resend. Without
+ * the mailbox there is nowhere to send it; without the secrets nothing is sent.
+ *
+ * WHAT THIS NO LONGER DECIDES: whether the submission survives. It used to —
+ * both routes kept nothing, so the send WAS the delivery. Since
+ * `0006_enquiries.sql` each route writes a row first (`contact_enquiries`,
+ * `newsletter_signups`) and the email is a notification about a row that
+ * already exists. This is the "does the owner hear about it" test now, not the
+ * "does it still exist tomorrow" test.
+ *
+ * It still gates whether the box is offered, and it still has to. Nothing in
+ * this codebase reads either table — there is no studio screen for enquiries
+ * yet — so the notification is the only way anyone finds out one arrived. Where
+ * this is false, a submitted message is stored and seen by nobody.
  *
  * @param canSendEmail `isEmailConfigured()`, read on the server. Passing a
  *   public build flag here instead is the defect this module exists to stop:
  *   the flag can be true while the secrets are absent, and then the form is
- *   offered, accepted, and the enquiry is lost with nothing recording it.
+ *   offered, accepted, and nobody is ever told the enquiry arrived.
  *
  * Asserts: it is honest to render the form/sign-up box and to say "our contact
  * form reaches the same inbox". Misusing it — rendering the form when this is
- * false — silently swallows enquiries, including faulty-goods claims.
+ * false — leaves enquiries, faulty-goods claims included, in a table no screen
+ * lists and no notification points at.
  */
 export function formsReachStudio(canSendEmail: boolean): boolean {
   return canSendEmail && hasStudioMailbox;

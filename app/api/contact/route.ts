@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { SHOP } from "@/lib/config";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -24,6 +25,13 @@ const BodySchema = z.object({
     .max(2000),
 });
 
+// Every bound above is mirrored by a CHECK constraint on
+// public.contact_enquiries (0006_enquiries.sql), and the two must move
+// together. The table is the backstop — it is what makes an unbounded message
+// impossible whichever code path writes it — so raising a limit here without
+// raising it there turns a long message into a failed insert rather than a
+// stored row. The topic enum is mirrored the same way.
+
 /**
  * Escapes the enquiry before it goes into the HTML part. The studio inbox is
  * the only reader, but the text is attacker-controlled and mail clients render
@@ -35,6 +43,92 @@ function escapeHtml(value: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/**
+ * Writes the enquiry down. Returns the new row's id, or null if it could not
+ * be stored.
+ *
+ * THE DEFECT THIS CLOSES. This route used to hand the message to Resend and
+ * keep nothing, so the email WAS the delivery — its own comment said as much.
+ * An unset `RESEND_API_KEY` or `EMAIL_FROM`, an unset
+ * `NEXT_PUBLIC_SUPPORT_EMAIL`, a provider 4xx/5xx or an 8-second timeout each
+ * destroyed the only copy of what the customer typed, and the route answered
+ * `{ ok: true, delivered: false }` over the wreckage. On a shop that tells
+ * customers in its own legal pages that it sends no order emails, this form is
+ * one of very few channels they have, and a message reporting faulty goods is
+ * the one that must survive a bad afternoon at a mail provider. (That is a
+ * pointer to why it matters, not legal advice.) The row is now written first
+ * and the email is a notification about a row that already exists.
+ *
+ * **Written with the service-role client, and the table grants no INSERT to
+ * `anon`.** The alternative — an insert-only RLS policy so the browser writes
+ * its own row — makes a public PostgREST endpoint out of this table, walking
+ * straight past the validation and the rate limiting above. This route already
+ * runs server-side, so the row is written by the same code that validated it
+ * and the key in the browser bundle gets nothing at all. The reasoning is
+ * written out in full in the grants block of 0006_enquiries.sql.
+ *
+ * Never throws: a database that is unreachable must not take the send attempt
+ * down with it. The caller falls back to email-only and reports what happened.
+ */
+async function storeEnquiry(
+  body: z.infer<typeof BodySchema>,
+): Promise<string | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("contact_enquiries")
+      .insert({
+        name: body.name,
+        email: body.email,
+        topic: body.topic,
+        order_number: body.orderNumber ?? null,
+        message: body.message,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      // PostgREST's message is text about the statement — a constraint name, a
+      // missing relation — not the customer's words. The row values are
+      // deliberately not logged: that was the §0.9 PII-in-the-log-stream
+      // defect, and this path handles nothing but PII.
+      console.error("[contact] enquiry NOT stored", { reason: error.message });
+      return null;
+    }
+    return data?.id ?? null;
+  } catch (error) {
+    // `createAdminClient()` throws when SUPABASE_SERVICE_ROLE_KEY is unset, and
+    // fetch throws when Supabase is unreachable. Neither may 500 the form.
+    console.error("[contact] enquiry NOT stored", {
+      reason: error instanceof Error ? error.message : "unknown",
+    });
+    return null;
+  }
+}
+
+/**
+ * Stamps the enquiry as notified — the same shape and the same reasoning as
+ * `orders.confirmation_email_sent_at` in 0005. Null means no notification has
+ * gone out for this one, which is what separates "she was emailed about this"
+ * from "this exists only in the table".
+ *
+ * Best-effort: the enquiry is already safe, and a failed stamp is not worth
+ * failing a response a customer is waiting on. The cost of losing it is one
+ * duplicate prompt, never a lost message.
+ */
+async function markNotified(id: string): Promise<void> {
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("contact_enquiries")
+      .update({ notified_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) console.warn("[contact] notify stamp failed", { reason: error.message });
+  } catch {
+    // Nothing to do and nothing lost: the row is written either way.
+  }
 }
 
 export async function POST(request: Request) {
@@ -56,10 +150,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  // Nothing is persisted — there is no enquiries table — so the email IS the
-  // delivery. If it does not send, the enquiry is genuinely lost and the caller
-  // must not be told otherwise: a faulty-goods claim silently swallowed is the
-  // worst version of WORKLOG §0.1.
+  // STORE FIRST, THEN SEND. The order is the whole fix. An enquiry that is on
+  // disk before Resend is called survives Resend failing, and the send stops
+  // being the delivery and becomes a notification.
+  const enquiryId = await storeEnquiry(body);
+  const stored = enquiryId !== null;
+
   let delivered = false;
   let failure: string | null = null;
 
@@ -70,6 +166,9 @@ export async function POST(request: Request) {
   // and the enquiry was lost. The pages now derive from this same predicate —
   // see lib/contact.ts `formsReachStudio`, which is this condition exactly.
   // Without a support address there is nowhere to send it either.
+  //
+  // Note what this no longer decides: whether the enquiry survives. It decides
+  // only whether the owner hears about it without opening the studio.
   if (isEmailConfigured() && SHOP.hasSupportEmail) {
     const lines = [
       `Topic: ${body.topic}`,
@@ -77,6 +176,13 @@ export async function POST(request: Request) {
       body.orderNumber ? `Order number: ${body.orderNumber}` : null,
       "",
       body.message,
+      "",
+      // Which copy this is. Deleting the mail is safe in the first case and
+      // throws the enquiry away in the second, and the owner cannot tell the
+      // two apart by looking at it.
+      stored
+        ? "A copy is stored in the studio, so this mail can be deleted."
+        : "THIS IS THE ONLY COPY — the studio could not store this enquiry.",
     ].filter((line): line is string => line !== null);
 
     const result = await sendEmail({
@@ -96,23 +202,55 @@ export async function POST(request: Request) {
     failure = "not_configured";
   }
 
+  if (delivered && enquiryId) await markNotified(enquiryId);
+
   // Deliberately no name, address, order number or message body — that was the
   // §0.9 PII-in-the-log-stream defect. `topic` is a fixed enum chosen from a
   // dropdown, not free text, and cannot identify anyone on its own.
-  if (delivered) {
-    console.info("[contact] enquiry delivered", { topic: body.topic });
+  //
+  // Severity now follows `stored`, not `delivered`. An enquiry on disk that was
+  // not emailed is a prompt the owner has not received — a warning. An enquiry
+  // that is neither is the original defect reproducing itself, and it is the
+  // only one of the four that is an error.
+  if (stored && delivered) {
+    console.info("[contact] enquiry stored and notified", { topic: body.topic });
+  } else if (stored) {
+    console.warn("[contact] enquiry stored, studio NOT notified", {
+      topic: body.topic,
+      reason: failure,
+    });
+  } else if (delivered) {
+    console.warn("[contact] enquiry NOT stored, emailed only", {
+      topic: body.topic,
+    });
   } else {
-    console.error("[contact] enquiry NOT delivered", {
+    console.error("[contact] enquiry LOST — neither stored nor delivered", {
       topic: body.topic,
       reason: failure,
     });
   }
 
-  // 200 with delivered:false rather than an error status. The customer did
-  // nothing wrong and retrying cannot help — an unconfigured provider fails
-  // identically every time — so an error status would only produce a "try
-  // again" loop against a form that will never succeed. The truth rides in the
-  // flag instead, and ContactForm renders different copy for it: undelivered
-  // means "we could not send this — please email the studio directly".
-  return NextResponse.json({ ok: true, delivered });
+  // 200 in all four cases, for the reason it always was: the customer did
+  // nothing wrong, and where the failure is an unconfigured provider, retrying
+  // fails identically every time — an error status would only produce a "try
+  // again" loop against a form that cannot succeed. The truth rides in the
+  // flags instead.
+  //
+  // WHAT EACH FLAG MAY BE USED TO CLAIM, spelled out because overclaiming here
+  // is the failure mode this route keeps producing:
+  //
+  //   delivered — a mail provider accepted a notification addressed to the
+  //     studio inbox. That, and nothing past it. Not that it was read.
+  //   stored — the message is a row in public.contact_enquiries and will still
+  //     be there tomorrow. **It does not mean anybody has seen it**, and until
+  //     the studio has a screen listing those rows, nobody can. Copy for
+  //     `stored && !delivered` may say the message is safe and that no one has
+  //     read it yet; it may not promise a reply.
+  //
+  // ContactForm.tsx branches on `delivered` alone today, and its undelivered
+  // copy — "we could not get that to the studio, so nobody has read it" —
+  // remains true when `stored` is true. That is deliberate: this flag is safe
+  // to ship ahead of the copy that will use it, because the copy it ships
+  // beside does not become false.
+  return NextResponse.json({ ok: true, delivered, stored });
 }
