@@ -354,15 +354,17 @@ export default function PrivacyPage() {
       <h2>Security</h2>
       {/* The access sentence is the schema, in plain words: both tables have
           row-level security on with no policy and are revoked from the anon and
-          authenticated roles, so only the service-role key reaches them. The
-          "no screen lists them" half is equally load-bearing — there is no
-          admin page for enquiries yet, so the notification email is the only
-          thing that tells anyone one arrived. Delete that sentence the day the
-          screen ships, not before. */}
+          authenticated roles, so only the service-role key reaches them — which
+          is still true now that /admin/enquiries exists, because that screen is
+          server-rendered and reads with the service-role key. What changed is
+          WHO can then see the words: the screen is gated on the `reports`
+          capability, which the owner and studio roles hold and the packing role
+          does not. That is a disclosure, so it is stated below rather than left
+          implied. */}
       <p>
         The site runs over HTTPS, payment details never touch our systems, and
         access to order records is restricted to the people who need it to fill
-        orders.{" "}
+        orders and answer messages.{" "}
         {FORM_DELIVERS
           ? "Messages sent through the contact form, and addresses given to hear about new drops, are stored"
           : "Addresses given to hear about new drops are stored"}{" "}
@@ -372,14 +374,24 @@ export default function PrivacyPage() {
         serious harm, we will notify you and the Office of the Australian
         Information Commissioner.
       </p>
+      {/* THIS PARAGRAPH USED TO SAY THE OPPOSITE, and had to be rewritten in
+          the same change that shipped /admin/enquiries. It told customers there
+          was no studio screen listing their messages, that a failed
+          notification email meant nobody had seen theirs, and that they should
+          not wait on a reply. All three stopped being true the moment that
+          screen existed. A legal page that quietly becomes false is worse than
+          one that admits a gap, so: if this screen is ever removed, put the old
+          wording back in the same change. */}
       {FORM_DELIVERS ? (
         <p>
-          Being plain about who reads a message and when: there is no screen in
-          the studio that lists these messages yet, so what tells us one has
-          arrived is the email the site sends us about it. If that email does
-          not go out, your message is saved but nobody has seen it — the form
-          says so at the time, and it is worth reaching us another way rather
-          than waiting on a reply.
+          Being plain about who reads a message and when: messages sent through
+          this form are listed on a screen inside our studio that only accounts
+          we have given access to can open — someone helping us pack parcels
+          cannot see them. An email tells us a message has arrived, and if that
+          email does not go out your message is still saved and still on that
+          screen, so it is seen the next time we look. Nobody is watching it
+          around the clock — this is a very small shop — so a reply can take a
+          few days.
         </p>
       ) : null}
 

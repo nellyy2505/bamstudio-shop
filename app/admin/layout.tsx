@@ -35,6 +35,15 @@ export const metadata: Metadata = {
 const ALL_LINKS: (AdminLink & { capability: Capability | null })[] = [
   { href: "/admin", label: "Overview", icon: "trend", capability: null },
   { href: "/admin/orders", label: "Orders", icon: "box", capability: "orders" },
+  /*
+   * Filed under "reports" rather than "orders" so Packing cannot reach it.
+   * The screen shows a customer's own words and the address they wrote from,
+   * and the person helping post parcels has no reason to read either. The full
+   * argument, including why `settings` was rejected and why a capability of its
+   * own would be better than borrowing this one, is above `setEnquiryHandled`
+   * in actions.ts.
+   */
+  { href: "/admin/enquiries", label: "Enquiries", icon: "msg", capability: "reports" },
   { href: "/admin/products", label: "Products", icon: "gift", capability: "catalogue" },
   /*
    * Its own entry rather than a page under Products, because a tier is not a
@@ -63,9 +72,17 @@ export default async function AdminLayout({
   ).map(({ href, label, icon }) => ({ href, label, icon }));
 
   return (
-    <div className="min-h-screen bg-bg">
-      {/* A dark bar so nobody mistakes the staff area for the shop. */}
-      <div className="bg-ink text-[#F8F5EF]">
+    <div className="min-h-screen bg-bg print:min-h-0">
+      {/*
+        * A dark bar so nobody mistakes the staff area for the shop.
+        *
+        * `no-print` on both this and the sidebar below: the packing slip and
+        * the pick list are rendered inside this layout, and a printed page has
+        * no navigation. It is also a solid dark block the width of the paper,
+        * which is the single most expensive thing a home printer could be
+        * asked to lay down. See the print block at the end of globals.css.
+        */}
+      <div className="no-print bg-ink text-[#F8F5EF]">
         <div className="wrap flex items-center justify-between gap-6 py-2.5">
           <div className="flex items-center gap-3">
             <span className="font-display text-[15px] font-bold tracking-tight">
@@ -89,8 +106,11 @@ export default async function AdminLayout({
         </div>
       </div>
 
-      <div className="wrap grid items-start gap-8 pt-8 pb-16 lg:grid-cols-[244px_minmax(0,1fr)]">
-        <aside className="card p-5 lg:sticky lg:top-8">
+      {/* `print:block` because the sidebar is hidden on paper and a two-column
+          grid would otherwise leave its empty track behind; `print:p-0` because
+          the page box in globals.css already provides the margin. */}
+      <div className="wrap grid items-start gap-8 pt-8 pb-16 lg:grid-cols-[244px_minmax(0,1fr)] print:block print:p-0">
+        <aside className="no-print card p-5 lg:sticky lg:top-8">
           <div className="mb-3 border-b border-line pb-3.5 pl-1 text-[11px] font-extrabold tracking-[0.1em] text-faint">
             STUDIO
           </div>

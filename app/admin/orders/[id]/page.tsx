@@ -1,13 +1,14 @@
 import { notFound } from "next/navigation";
 import { can, requireStaff } from "@/lib/auth/staff";
 import { formatDate, money, pluralise } from "@/lib/format";
-import { Alert, Breadcrumbs, Field, Pill, inputClass } from "@/components/ui";
+import { Alert, Breadcrumbs, ButtonLink, Field, Icon, Pill, inputClass } from "@/components/ui";
 import { AdminForm, SubmitButton } from "../../AdminForm";
 import { setOrderStatus } from "../../actions";
 import { CHANNEL_LABEL, PageHead, Panel, StatusPill, Unknown } from "../../ui";
 import { DispatchPanel } from "./DispatchPanel";
 import { ScoopPackPanel } from "./ScoopPackPanel";
 import {
+  describePersonalisationText,
   getOrder,
   getOrderScoops,
   listPoolCandidates,
@@ -118,7 +119,24 @@ export default async function OrderDetailPage({
               {pluralise(order.lines.length, "line")} · {pluralise(units, "piece")}
             </>
           }
-          actions={<StatusPill status={order.status} />}
+          actions={
+            <>
+              {/* Not offered on an unpaid checkout or a cancelled order:
+                  neither is a parcel anybody should be packing, and the slip
+                  page refuses them as well — a link is not a check. */}
+              {order.status !== "pending" && order.status !== "cancelled" ? (
+                <ButtonLink
+                  href={`/admin/orders/${order.id}/slip`}
+                  variant="soft"
+                  size="md"
+                >
+                  <Icon name="doc" size={18} />
+                  Packing slip
+                </ButtonLink>
+              ) : null}
+              <StatusPill status={order.status} />
+            </>
+          }
         />
       </div>
 
@@ -386,7 +404,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 function LineNotes({ line }: { line: OrderLine }) {
-  const personalisation = describePersonalisation(line.personalisation);
+  const personalisation = describePersonalisationText(line.personalisation);
   const bits = [line.variantLabel, line.colour].filter(
     (bit): bit is string => typeof bit === "string" && bit.trim().length > 0,
   );
@@ -402,26 +420,13 @@ function LineNotes({ line }: { line: OrderLine }) {
   );
 }
 
-/**
- * Personalisation is jsonb and its shape has changed once already, so this
- * reads whatever is there rather than assuming a schema. Nothing is invented:
- * an empty value produces no line at all.
+/*
+ * `describePersonalisation` used to live here, a private copy of what is now
+ * `describePersonalisationText` in data.ts. It moved because the packing slip
+ * and the pick list have to render a customer's letters IDENTICALLY to this
+ * screen — this shop sells custom name charms, and two renderings of the same
+ * jsonb value is exactly how a wrong charm gets made.
  */
-function describePersonalisation(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === "string") return value.trim() || null;
-  if (Array.isArray(value)) {
-    const parts = value.map((part) => String(part)).filter(Boolean);
-    return parts.length > 0 ? parts.join(" ") : null;
-  }
-  if (typeof value === "object") {
-    const parts = Object.entries(value as Record<string, unknown>)
-      .filter(([, v]) => v !== null && v !== undefined && v !== "")
-      .map(([key, v]) => `${key.replace(/_/g, " ")}: ${String(v)}`);
-    return parts.length > 0 ? parts.join(" · ") : null;
-  }
-  return String(value);
-}
 
 /**
  * The address, read defensively. A sale typed in at a market has no address at

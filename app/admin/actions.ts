@@ -2295,6 +2295,208 @@ async function joinWithInvitation(token: string): Promise<FormState> {
   return null;
 }
 
+/* ------------------------------------------------ enquiries and sign-ups */
+
+/**
+ * WHY THESE TWO ARE "reports" AND NOT "orders".
+ *
+ * `/admin/enquiries` shows a customer's own words and the address they wrote
+ * from. `orders` is the capability Packing holds, and Packing exists precisely
+ * so the person helping post parcels sees the minimum — no costs, no margins,
+ * no catalogue. Correspondence is squarely in that spirit: somebody packing a
+ * box has no reason to read what a customer said about a fault, a wholesale
+ * enquiry or a custom commission, and an address volunteered for a mailing list
+ * is not a packing instruction.
+ *
+ * `reports` is the closest existing fit: owner and studio hold it, Packing does
+ * not, and it is already the line this codebase draws around the things only a
+ * trusted insider sees. It is not a perfect name — reading a message is not
+ * reporting — and the honest fix is a capability of its own. That belongs in
+ * `lib/auth/staff.ts`, whose `Capability` union is the single list a page can
+ * be filed under; adding `"enquiries"` there and granting it to owner and
+ * studio would say what this screen is instead of borrowing a name. Until
+ * somebody does that, this is the narrowest capability that keeps Packing out.
+ *
+ * `settings` was the other candidate and was rejected: it is owner-only, and
+ * the studio role is described to its holder as "everything". Hiding the
+ * message inbox from it would contradict the role's own label for no gain.
+ */
+
+/**
+ * Mark an enquiry dealt with, or put it back on the open list.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * WHAT "DEALT WITH" MEANS, AND WHY IT IS EXACTLY THIS.
+ *
+ * `0006_enquiries.sql` gives `contact_enquiries` three columns for it —
+ * `handled_at`, `handled_by` and `handling_note` — and says what they are for:
+ * "Set by hand from the studio once the enquiry has been answered. Null is the
+ * open state, and open enquiries are what an inbox screen shows." So this
+ * writes those three and invents nothing.
+ *
+ * It is deliberately NOT "replied to". Nothing in this shop sends a reply — the
+ * customer's address is a `mailto:` link on the screen and the answer leaves
+ * from the owner's own mail client, which this application never sees. So the
+ * stamp records the only fact the studio can honestly assert: somebody looked
+ * at this and considers it finished. The note is where "refunded and told her"
+ * goes, and it stays null when nothing was typed rather than becoming "".
+ *
+ * REOPENING KEEPS THE NOTE. A message marked off in error goes back to open,
+ * and `handled_by` is cleared with the stamp because a person who has been
+ * un-attributed did not handle it. The note survives, because what somebody
+ * wrote down about this enquiry is still true and deleting it would be the one
+ * destructive thing on this screen.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+export async function setEnquiryHandled(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  return guard("reports", async () => {
+    const staff = await requireStaff("reports");
+
+    const id = text(form, "id");
+    const state = text(form, "state");
+    if (!id) return fail("No enquiry given.");
+    if (state !== "handled" && state !== "open") {
+      return fail("Say whether this is dealt with or back on the list.");
+    }
+
+    const admin = createAdminClient();
+
+    if (state === "open") {
+      const { data, error } = await admin
+        .from("contact_enquiries")
+        .update({ handled_at: null, handled_by: null })
+        .eq("id", id)
+        // Scoped to the handled state, so a second submission cannot report
+        // "reopened" about a message that was already open.
+        .not("handled_at", "is", null)
+        .select("id");
+
+      if (error) return fail(friendly(error.message));
+      if (!data || data.length === 0) return ok("That one was already on the open list.");
+
+      revalidatePath("/admin/enquiries");
+      return ok("Back on the open list.");
+    }
+
+    // Blank stays null. A handling note of "" is not a note, and an empty
+    // string in that column reads on screen as a note somebody left blank.
+    const note = text(form, "note") || null;
+
+    const { data, error } = await admin
+      .from("contact_enquiries")
+      .update({
+        handled_at: new Date().toISOString(),
+        handled_by: staff.userId,
+        handling_note: note,
+      })
+      .eq("id", id)
+      // Compare-and-set on the open state, for the reason
+      // `resolveRefundIncident` gives: a second submission must not rewrite
+      // when it was dealt with, and this is how "done" is told from "already
+      // done" rather than both reporting success.
+      .is("handled_at", null)
+      .select("id");
+
+    if (error) return fail(friendly(error.message));
+    if (!data || data.length === 0) {
+      return fail(
+        "This one was already marked dealt with, so nothing has been changed. " +
+          "Reload to see who marked it and when.",
+      );
+    }
+
+    revalidatePath("/admin/enquiries");
+    return ok("Marked as dealt with.");
+  });
+}
+
+/**
+ * Record that an address should come off the list, or that it was taken off in
+ * error.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * IS AN UNSUBSCRIBE CONTROL HONEST WHEN NOTHING IS SENT? YES — THIS ONE IS.
+ *
+ * There is no newsletter, no welcome email and no unsubscribe link, and no copy
+ * on the site may promise one. None of that is what this button is. It does not
+ * appear on the shop, it sends nothing and it tells the person nothing: it is
+ * the studio writing down, on the row, that somebody asked to be taken off.
+ *
+ * It has to exist, and it has to be here. Requests to come off arrive by email
+ * or by DM — there is nowhere else for them to arrive from — and
+ * `unsubscribed_at` is the column `0006_enquiries.sql` created for exactly that
+ * answer, specifically so that a later sign-up through the footer cannot
+ * silently undo it: the route's `on conflict do nothing` insert leaves this
+ * stamp alone. Without a control, the only way to honour the request would be
+ * deleting the row, which loses the record that the person ever asked and lets
+ * the next footer submission put them straight back.
+ *
+ * The copy on the screen must therefore say what this is — a record — and must
+ * not say the person has been unsubscribed from something, because they have
+ * not been receiving anything.
+ *
+ * WHY THE UNDO EXISTS TOO. The schema's stickiness is aimed at the automatic
+ * path: a sign-up form must not clear the stamp. A deliberate correction by a
+ * person, on a screen only staff can reach, is a different act — and it is the
+ * only way to fix a mis-click, since nothing else in this application writes
+ * that column. It is labelled as a correction rather than as re-subscribing.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+export async function setSignupSubscribed(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  return guard("reports", async () => {
+    // The address is the primary key, and the table's CHECK refuses anything
+    // that is not already lower-cased — the same normalisation /api/newsletter
+    // does on the way in. Doing it here too means a row can always be found.
+    const email = text(form, "email").toLowerCase();
+    const state = text(form, "state");
+
+    if (!email) return fail("No address given.");
+    if (state !== "off" && state !== "on") {
+      return fail("Say whether this address comes off the list or goes back on.");
+    }
+
+    const admin = createAdminClient();
+
+    if (state === "off") {
+      const { data, error } = await admin
+        .from("newsletter_signups")
+        .update({ unsubscribed_at: new Date().toISOString() })
+        .eq("email", email)
+        // Scoped to still-on, so asking twice does not rewrite the date the
+        // request was first recorded.
+        .is("unsubscribed_at", null)
+        .select("email");
+
+      if (error) return fail(friendly(error.message));
+      if (!data || data.length === 0) {
+        return ok("That address was already recorded as off the list.");
+      }
+
+      revalidatePath("/admin/enquiries");
+      return ok("Recorded as off the list.");
+    }
+
+    const { data, error } = await admin
+      .from("newsletter_signups")
+      .update({ unsubscribed_at: null })
+      .eq("email", email)
+      .not("unsubscribed_at", "is", null)
+      .select("email");
+
+    if (error) return fail(friendly(error.message));
+    if (!data || data.length === 0) return ok("That address was already on the list.");
+
+    revalidatePath("/admin/enquiries");
+    return ok("Put back on the list.");
+  });
+}
+
 /* ----------------------------------------------------------------- errors */
 
 /**

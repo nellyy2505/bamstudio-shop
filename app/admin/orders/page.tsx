@@ -93,10 +93,18 @@ export default async function OrdersPage({
         title="Orders"
         subtitle="Everything the shop has sold, wherever it was sold."
         actions={
-          <ButtonLink href="/admin/orders/new" size="md">
-            <Icon name="plus" size={18} />
-            Record a sale
-          </ButtonLink>
+          <>
+            {/* One sheet for every open order, printed in a batch. Walking one
+                order at a time is how a piece ends up in the wrong parcel. */}
+            <ButtonLink href="/admin/orders/pick" variant="soft" size="md">
+              <Icon name="doc" size={18} />
+              Pick list
+            </ButtonLink>
+            <ButtonLink href="/admin/orders/new" size="md">
+              <Icon name="plus" size={18} />
+              Record a sale
+            </ButtonLink>
+          </>
         }
       />
 

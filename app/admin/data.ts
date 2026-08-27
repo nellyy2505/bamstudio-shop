@@ -1362,9 +1362,9 @@ export type ScoopPoolProduct = {
 };
 
 /**
- * A tier with everything the studio's tier screen shows: its pool, whether the
- * pool can fill it today, whether it could be activated at all, and what it
- * might be worth.
+ * A tier with everything the studio's tier screen shows: its pool, whether it
+ * is on sale, how much the bowl holds today, whether it could be activated at
+ * all, and what it might be worth.
  */
 export type ScoopTierRow = {
   id: string;
@@ -1380,7 +1380,13 @@ export type ScoopTierRow = {
   active: boolean;
   createdAt: string;
   pool: ScoopPoolProduct[];
-  /** Stock-aware: can this be sold right now, and how many scoops are in it. */
+  /**
+   * Two independent things, and `lib/scoop.ts` is where they were untangled.
+   * `sellable`/`blockers` say whether the shop is offering this tier at all —
+   * switched on, priced — and are blind to stock. `drawable`/`scoopsAvailable`
+   * say how much the bowl holds without printing anything: studio information,
+   * a print signal, never a reason a customer is refused.
+   */
   availability: ScoopAvailability;
   /**
    * Why the database would refuse to switch this tier on, in words. Empty when
@@ -1835,4 +1841,413 @@ export async function getOrderScoops(orderId: string): Promise<OrderScoops> {
   }
 
   return { lines, outstanding, unreadable: false };
+}
+
+/* ------------------------------------------------ enquiries and sign-ups */
+
+/**
+ * The two tables `0006_enquiries.sql` writes, read for the first time.
+ *
+ * Until this block existed nothing in the shop read either of them: a message
+ * a customer typed was a row nobody could open, and the notification email was
+ * the only thing that told anyone it had arrived. `notified_at` being null does
+ * NOT mean the message was lost — the row is the delivery — it means the only
+ * way anybody finds that one is by looking, and this is the looking.
+ *
+ * Both reads go through the service-role client like everything else here.
+ * There is no other key that can see them: RLS is on with no policy and both
+ * tables are revoked from `anon` and `authenticated`.
+ */
+
+/** The topic enum, exactly as the CHECK constraint and the zod schema spell it. */
+export const ENQUIRY_TOPICS = [
+  "order",
+  "returns",
+  "custom",
+  "wholesale",
+  "other",
+] as const;
+
+export type EnquiryTopic = (typeof ENQUIRY_TOPICS)[number];
+
+/**
+ * Words for a topic. Keyed loosely rather than by `EnquiryTopic`, because the
+ * database is the authority on what is in that column and a row written before
+ * a future enum change must still render as itself rather than as blank.
+ */
+export const ENQUIRY_TOPIC_LABEL: Record<string, string> = {
+  order: "About an order",
+  returns: "Returns and faults",
+  custom: "Custom work",
+  wholesale: "Wholesale",
+  other: "Something else",
+};
+
+export type EnquiryRow = {
+  id: string;
+  name: string;
+  email: string;
+  topic: string;
+  /** What they typed in the order-number box, or null. Optional on the form. */
+  orderNumber: string | null;
+  message: string;
+  receivedAt: string;
+  /**
+   * When a mail provider accepted the studio notification, or null. Null is a
+   * fact — "no prompt went out for this one" — never a status and never a
+   * claim that the message was lost.
+   */
+  notifiedAt: string | null;
+  /** Null is the open state. This is the whole of "dealt with". */
+  handledAt: string | null;
+  handledBy: string | null;
+  /** The handler's sign-in address, when it could be resolved. */
+  handledByEmail: string | null;
+  handlingNote: string | null;
+};
+
+export type EnquiryFilters = {
+  /** One of ENQUIRY_TOPICS, or "" for all. */
+  topic?: string;
+  /** "open" | "handled", or "" for all. */
+  state?: string;
+};
+
+/**
+ * Sign-in addresses for the staff who marked enquiries off.
+ *
+ * One `getUserById` per distinct id rather than `auth.admin.listUsers()`, which
+ * is what `listStaff()` has to use because it starts from the whole staff
+ * table. Here the ids are already known and there are normally one or two of
+ * them, so asking for those accounts is both cheaper and narrower than pulling
+ * two hundred customer email addresses into memory to look two of them up.
+ *
+ * A lookup that fails is left out of the map, and the screen then says the
+ * account is no longer in the studio rather than inventing a name — a staff
+ * member who has been removed is a real state, and the enquiry they answered
+ * is still answered.
+ */
+async function handlerEmails(ids: string[]): Promise<Map<string, string>> {
+  const distinct = [...new Set(ids)];
+  const emails = new Map<string, string>();
+  if (distinct.length === 0) return emails;
+
+  const admin = createAdminClient();
+  await Promise.all(
+    distinct.map(async (id) => {
+      try {
+        const { data } = await admin.auth.admin.getUserById(id);
+        if (data?.user?.email) emails.set(id, data.user.email);
+      } catch {
+        // Left out of the map on purpose. See above.
+      }
+    }),
+  );
+
+  return emails;
+}
+
+/** Messages sent through /contact, newest first. */
+export async function listEnquiries(
+  page: number,
+  filters: EnquiryFilters = {},
+): Promise<Paged<EnquiryRow>> {
+  assertServer("listEnquiries");
+
+  const admin = createAdminClient();
+
+  let query = admin
+    .from("contact_enquiries")
+    .select(
+      "id, name, email, topic, order_number, message, received_at, " +
+        "notified_at, handled_at, handled_by, handling_note",
+      { count: "exact" },
+    )
+    .order("received_at", { ascending: false });
+
+  if (filters.topic) query = query.eq("topic", filters.topic);
+  // `handled_at is null` is the open state and the only definition of it —
+  // the same one contact_enquiries_open_idx is built on.
+  if (filters.state === "open") query = query.is("handled_at", null);
+  else if (filters.state === "handled") query = query.not("handled_at", "is", null);
+
+  const probe = await query.range(0, 0);
+  const total = probe.count ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), pageCount);
+  const from = (safePage - 1) * PAGE_SIZE;
+
+  const { data } = await query.range(from, from + PAGE_SIZE - 1);
+  const raw = (data ?? []).map((r) => asRow(r));
+
+  const emails = await handlerEmails(
+    raw
+      .map((row) => (row.handled_by as string | null) ?? null)
+      .filter((id): id is string => typeof id === "string" && id.length > 0),
+  );
+
+  return {
+    rows: raw.map((row) => {
+      const handledBy = (row.handled_by as string | null) ?? null;
+      return {
+        id: row.id as string,
+        name: (row.name as string) ?? "",
+        email: (row.email as string) ?? "",
+        topic: (row.topic as string) ?? "other",
+        orderNumber: (row.order_number as string | null) ?? null,
+        message: (row.message as string) ?? "",
+        receivedAt: row.received_at as string,
+        notifiedAt: (row.notified_at as string | null) ?? null,
+        handledAt: (row.handled_at as string | null) ?? null,
+        handledBy,
+        handledByEmail: handledBy ? (emails.get(handledBy) ?? null) : null,
+        handlingNote: (row.handling_note as string | null) ?? null,
+      };
+    }),
+    page: safePage,
+    pageCount,
+    total,
+  };
+}
+
+export type SignupRow = {
+  email: string;
+  requestedAt: string;
+  source: string;
+  notifiedAt: string | null;
+  /**
+   * When somebody recorded that this address should come off. Null is the
+   * ordinary state. Nothing is ever sent to any of these addresses, so this is
+   * a record of a request, not the result of an unsubscribe link.
+   */
+  unsubscribedAt: string | null;
+};
+
+/** Addresses that asked to hear about new drops, newest first. */
+export async function listSignups(page: number): Promise<Paged<SignupRow>> {
+  assertServer("listSignups");
+
+  const admin = createAdminClient();
+  const query = admin
+    .from("newsletter_signups")
+    .select("email, requested_at, source, notified_at, unsubscribed_at", {
+      count: "exact",
+    })
+    .order("requested_at", { ascending: false });
+
+  const probe = await query.range(0, 0);
+  const total = probe.count ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), pageCount);
+  const from = (safePage - 1) * PAGE_SIZE;
+
+  const { data } = await query.range(from, from + PAGE_SIZE - 1);
+
+  return {
+    rows: (data ?? []).map((raw) => {
+      const row = asRow(raw);
+      return {
+        email: row.email as string,
+        requestedAt: row.requested_at as string,
+        source: (row.source as string) ?? "",
+        notifiedAt: (row.notified_at as string | null) ?? null,
+        unsubscribedAt: (row.unsubscribed_at as string | null) ?? null,
+      };
+    }),
+    page: safePage,
+    pageCount,
+    total,
+  };
+}
+
+/* ------------------------------------------------------------ pick list */
+
+/**
+ * One thing to pick or print, across every order that still needs work.
+ *
+ * WHY PERSONALISED PIECES ARE NEVER POOLED. Three "Custom name charm" lines on
+ * three orders are not three of one thing: they are three different objects
+ * that happen to share a product row, and adding them up produces a count that
+ * cannot be picked from a drawer. So a line carrying personalisation is its own
+ * entry with its own order number and the text exactly as it was typed, and
+ * only plain lines are grouped.
+ *
+ * A Lucky Scoop line is neither. Nobody knows what goes in it until somebody
+ * decides, and that decision is recorded on the order screen — so it appears as
+ * work to do against an order, never as a quantity of anything.
+ */
+export type PickEntry = {
+  /** Stable enough for a React key; not a database id. */
+  key: string;
+  kind: "plain" | "personalised" | "scoop";
+  name: string;
+  sku: string | null;
+  quantity: number;
+  colour: string | null;
+  variantLabel: string | null;
+  /** Verbatim, as the customer typed it. Never reformatted. */
+  personalisation: string | null;
+  /** Which orders want it — one entry for a personalised piece, many for plain. */
+  orders: { id: string; orderNumber: string | null }[];
+};
+
+export type PickList = {
+  entries: PickEntry[];
+  orderCount: number;
+  /**
+   * Physical pieces to pick or print — SCOOPS EXCLUDED.
+   *
+   * A scoop line's quantity is a count of bags, not of things to fetch off a
+   * shelf, and nobody knows what is going in them yet. Adding them in would
+   * produce a total that is wrong on exactly the orders that most need
+   * checking, so the scoops are counted in their own section instead.
+   */
+  pieceCount: number;
+};
+
+/**
+ * What has to be printed and picked for every order that is still open.
+ *
+ * "Open" is `OPEN_ORDER_STATUSES` — confirmed, printing, packed — the same set
+ * the inventory queue and the overview use. A posted order is not on it, and
+ * neither is an unpaid checkout: `pending` is not an order and never appears in
+ * a queue.
+ */
+export async function getPickList(): Promise<PickList> {
+  assertServer("getPickList");
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("orders")
+    .select(
+      "id, order_number, created_at, status, " +
+        "order_items(id, product_id, product_name, variant_label, quantity, " +
+        "colour, personalisation, scoop_tier_id, products(sku))",
+    )
+    .in("status", OPEN_ORDER_STATUSES as unknown as string[])
+    // Oldest first: the order that has been waiting longest is picked first.
+    .order("created_at", { ascending: true });
+
+  if (error || !data) return { entries: [], orderCount: 0, pieceCount: 0 };
+
+  const plain = new Map<string, PickEntry>();
+  const singles: PickEntry[] = [];
+
+  for (const rawOrder of data) {
+    const order = asRow(rawOrder);
+    const ref = {
+      id: order.id as string,
+      orderNumber: (order.order_number as string | null) ?? null,
+    };
+
+    for (const rawItem of (order.order_items ?? []) as unknown[]) {
+      const item = asRow(rawItem);
+      const quantity = Number(item.quantity ?? 0);
+      if (quantity <= 0) continue;
+
+      const product = embedded<Record<string, unknown>>(item.products);
+      const name = (item.product_name as string) ?? "";
+      const colour = (item.colour as string | null) ?? null;
+      const variantLabel = (item.variant_label as string) || null;
+      const personalisation = describePersonalisationText(item.personalisation);
+      const isScoop = Boolean(item.scoop_tier_id);
+
+      if (isScoop) {
+        singles.push({
+          key: `scoop-${item.id as string}`,
+          kind: "scoop",
+          name,
+          sku: null,
+          quantity,
+          colour,
+          variantLabel,
+          personalisation: null,
+          orders: [ref],
+        });
+        continue;
+      }
+
+      if (personalisation) {
+        singles.push({
+          key: `custom-${item.id as string}`,
+          kind: "personalised",
+          name,
+          sku: (product?.sku as string) ?? null,
+          quantity,
+          colour,
+          variantLabel,
+          personalisation,
+          orders: [ref],
+        });
+        continue;
+      }
+
+      // Grouped on everything that changes what comes off the shelf — the
+      // product, the colour and the variant. Two lines that differ in colour
+      // are two different picks and must not be added together.
+      const groupKey = [
+        (item.product_id as string | null) ?? name,
+        colour ?? "",
+        variantLabel ?? "",
+      ].join("|");
+
+      const existing = plain.get(groupKey);
+      if (existing) {
+        existing.quantity += quantity;
+        // One order can carry the same piece on two lines; list it once.
+        if (!existing.orders.some((o) => o.id === ref.id)) existing.orders.push(ref);
+      } else {
+        plain.set(groupKey, {
+          key: `plain-${groupKey}`,
+          kind: "plain",
+          name,
+          sku: (product?.sku as string) ?? null,
+          quantity,
+          colour,
+          variantLabel,
+          personalisation: null,
+          orders: [ref],
+        });
+      }
+    }
+  }
+
+  const entries = [
+    ...[...plain.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    ...singles.sort((a, b) => a.name.localeCompare(b.name)),
+  ];
+
+  return {
+    entries,
+    orderCount: data.length,
+    pieceCount: entries
+      .filter((entry) => entry.kind !== "scoop")
+      .reduce((sum, entry) => sum + entry.quantity, 0),
+  };
+}
+
+/**
+ * Personalisation as one line of text, read defensively.
+ *
+ * `order_items.personalisation` is jsonb and its shape has changed once
+ * already, so this reads whatever is there rather than assuming a schema. It
+ * lives here rather than on a page because the packing slip and the pick list
+ * must show a customer's letters IDENTICALLY — this shop sells custom name
+ * charms, and two screens formatting the same value two ways is how a remake
+ * starts. Nothing is invented: an empty value produces null, not "".
+ */
+export function describePersonalisationText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value.trim() || null;
+  if (Array.isArray(value)) {
+    const parts = value.map((part) => String(part)).filter(Boolean);
+    return parts.length > 0 ? parts.join(" ") : null;
+  }
+  if (typeof value === "object") {
+    const parts = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== null && v !== undefined && v !== "")
+      .map(([key, v]) => `${key.replace(/_/g, " ")}: ${String(v)}`);
+    return parts.length > 0 ? parts.join(" · ") : null;
+  }
+  return String(value);
 }

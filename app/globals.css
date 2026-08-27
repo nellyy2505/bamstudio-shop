@@ -100,3 +100,92 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------------------------------------------------------------- printing
+ *
+ * WHY THE PRINT RULES LIVE HERE. This is the only stylesheet in the project —
+ * `app/layout.tsx` imports it and nothing else imports CSS — so a second file
+ * would be a second thing to remember to load. Tailwind's own `print:` variant
+ * handles per-element decisions and is used on the pages themselves; what a
+ * utility class cannot express is the page box, so `@page` has to be written
+ * as CSS somewhere, and this is where.
+ *
+ * WHAT THIS IS FOR. `/admin/orders/[id]/slip` (the packing slip that goes in
+ * the box) and `/admin/orders/pick` (the pick list she works from at the
+ * bench). Both come out of a home printer, which is the constraint that shapes
+ * every rule below: paper is white and toner is expensive, so nothing dark is
+ * printed; a printed page has no navigation, no buttons and no hover state, so
+ * they are removed rather than left inert; and colour is decorative on paper,
+ * because a mono laser prints an amber warning pill as light grey. Anything
+ * that has to be understood is words.
+ *
+ * `.no-print` marks chrome — the staff bar, the sidebar, every control.
+ * `.print-sheet` wraps a document that is genuinely meant to be printed and
+ * flattens its palette to black on white.
+ * -------------------------------------------------------------------------- */
+
+@media print {
+  @page {
+    /* A4 is what a home printer in Australia is loaded with. The margin is
+       generous enough that no printer's unprintable edge clips an address. */
+    size: A4;
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #fff;
+    color: #000;
+    /* Points, not pixels: on paper a physical size is the honest unit. */
+    font-size: 10.5pt;
+  }
+
+  /* Navigation, buttons, filters, anything a finger would press. */
+  .no-print {
+    display: none !important;
+  }
+
+  /* A link is not clickable on paper, and blue underlined text on a mono
+     printer is just grey underlined text. The href is deliberately NOT
+     appended: a packing slip with raw URLs printed after every word is
+     harder to read, not more useful. */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .card {
+    border: 1px solid #999;
+    border-radius: 0;
+    box-shadow: none;
+    background: #fff;
+  }
+
+  /* A document that IS the thing being printed needs no card around it — the
+     page box is its frame. Spelled out here rather than as `print:border-0`
+     on the element, because these rules sit outside Tailwind's layers and
+     would otherwise beat the utility whatever order it was written in. */
+  .print-sheet.card {
+    border: 0;
+    padding: 0;
+  }
+
+  /* Everything inside a printed document is black on white. This is what
+     stops a filled pill, a soft warning panel or the cream table stripe from
+     coming out as a grey block — and it is why nothing on those pages relies
+     on a colour to carry meaning. */
+  .print-sheet,
+  .print-sheet * {
+    background: transparent !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    /* The screen palette's rules are a very pale cream — legible on a monitor,
+       all but invisible on paper. This only darkens borders that already have
+       a width, so nothing gains an outline it did not have. */
+    border-color: #999 !important;
+  }
+
+  .print-sheet {
+    max-width: none;
+  }
+}
