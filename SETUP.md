@@ -7,8 +7,17 @@ own computer. Step 5 deploys it, and the deployed shop gets its settings a
 different way — the box below explains how, and it is the one thing here worth
 reading twice.
 
-Budget about 90 minutes for the first pass, plus a little longer for Step 5
-now that the shop is deployed with Docker on Fly.io rather than on Vercel.
+> **Most of this is already done — read it as a reference, not as a list to
+> work through.** As at 27 August 2026: Supabase is set up and the schema is
+> applied, the Fly app exists, **the shop is deployed and live at
+> `https://bamstudio-shop.fly.dev`**, and the JWT secret has been rotated. Each
+> step below says at its top whether it is done. **The steps still waiting on
+> you are gathered under "What only you can supply"**, and the shortest version
+> of them is: push the three commits sitting on your computer, run one more SQL
+> file, and fill in the catalogue.
+
+Budget about 90 minutes for a first pass if you are setting this up from
+scratch again; far less to check the parts that are already done.
 
 **What it costs.** Supabase, Resend, the Australia Post postage API and GitHub
 Actions all have free tiers that comfortably cover a new shop, and Stripe only charges per sale (1.75% + $0.30
@@ -44,8 +53,7 @@ the live container as real environment variables, by two different routes:
 history, so anyone who can pull the image can read them back.
 
 The full table of which variable is which is in Step 5c, and `.env.example`
-labels every line — with one exception: **`AUSPOST_API_KEY` is not in
-`.env.example` yet**, so add that line to `.env.local` by hand (Step 3b).
+labels every line, `AUSPOST_API_KEY` included.
 
 ---
 
@@ -77,37 +85,60 @@ Go to **Project Settings → API Keys** (and **Data API** for the URL):
 
 ### 1c. Create the tables
 
-> **Your database is still empty — none of this has been run yet.** There are
-> now **two** migration files and they go in order.
+> ✅ **Steps 1–5 below are DONE.** `0001_init.sql`, `0002_shipping.sql`,
+> `0003_admin.sql`, `seed.sql` and `storage.sql` have all been run on your
+> project, along with the one-line statement that makes you the owner of the
+> studio, and `verify.sql` came back with all 50 rows saying `t` on 26 August.
+>
+> ⚠️ **One file is still to run: step 6.** It is new, it is quick, and it fixes
+> a default that would otherwise quietly undercharge you on postage.
 
-1. In Supabase, open **SQL Editor → New query**.
-2. Open `supabase/migrations/0001_init.sql` from this project, copy the whole
-   file, paste it in, and click **Run**. It should say "Success".
-3. New query again. Copy all of **`supabase/migrations/0002_shipping.sql`**,
-   paste, **Run**. This adds the weight and size columns postage is priced
-   from, the postage rate cache, and three columns on `orders` that record how
-   a postage price was arrived at. Like the first file it is safe to re-run.
-4. New query again. Copy all of `supabase/seed.sql`, paste, **Run**. This
-   loads your 44 products and 6 colourway collections. No reviews —
-   those only ever come from real customers.
-5. Check **Table Editor → products** — you should see the catalogue, and each
-   row now has `weight_grams`, `length_mm`, `width_mm`, `thickness_mm` and
-   `letter_eligible`. Hover a column name to see what it is for. **Those
-   numbers are estimates** — see "What only you can supply" for the three
-   weighings that would replace the guesswork.
-6. New query once more. Copy all of `supabase/verify.sql`, paste, **Run**.
-   Every row must say `t`. It checks the things that otherwise fail silently
-   in production — most importantly that the webhook is allowed to allocate
-   order numbers and move stock. Without those grants, customers can pay and
-   no order is ever recorded. The script writes two throwaway rows and rolls
-   them back, so it is safe to re-run any time.
+1. ~~In Supabase, open **SQL Editor → New query**, copy all of
+   `supabase/migrations/0001_init.sql`, paste, **Run**.~~ Done.
+2. ~~New query. All of **`supabase/migrations/0002_shipping.sql`**, paste,
+   **Run**.~~ Done. It added the weight and size columns postage is priced from,
+   the postage rate cache, and three columns on `orders` that record how a
+   postage price was arrived at.
+3. ~~New query. All of **`supabase/migrations/0003_admin.sql`**, paste,
+   **Run**.~~ Done. That is the studio itself: who may get behind the shopfront,
+   the colour list, filament stock, the costing settings and the accessories.
+4. ~~New query. All of `supabase/seed.sql`.~~ Done — your 44 products and 6
+   colourway collections. No reviews; those only ever come from real customers.
+5. ~~New query. All of `supabase/storage.sql`.~~ Done. That is the
+   `product-photos` bucket the Products screen uploads into. (It is deliberately
+   a separate file from the migrations, because it needs Supabase's Storage
+   feature and cannot be tested anywhere else.)
+6. ⚠️ **To do: new query. Copy all of
+   `supabase/migrations/0004_letter_eligible_default.sql`, paste, Run.**
+   Small but worth doing before you add any product by hand. `letter_eligible`
+   decides whether an item is quoted as a $3.40 **untracked** Large Letter or a
+   ~$10.20 **tracked** parcel, and the column was set up so that a row you typed
+   in yourself arrived claiming the cheap untracked option — for something nobody
+   had measured. Every difference is money you pay, and a lost letter cannot be
+   traced. This file makes a new row default to "parcel" instead, and clears the
+   flag on any row that got it by accident. It is safe to re-run.
+7. **Then re-run the check.** New query, copy all of `supabase/verify.sql`,
+   paste, **Run**. **Every row must say `t`, and there should now be 52 of
+   them** — count the rows as well as the ticks, because a shorter table means
+   an older copy of the file, which is a pass that never looked at part of your
+   database. It checks the things that otherwise fail silently in production —
+   most importantly that the webhook is allowed to allocate order numbers and
+   move stock. Without those grants, customers can pay and no order is ever
+   recorded. It writes a few throwaway rows and rolls them back, so it is safe
+   to re-run any time.
 
-> The schema is `supabase/migrations/0001_init.sql` plus
-> `supabase/migrations/0002_shipping.sql`, in that order. Both are safe to
-> re-run: if you applied an earlier version, run it
-> again and it adds anything missing rather than starting over, leaving your
-> data alone. It also revokes a grant that an earlier version handed out too
-> widely, so re-running it on an existing database is not optional.
+Check **Table Editor → products** whenever you like: each row has
+`weight_grams`, `length_mm`, `width_mm`, `thickness_mm` and `letter_eligible`.
+Hover a column name to see what it is for. **Those numbers are estimates** — see
+"What only you can supply" for the three weighings that would replace the
+guesswork.
+
+> The schema is the four files in `supabase/migrations/`, in number order, and
+> `supabase/storage.sql` afterwards. All of them are safe to re-run: if you
+> applied an earlier version, run it again and it adds anything missing rather
+> than starting over, leaving your data alone. `0001` also revokes a grant that
+> an earlier version handed out too widely, so re-running it on an existing
+> database is not optional.
 
 ### 1d. Turn on Google sign-in
 
@@ -393,6 +424,21 @@ you do.
 
 ### 5a. Put the code on GitHub — already done
 
+> ⚠️ **Three commits are sitting on your computer and are not pushed.** They are
+> the three fixes from 26 August — the studio printing a price for a piece nobody
+> had measured, the inventory screen saying the shelf covered the queue, and the
+> doubled page title — plus the page that makes staff invitations work at all.
+> **Nothing in them is live on `bamstudio-shop.fly.dev` until you push**, and
+> pushing is what triggers the deploy. In the project folder:
+>
+> ```bash
+> git status          # check what it is about to send
+> git push origin master
+> ```
+>
+> It has to be you: the assistant's shell has no network access and cannot reach
+> your saved GitHub login.
+
 The repository exists: **<https://github.com/nellyy2505/bamstudio-shop>**,
 branch **`master`**, which is the branch the deploy workflow watches. It is
 **public**, so treat everything in it as readable by anyone — that is fine for
@@ -408,7 +454,7 @@ git commit -m "what changed"
 git push
 ```
 
-> ⚠️ **Do not use `git add -A` in this project.** About ten files always show as
+> ⚠️ **Do not use `git add -A` in this project.** Nine files always show as
 > modified because of invisible Windows line-ending differences, not because
 > anything changed in them. `git add -A` sweeps all of that into your commit and
 > makes it impossible to see what you actually did. Add files by name.
@@ -416,7 +462,11 @@ git push
 > `.env.local` is git-ignored, so your keys stay off GitHub. Check `git status`
 > before pushing anyway.
 
-### 5b. Create the Fly app
+### 5b. Create the Fly app — already done
+
+> ✅ **`bamstudio-shop` exists on Fly and the shop is deployed.** It answers at
+> **<https://bamstudio-shop.fly.dev>**. Keep the rest of this step for reference —
+> it is what you would do if the app ever had to be recreated.
 
 1. Install flyctl: <https://fly.io/docs/flyctl/install/>, then `fly auth signup`
    (or `fly auth login`). You will be asked for a card — Fly needs one even on
@@ -648,18 +698,52 @@ builds go to Fly's remote builder.
 
 ---
 
+## The studio — `/admin`
+
+✅ **Set up and working.** Sign in on the shop with your own account and go to
+**<https://bamstudio-shop.fly.dev/admin>**. You are already the owner: a single
+statement run in the SQL editor put your account in the `staff` table, which is
+the only way the first person ever gets in. There is no "sign up as staff" page,
+by design.
+
+Nine screens: **Overview**, **Orders** (including *Record a sale* for a market or
+TikTok order you took in person), **Products**, **Inventory** (the print queue,
+the filament buy list, and *Measure the catalogue*), **Reports**, **Colours**,
+**Settings** and **Studio access**.
+
+Three things worth knowing before you use it:
+
+- **Nothing is invented.** A shop that has taken no orders says so, and a piece
+  with no print time and no filament says "not measured" instead of showing a
+  price. If a screen looks empty, that is the screen telling you the truth about
+  the database, not a fault.
+- **Inviting someone.** Studio access → invite by email address, choosing
+  **Studio** (everything except inviting people) or **Packing** (orders only —
+  no costs, no prices, no margins). They get a link; they must sign in with **the
+  same address you invited**, and then the link makes them staff. An invitation
+  can never grant Owner. If they have no account yet, the link takes them through
+  creating one and brings them back.
+- **Tracking numbers and order status** are typed on the order's own page in
+  Orders. That is what moves a customer's `/track` page from *printing* to
+  *packed* to *shipped* — it is no longer a hand edit in the Supabase tables.
+
+The one thing the studio cannot do yet: **refund a cancelled order that was paid
+anyway.** If that ever happens it is logged, and the refund is done by hand in
+Stripe.
+
+---
+
 ## Step 6 — Going live
 
 Do these in order on launch day:
 
-0. **Rotate the Supabase JWT secret** if you have not already — see the box at
-   the top of "What only you can supply". The exposed anon key still works,
-   which means the leaked `service_role` key very likely does too, and that key
-   can read every customer's address. Nothing else on this list matters as much.
-0b. **Check the database has both migrations applied** —
-   `0001_init.sql` *and* `0002_shipping.sql`, then `seed.sql`, then
-   `verify.sql` with every row printing `t` (Step 1c). The project is empty
-   until you do.
+0. ~~Rotate the Supabase JWT secret.~~ ✅ **Done, 26 August.** Nothing further is
+   needed there.
+0b. **Run `0004_letter_eligible_default.sql`, then re-run `verify.sql`** and
+   check it prints **52** rows, every one `t` (Step 1c step 6). The other SQL
+   files are already applied.
+0c. **Push the three commits sitting on your computer** (Step 5a) — the deploy
+   only runs on a push, so until then the live shop is missing three fixes.
 1. **Fill in "My price"** in the workbook for every product, then run
    `node scripts/generate-seed.mjs` and re-run `supabase/seed.sql`.
    Until then the shop uses placeholder prices.
@@ -724,35 +808,39 @@ Do these in order on launch day:
 
 ## What only you can supply
 
-### Do this first — an outstanding security job
+### Done — the security job that used to sit at the top of this list
 
-> **Rotate your Supabase JWT secret.**
+> ✅ **Your Supabase JWT secret has been rotated** (26 August 2026), so the anon
+> key and `service_role` key that were once exposed in a chat no longer work.
+> That closes it. Your Stripe live key was exposed the same way and you had
+> already rolled it. Test keys are what the shop is using today.
 >
-> A Supabase anon key and a `service_role` key of yours were exposed in a chat.
-> The check that matters is simple: **the exposed anon key still works.** Keys
-> are signed with the project's JWT secret, and rotating that secret is what
-> makes every old key stop working — so if the old anon key still authenticates,
-> the secret has not been rotated, and the `service_role` key that leaked
-> alongside it is very likely still live.
+> Kept here only so the procedure is written down if it is ever needed again:
+> rotating the JWT secret in the Supabase dashboard invalidates **every** key
+> signed with the old one, so the new keys have to go into **all three** places
+> in one sitting or the shop goes offline — `.env.local` on your computer; the
+> `NEXT_PUBLIC_SUPABASE_ANON_KEY` **GitHub Actions Secret**, followed by a
+> **re-run of the deploy**, because that one is baked in at build time and a
+> restart will not pick it up; and
+> `fly secrets set SUPABASE_SERVICE_ROLE_KEY='...' -a bamstudio-shop`.
+
+### Do this first — the three commits, and one SQL file
+
+> 1. **`git push origin master`** (Step 5a). Three fixes made on 26 August are
+>    sitting on your computer only, and the live shop does not have them.
+> 2. **Run `supabase/migrations/0004_letter_eligible_default.sql`** and re-run
+>    `verify.sql`, expecting 52 rows all `t` (Step 1c).
+> 3. **Fill in the studio.** Your 44 products are all still priced at the seed's
+>    $9.00, none of them has a filament recipe, and almost none has a print time
+>    — so every cost, margin and suggested price in the studio says "Not
+>    measured", which is correct and useless. **Studio → Inventory → Measure the
+>    catalogue** is the screen built for exactly this: one row per product, a
+>    print time, a colour and its grams, Save, next.
 >
-> That one matters. `service_role` ignores every access rule in the database: it
-> can read every order, every customer address and every profile, and change or
-> delete any of it.
->
-> In the Supabase dashboard, rotate the JWT secret, then update the new keys in
-> **all three** places in one sitting — rotating without updating takes the shop
-> offline:
->
-> 1. `.env.local` on your computer (`NEXT_PUBLIC_SUPABASE_ANON_KEY` and
->    `SUPABASE_SERVICE_ROLE_KEY`);
-> 2. GitHub → Settings → Secrets and variables → Actions → **Secrets** →
->    `NEXT_PUBLIC_SUPABASE_ANON_KEY`, then **re-run the deploy** — that one is a
->    build arg, so a restart will not pick it up;
-> 3. `fly secrets set SUPABASE_SERVICE_ROLE_KEY='...' -a bamstudio-shop`.
->
-> Your Stripe live key was exposed the same way and **you have already rolled
-> it** — nothing further is needed there. Test keys are what the shop is using
-> today.
+> Do not copy prices out of the workbook's *Suggested price* column: cell C19 on
+> the Settings sheet holds the text `1.6%` rather than a number, so that column
+> is an error on every row and Profit/unit reads 0. The shop works the same sum
+> out correctly.
 
 ### The most useful ten minutes you can spend on postage
 
@@ -786,13 +874,16 @@ Small orders can go two ways, and the shop is currently taking the safe one.
 | Insurance | Yes | **None** |
 | Fits | Anything | Under 125 g, 260 × 360 mm, under 20 mm thick |
 
-Every product is set to "parcel" right now, so nothing is ever underpriced. If
-you want small charm orders to go as letters, that is a checkbox per product
-(`letter_eligible`) on its row in Supabase — **but do not tick it and leave it
-there**. The site currently tells customers every delivery method is "tracked",
-which stops being true the moment a letter goes out. Tell whoever is working on
-the code, so the wording and the checkbox change together. It is written up in
-`WORKLOG.md` §6 as a pending decision.
+Every product is set to "parcel" right now, so nothing is ever underpriced, and
+once you have run `0004` (Step 1c) that is also what a brand-new product row
+starts as. If you want small charm orders to go as letters, that is a checkbox
+per product (`letter_eligible`) on its row in Supabase, and **it no longer needs
+a code change to go with it**: the site used to tell customers every delivery
+method was "tracked" whatever was actually being sent, and that was fixed — the
+wording now comes from the real quote, so a letter is described as a letter. Tick
+it per product, and check the cart wording once on a small basket to see it for
+yourself. It is written up in `WORKLOG.md` §6 as a pending decision because the
+trade below is yours to make, not because anything is waiting on the code.
 
 The trade is: a lost parcel can be traced and claimed; a lost letter is gone,
 and you would be reprinting and reposting it at your own cost. On a $9 charm,
@@ -818,11 +909,12 @@ until you fill it in.
 | **ABN** — `NEXT_PUBLIC_ABN` | Footer, legal pages, and Stripe's own verification | Hidden wherever it would appear. Stripe will not release money without it |
 | **Hosting provider's name — it is now Fly.io** | `/legal/privacy`, "who we share information with" | Listed generically as "the provider that serves these pages". Accurate, but the privacy page names its other processors (Stripe, Supabase, Resend) and is expected to name this one too. **Edit `app/legal/privacy/page.tsx` to say Fly.io.** It used to be Vercel; do not let an old draft say so |
 | **The domain, attached** — `bamstudioshop.com` **is registered** (Porkbun) | `NEXT_PUBLIC_SITE_URL`, Stripe's webhook URL, Supabase's Site URL and redirect list, the Resend sending domain | Bought, not yet pointed at anything, and **Porkbun's `*` parking CNAME is still there and must be deleted — it shadows email records**. The shop will first go live at `https://bamstudio-shop.fly.dev`. The `.com.au` needs an **issued** ABN (a pending application does not qualify). Step 5f is the move, and its first job is a **rebuild**, not a setting change |
-| **Australia Post key** — `AUSPOST_API_KEY` | Postage pricing | Free and instant from developers.auspost.com.au (Step 3b). Without it postage is quoted from built-in rates read on 25 August 2026, rounded up one band — the shop works and charges slightly dear |
+| **Australia Post key** — `AUSPOST_API_KEY` | Postage pricing | Free and instant from developers.auspost.com.au (Step 3b), and it is in `.env.example`. Without it postage is quoted from built-in rates read on 25 August 2026, rounded up one band — the shop works and charges slightly dear |
 | **Three real weights** — one charm, one clicker, one bowl, each in its mailer | `lib/shipping/dimensions.ts`, and each product's row in Supabase | Every weight and size is an estimate today, erring expensive. See the box above — this is the highest-value thing on this page |
 | **Social handles** (optional) — `NEXT_PUBLIC_INSTAGRAM_URL`, `NEXT_PUBLIC_TIKTOK_URL` | Footer, contact, about, and every "message us" fallback | No links shown. They also act as a second channel: with a handle set, pages can still offer a way to reach you even before the mailbox exists |
 | **Email keys** — `RESEND_API_KEY`, `EMAIL_FROM` (both, or neither) | Step 3 | No email of any kind is sent, and no page claims one is coming. Customers still get their order number on screen and can still track an order — that path deliberately does not depend on email |
 | **Market dates** | About page | `[MARKET NAME AND DATE]` placeholder — the one bracketed placeholder left in the site |
+| **Real prices, print times and filament grams** | Studio → Products, and Studio → Inventory → *Measure the catalogue* | All 44 products still carry the seed's $9.00, **none has a filament recipe** and almost none has a print time, so every cost, margin, suggested price and the whole filament buy list read "Not measured". Nothing invents a number in their place — that is deliberate — but the studio cannot tell you anything useful until they are in |
 
 ### Business and account items
 
@@ -943,12 +1035,33 @@ Postage is quoted from Australia Post's live prices when `AUSPOST_API_KEY` is
 set (Step 3b) and from a built-in table of real rates when it is not — and that
 table deliberately quotes **one price band up**, so it is never short. Small
 orders also all go as tracked parcels today rather than as $3.40 letters; see
-the tracked-or-cheap decision in "What only you can supply". (Note that until
-the postage work is finished in the code, checkout still charges the old flat
-$9.50 / $14.50 regardless.)
+the tracked-or-cheap decision in "What only you can supply". The cart and
+checkout both price a basket the same way, through one piece of code, so the
+figure a customer agrees to is the figure Stripe charges.
 
 **Fly says the machine is unhealthy, or the deploy will not roll over**
 Check `fly logs -a bamstudio-shop`, then
 `curl https://bamstudio-shop.fly.dev/api/health` — it should return
 `{"ok":true}`. That endpoint touches nothing, so if it fails the process itself
 is not serving. `fly status -a bamstudio-shop` shows the machine's state.
+
+**`/admin` sends me back to the shop, or to sign in**
+The studio checks the `staff` table on every page, and that table is only
+readable by the server — so being signed in is not enough, your account has to
+be in it. Yours was added by the one-line statement in Step 1c. If you are being
+turned away, check you are signed in with **the same email address** that
+statement used.
+
+**Someone I invited says the link is not valid**
+Three usual causes, in order: they are signed in with a **different address**
+than the one you invited (the link only works for the address on the
+invitation); the invitation was already used, or you revoked it, or it has
+expired — Studio access shows which; or they opened it, signed up, and never
+came back to the link. Send a fresh invitation from Studio access rather than
+re-sending the old link.
+
+**A screen in the studio says "not measured" everywhere**
+That is correct, not broken: a product with no print time and no filament grams
+has no cost, so there is no margin and no suggested price to show, and the shop
+will not print a number it cannot stand behind. **Studio → Inventory → Measure
+the catalogue** is where you fill those in.

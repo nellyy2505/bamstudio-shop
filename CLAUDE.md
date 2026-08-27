@@ -28,7 +28,11 @@ it **is** wired: `quoteBasket()` prices every basket in checkout and in the cart
 See *Postage* below before touching anything that mentions shipping, and
 `WORKLOG.md` §5 rounds 9 and 10 for how it was arrived at.
 
-`WORKLOG.md` is the source of truth for project state: what was built, nine
+There is a **staff area at `/admin`** (round 11), the shop is **deployed** at
+`bamstudio-shop.fly.dev`, and the schema is applied on the live Supabase
+project. See *The staff area* below before touching anything under `app/admin/`.
+
+`WORKLOG.md` is the source of truth for project state: what was built, thirteen
 rounds of findings, what is deliberately still open, and — in **§0** — the ten
 launch blockers with their current status plus **the open list as it stands
 today**. All ten have been addressed;
@@ -44,7 +48,19 @@ npm run build      # production build — run before every deploy
 npm run lint       # eslint (flat config; `next lint` was removed in 16)
 npx tsc --noEmit   # typecheck
 node scripts/generate-seed.mjs [workbook.xlsx]   # regenerate the catalogue
+node scripts/check-costing.mjs                   # lib/costing.ts vs the workbook's
+                                                 # own cached values
+./scripts/verify-sql.sh                          # every migration + seed + verify.sql
 ```
+
+**`npm run build` is on the check list, not a formality.** `npx tsc --noEmit`
+and `npx eslint .` both passed on a round-11 tree that could not compile: one
+`export const` in a `"use server"` file — every export there must be an async
+function — made Turbopack report the module as having no exports and took eleven
+pages down. Only `next build` sees the server-action boundary, and only it
+proves a route group resolves to the URL you expect, which is what `/admin/join`
+depends on. `tsc` also accepts a server action defined inside a `"use client"`
+file, which compiles and then does nothing.
 
 `generate-seed.mjs` needs `../Documents/3D_Planner.xlsx`. **That workbook is not
 in this sandbox**, so the seed cannot be regenerated here: `lib/fallback-data.ts`
@@ -66,6 +82,12 @@ check passed while all ten launch blockers in `WORKLOG.md` §0 were live, and
 three times in this project a *fix* introduced a regression that only a
 replayed payload caught. Hand-written API tests passed while checkout was
 completely broken for the highest-margin products.
+
+**And open the page.** Round 12's worst defect — a product page printing
+*Suggested $0.50 · Profit $8.73 · Actual margin 97%* on a piece with no print
+time and no filament, directly under a panel correctly saying there was no cost
+— was invisible to the typecheck, the lint, the build and all 50 SQL
+assertions.
 
 Both checks are scripts. Run them; don't reconstruct them.
 
@@ -114,9 +136,28 @@ those grants customers pay and no order is ever recorded), and that
 ./scripts/verify-sql.sh
 ```
 
-> **29/29, observed.** The script applies `0001_init.sql`, then
-> `0002_shipping.sql`, then the seed. Three documents used to say it applied
-> `0001` only; that was already false.
+> **The script keeps no list of migrations.** It globs every `.sql` in
+> `supabase/migrations/`, sorts under `LC_ALL=C` and applies the lot before the
+> seed, printing `applied N migration(s)`. The hand-written list it replaced fell
+> behind twice — `0002_shipping.sql` sat unapplied for two rounds while
+> `verify.sql` asserted against it, and the run stopped rather than failing, so
+> 29 assertions silently stopped existing. Observed: **29/29** (round 10),
+> **50/50** (round 11, each assertion proved to fail when broken), and 50 rows
+> all `t` against the live project. **52/52 has not been observed yet.**
+>
+> ⚠️ **`supabase/storage.sql` is deliberately not applied by the harness**, and
+> is not a migration: `storage` is a platform schema that vanilla PostgreSQL does
+> not have. Guarding it with an `if exists` would make the harness skip it
+> silently and print ticks about a bucket it never created. It is run by hand,
+> once, in the Supabase SQL editor.
+>
+> ⚠️ **The stand-in must keep granting Supabase's default privileges.** Hosted
+> Supabase grants every new `public` table to `anon` as it is created — which is
+> *why* `0002` and `0003` revoke explicitly — and vanilla PostgreSQL does not.
+> Without that `alter default privileges` block, every "anon cannot read X"
+> assertion passes whether or not the revoke exists: it measures the absence of
+> a grant, not the presence of a revoke. Round 11 deleted each revoke one at a
+> time to watch its assertion go red. Do that again if you change it.
 >
 > ⚠️ **Its Supabase stand-in must keep installing pgcrypto into an `extensions`
 > schema, not into `public`.** It used to do the latter, which put
@@ -126,11 +167,13 @@ those grants customers pay and no order is ever recorded), and that
 > stand-in has to reproduce the hosted platform's *shape*, not just its API.
 > `WORKLOG.md` §5 round 10.
 >
-> ⚠️ **`verify.sql` returns one table of 29 rows and must stay that way.** It was
-> eight separate statements, and the Supabase SQL editor shows only the last —
-> so the owner saw two rows, both `true`, and could not check her own database
-> with the tool the runbook names. Count rows as well as ticks: 24 rows all `t`
-> would be green without ever looking at the shipping schema.
+> ⚠️ **`verify.sql` returns ONE table, and it is now 52 rows.** It was eight
+> separate statements, and the Supabase SQL editor shows only the last — so the
+> owner saw two rows, both `true`, and could not check her own database with the
+> tool the runbook names. Count rows as well as ticks: the file has grown 24 →
+> 29 (shipping) → 50 (the staff area) → 52 (the `letter_eligible` default), so a
+> shorter table is an older copy of the file, which is a green result that never
+> looked at part of the schema.
 
 One command, self-bootstrapping, exits non-zero if any assertion is not `t`. It
 drives a **locally installed PostgreSQL 16** (`apt install postgresql-16`):
@@ -140,7 +183,9 @@ empty, applies the Supabase stand-ins the migration needs (`anon` /
 the migration, the seed and `verify.sql`, and prints the assertion table. It
 refuses to run against anything that is not Postgres 16.
 
-> **The schema is `supabase/migrations/0001_init.sql`. There is no
+> **The schema is the four files in `supabase/migrations/`** — `0001_init.sql`,
+> `0002_shipping.sql`, `0003_admin.sql`, `0004_letter_eligible_default.sql`, in
+> that order, plus `supabase/storage.sql` by hand. **There is no
 > `supabase/schema.sql`.** This file and `WORKLOG.md` both used to say to pipe
 > `schema.sql`; it does not exist and never did, and that cost someone real
 > time.
@@ -151,9 +196,10 @@ was *unavailable* in the environment this was last verified in:
 
 ```bash
 docker run -d --rm --name pg -e POSTGRES_PASSWORD=test postgres:16-alpine
-# create schema auth, auth.users, auth.uid(), and the service_role/anon/
-# authenticated roles first, then pipe supabase/migrations/0001_init.sql,
-# supabase/seed.sql and supabase/verify.sql through
+# create schema auth, auth.users, auth.uid(), the service_role/anon/
+# authenticated roles, Supabase's default privileges and pgcrypto in an
+# `extensions` schema first, then pipe every file in supabase/migrations/ in
+# order, then supabase/seed.sql and supabase/verify.sql through
 # docker exec -i pg psql -U postgres
 ```
 
@@ -222,7 +268,12 @@ the full table.
   Delivery quotes are print lead time *plus* carrier transit.
 - **Personalised items are non-returnable** except when faulty.
 - **Prices are always recomputed server-side.** The client says which product
-  and how many, never what it costs.
+  and how many, never what it costs — and never how heavy it is.
+- **No sample data, ever, and no plausible-looking zero.** A shop that has taken
+  no orders reports that it has taken no orders; a piece nobody has measured says
+  "not measured" rather than printing a price derived from a floor. This was an
+  explicit instruction from the owner, and three round-12 defects were breaches
+  of it.
 
 Because the shop makes claims to customers, **a change that makes an on-site
 statement untrue is as serious as a crash.** §0.1 of the log is exactly that:
@@ -433,12 +484,18 @@ no `price` field. The rules that govern it:
   correct for nothing and wrong for a basket. `/api/shipping/quote` returns 409
   when any line was dropped. This shipped as a live $0.00-postage bug in round
   10 before it was caught.
-- **The schema default is the wrong way round.** `0002_shipping.sql` declares
-  `letter_eligible boolean not null default true`, while
-  `lib/shipping/weights.ts` treats an absent flag as **false** and the seed
-  writes `false` for all 44 rows. A new row added in the Supabase table editor
-  therefore arrives letter-eligible. Nothing is wrong today; do not make it
-  worse.
+- **`letter_eligible` defaults to `false`, and must stay that way.**
+  `0002_shipping.sql` originally declared it `default true` while
+  `lib/shipping/weights.ts` documents the opposite — "absent means false", an
+  unmeasured product is quoted as a parcel — and `select.ts` only counts a line
+  as letter-eligible when the value is exactly `true`. A row typed into the
+  Supabase table editor therefore arrived claiming Large Letter: $3.40,
+  untracked and uninsured, against about $10.20 tracked, with the undercharge
+  paid by the studio. `0004_letter_eligible_default.sql` sets the default to
+  `false` and clears accidental `true`s once, gated so it can never touch a tick
+  the owner made deliberately; `verify.sql` asserts both the declared default and
+  the behaviour a hand-added row gets. **The flag is a judgement, not a
+  measurement**, and a default is a judgement nobody made.
 - **`AUSPOST_API_KEY` is a runtime secret** — a Fly secret, never a build arg,
   and never `NEXT_PUBLIC_`. `isPacConfigured()` throws in the browser rather
   than answering `false`, the same pattern as `isEmailConfigured()`.
@@ -449,6 +506,82 @@ no `price` field. The rules that govern it:
 - **Every physical constant in `lib/shipping/dimensions.ts` is an estimate**,
   and `select.ts`'s rule 4 (`max` thickness rather than sum) is only legitimate
   because rule 3 forces a single flat layer. Do not weaken rule 3.
+
+## The staff area
+
+`/admin` — nine screens for the person running the shop: Overview, Orders (with
+a form for typing in a market or TikTok sale), Products, Inventory (print queue,
+filament buy list, and *Measure the catalogue*), Reports, Colours, Settings and
+Studio access. Built in round 11, deployed, and driven against the live database
+in round 12. `WORKLOG.md` §5 rounds 11 and 12 have the reasoning.
+
+**A role is not a column on `profiles`, and must never become one.**
+`0001_init.sql` grants every signed-in account UPDATE on its own profile row
+across *all* columns, and RLS cannot restrict a policy to a subset of columns —
+a `role` there would be self-assignable over PostgREST with the anon key that
+ships in the browser bundle. One HTTP request and a customer is an admin. It
+lives in `public.staff`: RLS on, **no policy at all**, explicit revokes from
+`anon` and `authenticated`, readable only with the service-role key.
+`verify.sql` asserts all four facts on every run, and the same shape covers
+every other table in `0003_admin.sql` that decides authority or exposes cost.
+Do not add a policy to make something "easier to query" from the client.
+
+**`requireStaff(capability)` is called by every page, route handler and server
+action under `/admin`** — it cannot be hoisted anywhere. `proxy.ts` only holds
+the anon client, so it can establish "signed in at all" and nothing more; a
+layout is not a security boundary for a route handler; and a server action is a
+public HTTP endpoint with a generated id that anyone who has ever loaded the shop
+can find in the client bundle. "Only the admin page calls this" is a hope, not a
+check. In `app/admin/actions.ts` the capability comes first, before the form data
+is even read.
+
+**There is exactly ONE documented exception: `acceptInvitation`.** It is the
+action that *makes* somebody staff, so requiring staff would be circular —
+everyone who legitimately reaches it is a signed-in account with no row in
+`public.staff`. It is not unguarded: `resolveJoin()` requires a signed-in user, a
+token that hashes to a live invitation row, and **the signed-in email to equal
+the invited email**, which is a narrower gate than any capability in the file. An
+agent that "fixes" this by adding `requireStaff()` breaks every invitation.
+**Do not add a second exception without the same treatment**, and do not move the
+page: `app/(admin-join)/admin/join/` is a route group so the URL is still exactly
+`/admin/join` while the page escapes `app/admin/layout.tsx`, which calls
+`requireStaff()` and would bounce the invited person before they could accept.
+
+**No sample data, and no plausible-looking zero.** A shop that has taken no
+orders says so; Reports renders an empty state rather than a chart of zeros; a
+piece nobody has measured says "not measured" rather than `$0.00`. All three
+round-12 defects were breaches of this, so it is not theoretical. The costing
+chain carries it: **nulls stay null**, `unitCost()` returns `unknown: true` when
+an input is missing, and `costProduct()` returns `suggested: null` rather than
+pricing from a floor.
+
+**`lib/costing.ts` is a transcription of the workbook and stays one.** Products
+sheet, columns T–AA, the workbook's own formulas quoted in the comments,
+fractional cents throughout with exactly one rounding at the end into the price;
+`scripts/check-costing.mjs` checks it against the values Excel itself cached. The
+round-12 guard for the false suggested price went into `costProduct()` in
+`app/admin/data.ts` — the studio's own composition layer — precisely so that
+`lib/costing.ts` still matches the sheet line for line. The workbook has no
+notion of an unmeasured input; knowing that an input is missing is the
+application's job. (Do not copy prices out of the workbook's Suggested price
+column either: Settings C19 holds the *text* `1.6%`, so it is `#VALUE!` on every
+row.)
+
+**Guard by what a screen writes, not by where it lives.**
+`/admin/inventory/measure` hangs off Inventory and asks for **`catalogue`**,
+because counting a shelf is an observation and typing a print time is authoring
+the cost basis every price in the shop derives from. `saveMeasurement` also
+refuses partial nonsense rather than dropping it — grams with no colour, a colour
+with no grams, zero grams, a repeated colour — and rejects a payload carrying
+fewer than `MEASURE_COLOUR_SLOTS` slots, because the recipe is replaced wholesale
+and a POST that simply omitted the fields would wipe one.
+
+**A query that runs is not a query that is right.** The embedded-resource selects
+in `app/admin/data.ts` — `product_filament(grams, colours(...))`,
+`orders!inner(status)` in `getOpenDemand`, and the `order_items` embeds in
+`getOrder` — have only ever returned `[]` against the real project, because every
+table behind them is empty. That proves the syntax parses and nothing else. Until
+one real sale exists, do not trust a number on Inventory or Reports.
 
 **Supabase clients** (`lib/supabase/`): `createClient()` uses the anon key and
 respects RLS; `createAdminClient()` uses the service-role key and bypasses RLS
@@ -601,9 +734,15 @@ None of these is about the app. All of them have cost time.
 - **`git` on the mounted Windows folder cannot delete its own lock files.**
   Clear them by moving them aside — `mv .git/index.lock /tmp/`, and the same for
   any other `.git/**/*.lock` — rather than `rm`.
-- **Ten files show as permanently modified and it is pure CRLF line-ending
-  noise.** **Never `git add -A`.** Stage the files you actually changed, by
-  name, or a commit becomes unreviewable.
+- **Nine files show as permanently modified and it is pure CRLF line-ending
+  noise** (`git diff --ignore-all-space` is empty). **Never `git add -A`.** Stage
+  the files you actually changed, by name, or a commit becomes unreviewable.
+- **A Next build cannot complete on the device shell.** Each call is a fresh
+  ~45s shell and anything left running is killed between calls — `nohup`,
+  `setsid` and `disown` all die. What works: `tar` the source (excluding
+  `node_modules`, `.next`, `.git`, `.env*`), stage that one file, then `npm ci`
+  and `npm run build` in a cloud container with dummy `NEXT_PUBLIC_*` values.
+  **Never stage `.env.local`.**
 - **`../Documents/3D_Planner.xlsx` is not in the sandbox**, so
   `scripts/generate-seed.mjs` cannot be run here. `lib/fallback-data.ts` and
   `supabase/seed.sql` were patched in place in round 9; a real regenerate is

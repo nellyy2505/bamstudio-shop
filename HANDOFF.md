@@ -7,27 +7,30 @@ named by file and section.
 
 ---
 
-> ⚠️ **This file is stale as of round 10 (25 August 2026). Read `WORKLOG.md` §0
-> and §5 round 10 before believing anything below.** In particular: the round-9
-> postage work **is** committed (`36a33d5`, unpushed, not "not committed
-> anywhere"); `scripts/verify-sql.sh` **does** apply `0002_shipping.sql` and the
-> harness runs **29/29**; `quoteBasket()` **is** wired into checkout, the cart
-> and `POST /api/shipping/quote`; `shippingCost()` has been **deleted**; and
-> `transitLabel()` now takes `tracked` as a required argument. Nine files show
-> as CRLF-modified, not ten. The rest of this file — how to work, the
-> verification protocol, the hard business rules, the traps, and the owner's
-> outstanding steps — still stands.
-
 You are the **orchestrator** for pre-launch work on the Bam Studio online shop
 at `bamstudio-shop/`. It is a real Australian sole trader's shop, it takes real
 card payments, and a real customer will use it. Treat every change as
 production work.
 
-The shop is **built and never deployed**. Ten launch blockers were found and
-closed across seven review rounds; the hosting then moved from Vercel to Fly.io
-(round 8); and postage was rebuilt against the live Australia Post API (round 9)
-but **deliberately left unwired**. `WORKLOG.md` is the source of truth for all
-of it — start at **§0**, which now opens with the current open list.
+**The shop is deployed and has never taken an order.** Live at
+`bamstudio-shop.fly.dev`; the Supabase schema is applied; there is a staff area
+at `/admin` that the owner has used. Ten launch blockers were found and closed
+across seven review rounds; hosting moved from Vercel to Fly.io (round 8);
+postage was built against the live Australia Post API (round 9) and **wired into
+checkout, the cart and `POST /api/shipping/quote`** (round 10); the staff area
+was built (round 11) and then driven against the live database, which found
+three defects and one hole (round 12); and round 13 — in the working tree as
+this was written — replaced the migration list in the SQL harness with a glob,
+added `0004_letter_eligible_default.sql`, took `verify.sql` to 52 assertions,
+removed `@stripe/stripe-js`, carried `next=` through sign-up, and added
+`/admin/inventory/measure`. `WORKLOG.md` is the source of truth for all of it —
+start at **§0**, which opens with the current open list.
+
+**Settled, so do not re-raise:** the **Supabase JWT secret has been rotated**
+(owner-confirmed, 26 August 2026) and the round-10 key leak is closed; the deploy
+and the SQL steps (`0003_admin.sql`, `storage.sql`, the claim statement that
+makes the owner `owner` in `public.staff`) are done and `verify.sql` returned 50
+rows all `t` against the live project.
 
 ## How I want you to work
 
@@ -66,12 +69,13 @@ Your own context is the scarce resource. Spend it on judgement, not on reading.
 3. `WORKLOG.md` — **§0** (blocker status plus the current open list), **§4**
    (how to verify), **§5 round 7** (where a fix reproduced the defect class it
    was closing — the design rule at the end of it is the most valuable paragraph
-   in the repo), **§5 rounds 8 and 9** (hosting, and postage), **§6** (open
-   items, the backlog and the pending owner decision).
+   in the repo), **§5 rounds 11 and 12** (the staff area, and what looking at the
+   deployed studio found), **§6** (open items, the backlog and the pending owner
+   decision).
 4. `README.md` for architecture, `SETUP.md` for what the owner must supply.
 
-Have a subagent produce a condensed brief of §0, §4, §5 round 9 and §6 rather
-than reading all of `WORKLOG.md` into your own context.
+Have a subagent produce a condensed brief of §0, §4, §5 rounds 11–13 and §6
+rather than reading all of `WORKLOG.md` into your own context.
 
 ## Traps in this environment — read before your first command
 
@@ -83,9 +87,16 @@ Every one of these has already cost someone time.
 - **`git` on the mounted Windows folder cannot delete its own lock files.**
   Clear them by moving them aside — `mv .git/index.lock /tmp/`, and the same for
   any other `.git/**/*.lock` — not with `rm`.
-- **Ten files show as permanently modified and it is pure CRLF line-ending
-  noise. Never `git add -A`.** Stage by name, or the diff becomes unreviewable
-  and the real change is invisible inside it.
+- **Nine files show as permanently modified and it is pure CRLF line-ending
+  noise** (`git diff --ignore-all-space` is empty). **Never `git add -A`.** Stage
+  by name, or the diff becomes unreviewable and the real change is invisible
+  inside it.
+- **A Next build cannot complete on the device shell.** Each call is a fresh
+  ~45s shell and anything left running is killed between calls — `nohup`,
+  `setsid` and `disown` all die. What works, and what round 12 did: `tar` the
+  source (excluding `node_modules`, `.next`, `.git`, `.env*`), stage that one
+  file, then `npm ci` and `npm run build` in a cloud container with dummy
+  `NEXT_PUBLIC_*` values. **Never stage `.env.local`.**
 - **Turbopack constant-folds `process.env.NODE_ENV === "production"`
   comparisons in a production build** — measured in this repo, where it silently
   made a guard unconditional. Write environment guards as **`!== "development"`**.
@@ -112,13 +123,16 @@ Every one of these has already cost someone time.
 Run `git status` and `git diff --stat` and reconcile them against what the docs
 claim, rather than assuming any document is current.
 
-**Expect the clones to disagree.** The hosting move is reported as commit
-`896c08d`, pushed to `master` at `github.com/nellyy2505/bamstudio-shop`. That
-commit does **not** exist in the sandbox checkout these docs were written in,
-where every round-8 and round-9 file is untracked or modified in the working
-tree. Both can be true — they are different clones — so **`git status` is the
-only trustworthy answer to "what is committed"**, and the round-9 postage work
-is not committed anywhere as far as anything here can tell.
+**Expect the clones to disagree.** These docs have been written in more than one
+checkout, and a commit that exists in one has repeatedly not existed in another.
+**`git status` is the only trustworthy answer to "what is committed."** What the
+owner's machine reports: `896c08d` (hosting), `36a33d5` (the postage engine),
+`d3f2946`…`8131290` (round 10), `9098449` and `6cfdafb` (the staff area, pushed
+and deployed), and then three round-12 commits that are **committed locally and
+not pushed** — `1a4e0d0` *Stop the studio printing numbers it has not measured*,
+`7c049aa` *Give an invitation somewhere to be accepted*, `10a683f` *Print the
+studio's page title once*. **Only the owner can push**: the device shell has no
+network and cannot reach the Windows credential store.
 
 Two habits this project earned the hard way:
 
@@ -144,20 +158,32 @@ Two habits this project earned the hard way:
   untrackable orders.
 - **`lookup_order` is `service_role` only**, with an explicit `revoke` so the
   migration closes the hole on already-deployed databases.
-- **The hosting move to Fly.io is complete in the code** — `Dockerfile`,
+- **The hosting move to Fly.io is complete, and deployed** — `Dockerfile`,
   `fly.toml`, `.dockerignore`, `.github/workflows/deploy.yml`, the new
   dependency-free `/api/health`, and fixes to three defects that only existed
   off Vercel: `siteUrl()` silently returning localhost (a customer would have
   been charged and then redirected to their own machine), `clientKey()` reading
   the **first** `x-forwarded-for` value (forgeable on Fly, whose proxy *appends*),
   and health checks that would have run through `proxy.ts` into Supabase auth
-  every few seconds.
+  every few seconds. The shop answers at `bamstudio-shop.fly.dev`. Still never
+  observed from here: a rolling release, and `Fly-Client-IP` actually arriving on
+  a request.
+- **The schema is applied on the live project and `verify.sql` returned 50 rows
+  all `t`** on 26 August, after `0003_admin.sql`, `storage.sql` and the claim
+  statement. `0004_letter_eligible_default.sql` is the one migration not yet run
+  there, and it takes the file to 52.
+- **The staff area is live and has been used.** All nine screens opened as the
+  owner against real Supabase in round 12; everything renders, nothing 500s.
+  What that did *not* prove is anything about the three embedded-resource
+  selects in `app/admin/data.ts`: every table behind them is empty, so they have
+  only ever returned `[]`. **A query that runs is not a query that is right.**
 
-### Built, verified against the live carrier API, and NOT wired up
+### Postage — built, verified against the live carrier API, and wired
 
-`lib/shipping/` — seven modules that quote real Australia Post postage.
-**Nothing imports them.** `app/api/checkout/route.ts:499` still calls the
-flat-rate `shippingCost()`. This is the top piece of work.
+`lib/shipping/` quotes real Australia Post postage, and `quoteBasket()` prices
+every basket in checkout, in the cart and in `POST /api/shipping/quote`.
+`shippingCost()` was **deleted**, not deprecated. `isFreeShipping(subtotal,
+methodId)` decides who pays; `quoteBasket()` decides how much; never merge them.
 
 What is known, so nobody researches it twice:
 
@@ -170,10 +196,12 @@ What is known, so nobody researches it twice:
 - **Large Letter** ≤125 g / ≤260 × 360 mm / ≤20 mm is **$3.40** but **untracked
   and uninsured**; a parcel is about **$10.20**. Live quotes: 1 charm $3.40, 4
   charms $3.40, 12 charms $11.70, 1 pet bowl $10.20.
-- **`transitLabel()` in `lib/config.ts` hardcodes "· tracked"** — true only
-  while everything ships as a parcel. **It must be fixed in the same change that
-  ever enables Large Letter**, or the site tells customers untracked mail is
-  tracked. `quoteBasket` returns a `tracked` boolean per quote; read that.
+- **`transitLabel(methodId, tracked)` takes tracking as a required argument.**
+  It used to hardcode "· tracked", which was true only while everything shipped
+  as a parcel — and `letter_eligible` is a checkbox in the Supabase table editor,
+  so one tick with no deploy would have armed the lie. Pass `quoteBasket()`'s own
+  `tracked`; **never a literal**. A page with no basket to ask uses
+  `transitRangeLabel()` and makes no tracking claim.
 - Prices are **GST-inclusive retail**; the shop is not GST-registered, so the
   total passes through and **no GST component may ever be shown**.
 - **Label printing and tracking APIs are not available to this business.** The
@@ -186,48 +214,70 @@ What is known, so nobody researches it twice:
 - Every physical constant in `lib/shipping/dimensions.ts` is an **estimate**,
   rounded toward the shop paying. Three real weighings are on the owner's list.
 
+### The staff area — and the one rule an agent breaks from memory
+
+`/admin` is nine screens, built in round 11 and used by the owner against the
+live database. Read `CLAUDE.md`'s *The staff area* before touching it. The rule:
+**`requireStaff(capability)` is the first statement of every page, route handler
+and server action under `/admin`.** It cannot be hoisted into `proxy.ts` (anon
+client only, so it cannot read `public.staff`) or into a layout (not a security
+boundary for a route handler, and a server action is a public endpoint with a
+generated id).
+
+**There is exactly ONE documented exception: `acceptInvitation` in
+`app/admin/actions.ts`.** It is the action that makes somebody staff, so
+requiring staff would be circular and no invitation could ever be accepted. It
+does its own equivalent check in `resolveJoin()` — signed in, a token that hashes
+to a live invitation, and **the signed-in email equal to the invited email**.
+"Fixing" it by adding `requireStaff()` breaks every invitation. Do not add a
+second exception without the same treatment, and do not move
+`app/(admin-join)/admin/join/` under `app/admin/` — the route group is what keeps
+the page out of the layout that would bounce an invited person.
+
 ### Still not built — do not read ticks as "done"
 
-1. **Postage wiring** — `quoteBasket` into checkout (replacing `shippingCost()`
-   at `app/api/checkout/route.ts:499`), a `POST /api/shipping/quote` route, the
-   cart UI and copy, and the three order provenance columns `0002` added.
-2. **`scripts/verify-sql.sh` applies only `0001_init.sql`**, while `verify.sql`
-   is now **29 assertions** written against `0002_shipping.sql`. **The SQL
-   harness cannot pass as it stands** and 29/29 has never been observed.
-3. **The rate limiter is still one process's memory.** Round 8 fixed *which IP
+1. **The rate limiter is still one process's memory.** Round 8 fixed *which IP
    it reads*, not durability. It is the only thing in front of `/api/track`,
    which returns a postal address for an order number plus the matching email —
    and order numbers are a sequence plus four hex characters. Upstash/Redis; the
-   call sites do not change.
-4. **Real account deletion.** The claim was fixed, not the capability. Needs a
+   call sites do not change. It is also, with the `after()` email task, why
+   `fly.toml` cannot scale to zero.
+2. **Real account deletion.** The claim was fixed, not the capability. Needs a
    server-side admin route, re-authentication, and an in-flight-order guard.
-5. **A newsletter subscriber list.** No table, no audience, no unsubscribe.
-6. **The `"unknown"` email sentinel escapes the webhook** into `/track`, the
+3. **A newsletter subscriber list.** No table, no audience, no unsubscribe.
+4. **The `"unknown"` email sentinel escapes the webhook** into `/track`, the
    account order pages and `lib/queries.ts`, which read the column as an address.
-7. **Nothing writes `orders.tracking_number`, and there is no admin surface.**
-   The status progression customers are shown advances only by a hand edit in
-   the Supabase table editor.
-8. **`components/contact/Reach.tsx`** — the "can the customer reach us" fallback
+5. **`components/contact/Reach.tsx`** — the "can the customer reach us" fallback
    chain is still written out six times in JSX. The predicates were deduplicated
    into `lib/contact.ts`; the markup was not.
-9. **`0002_shipping.sql` declares `letter_eligible … default true`** while
-   `lib/shipping/weights.ts` treats an absent flag as **false** and the seed
-   writes `false` for all 44 rows. A new row added in the table editor therefore
-   arrives letter-eligible — the wrong way round. Nothing is wrong today.
+6. **The 43-scenario webhook harness is not in the repo.** It scored 7/26 against
+   the old code, which is what made it meaningful. Rebuild it **before** the
+   builder payload changes, not after.
+7. **The builder rework** — per-keycap and per-key-holder colours, no cord,
+   optional charm, numbers/star/heart/paw. Not started.
+8. **`app/admin/layout.tsx` hardcodes "Bam Studio"** where `app/layout.tsx` uses
+   `SHOP.name` from `lib/config.ts`. Same value today, two sources tomorrow.
 
 ## What to do first
 
 Roughly this order of value:
 
-1. **Fix `scripts/verify-sql.sh` to apply `0002_shipping.sql`**, then run it and
-   report the real number. Everything else you do to the schema is unverifiable
-   until this works, and it is a two-line change.
-2. **Wire `quoteBasket()` into checkout**, plus `POST /api/shipping/quote` and
-   the cart. Both surfaces must call `quoteBasket` and nothing else — two code
-   paths computing postage is how the price a customer agreed to and the price
-   Stripe charges come to differ for some baskets and not others. Leave the
-   free-shipping threshold where it is: `quoteBasket` answers what the post
-   office charges, `shippingCost()`/`SHIPPING.freeThreshold` decides who pays it.
+1. **Re-verify the round-13 tree, then report the real numbers.**
+   `npx tsc --noEmit`, `npm run lint`, **`npm run build`** — a dependency
+   (`@stripe/stripe-js`) was removed from `package.json` and only the build shows
+   nothing pulled it in transitively — then `./scripts/verify-sql.sh`, which
+   should now apply four migrations and print **52** assertions. Nothing in round
+   13 has been run. Say what you ran and what it printed, not that it "should"
+   pass.
+2. **Record one real sale in the studio, against a measured product.** Orders →
+   *Record a sale*, for a product with a print time and a filament colour on it,
+   then open that order, Inventory and Reports and check every number against
+   what was typed in; cancel it afterwards. This is the only thing that
+   exercises the three embedded-resource selects in `app/admin/data.ts` with rows
+   in them — they have parsed and returned `[]` every time, which proves syntax
+   and nothing else. **Until this is done, no number on Inventory or Reports is
+   trustworthy.** `/admin/inventory/measure` is the fastest way to give one
+   product the two inputs it needs.
 3. **The rate limiter** — the only remaining *security* item fully in your hands.
 4. **The `"unknown"` sentinel**, wherever it escapes the webhook.
 5. **`components/contact/Reach.tsx`** — mechanical, and it protects the thing
@@ -237,15 +287,31 @@ Roughly this order of value:
    isn't, is not.
 7. **Make `verify.sql`'s backfill assertions run the migration's own `UPDATE`**
    rather than a hand-copied `WHERE` clause.
+8. **Rebuild the webhook harness** before anything touches the builder payload.
+
+**Waiting on the owner, and blocking nothing you can do yourself:** `git push
+origin master` for the three round-12 commits; running
+`0004_letter_eligible_default.sql` on the live project (after which `verify.sql`
+is 52 rows); and the catalogue data — 44 products still at the seed's $9.00, none
+with a filament recipe.
 
 ## Verification protocol — non-negotiable
 
 `tsc`, `eslint`, `build` and every SQL check passed while all ten launch
 blockers were live. Green checks measure what is being watched.
 
-1. **Static:** `npx tsc --noEmit && npx eslint . && npm run build`. Round 9
-   added five non-optional fields to `Product` in `lib/types.ts` and the
-   typecheck has **not** been re-run since; do it first.
+1. **Static:** `npx tsc --noEmit && npm run lint && npm run build`. **The build
+   is not optional.** `tsc` and `eslint` both passed on a round-11 tree that
+   could not compile — one `export const` in a `"use server"` file, where every
+   export must be an async function, made Turbopack report the module as having
+   no exports and took eleven pages down. Only `next build` sees the
+   server-action boundary, and only it proves a route group resolves to the URL
+   you expect, which is what `/admin/join` depends on.
+
+   **And open the page.** Round 12's worst defect — a product page printing
+   *Suggested $0.50 · Profit $8.73 · Actual margin 97%* on a piece with no print
+   time and no filament, under a panel correctly saying there was no cost — was
+   invisible to the typecheck, the lint, the build and all 50 SQL assertions.
 
 2. **After anything touching checkout — the replay harness:**
 
@@ -281,17 +347,32 @@ blockers were live. Green checks measure what is being watched.
 
    Self-bootstrapping: drives a locally installed PostgreSQL 16, `initdb`s a
    disposable cluster outside the repo, applies the Supabase stand-ins
-   (`anon`/`authenticated`/`service_role`, `auth.users`, `auth.uid()`,
-   `pgcrypto`), then the migration, the seed and `verify.sql`, and exits
-   non-zero if any row is not `t`.
+   (`anon`/`authenticated`/`service_role`, Supabase's default table privileges,
+   `auth.users`, `auth.uid()`, and `pgcrypto` in an `extensions` schema), then
+   **every file in `supabase/migrations/`** in `LC_ALL=C` filename order, the
+   seed and `verify.sql`, and exits non-zero if any row is not `t`. It prints
+   `applied N migration(s)`; a drop in that number between runs is the signature
+   of a migration silently going missing.
 
-   ⚠️ **It applies `0001_init.sql` only and `verify.sql` now needs
-   `0002_shipping.sql` too — fix that before quoting any result.** Docker is the
-   older alternative and is in `WORKLOG.md` §4.
+   **`verify.sql` is one table of 52 rows and every one must be `t`. Count the
+   rows as well as the ticks** — 24 → 29 → 50 → 52 as the schema grew, so a
+   shorter table is an older copy of the file, which is a green result that never
+   looked at part of the schema.
 
-   **The schema is `supabase/migrations/0001_init.sql` plus
-   `0002_shipping.sql`. There is no `supabase/schema.sql`** — the docs used to
-   say there was, and it cost real time.
+   ⚠️ **Two properties of the harness are load-bearing.** It must keep granting
+   Supabase's **default privileges** — hosted Supabase grants every new `public`
+   table to `anon` as it is created, and without that block every "anon cannot
+   read X" assertion passes whether or not the revoke exists. And it must keep
+   installing `pgcrypto` into an **`extensions`** schema, not `public` — with it
+   in `public` the harness printed 29/29 while `0001_init.sql` could not be
+   applied to a real Supabase project at all. **Prove an assertion bites before
+   believing it.**
+
+   **The schema is the four files in `supabase/migrations/`, plus
+   `supabase/storage.sql` run by hand. There is no `supabase/schema.sql`** — the
+   docs used to say there was, and it cost real time. `storage.sql` is
+   deliberately outside the harness: vanilla PostgreSQL has no `storage` schema,
+   and a guard would turn "not tested" into something that looks tested.
 
 4. **After anything touching the Stripe webhook** — the highest-consequence file
    in the project, and neither script above touches it — there is a behavioural
@@ -324,6 +405,12 @@ Breaking one is a real-world problem, not a bug. `WORKLOG.md` §2 has the table.
 - **Prices are always recomputed server-side.** The client says which product and
   how many, never what it costs — and never how heavy it is.
 - **Australian English** in all customer-facing copy.
+- **No sample data, ever, and no plausible-looking zero.** A shop that has taken
+  no orders reports that it has taken no orders; Reports renders an empty state
+  rather than a chart of zeros; a piece nobody has measured says "not measured"
+  rather than a price worked out from the cost of its packaging. This is an
+  explicit instruction from the owner, and three round-12 defects were breaches
+  of it. **Nulls stay null** through the costing chain.
 
 Because the shop makes claims to customers, **a change that makes an on-site
 statement untrue is as serious as a crash.** Roughly forty places once promised
@@ -361,6 +448,18 @@ it had two switches for one fact.
 - **`fly.toml`'s always-on settings are correctness, not cost.** `after()` sends
   the confirmation email after the response is flushed, and the rate limiter is
   an in-process `Map`. Scaling to zero requires fixing both first.
+- **A role is `public.staff`, never a column on `profiles`.** `0001_init.sql`
+  grants each account UPDATE on all columns of its own profile row and RLS cannot
+  restrict a policy to a subset of columns, so a role there is self-assignable
+  with the public key. The table has RLS on, no policy, and explicit revokes.
+- **`lib/costing.ts` stays a line-by-line transcription of the workbook.**
+  Round 12's guard against pricing an unmeasured piece went into `costProduct()`
+  in `app/admin/data.ts`, the studio's own composition layer, so the sheet and
+  the shop still agree line for line. `scripts/check-costing.mjs` is what proves
+  they do.
+- **The Finance sheet stays in the workbook**, by the owner's decision — the loan
+  account, tax and the split are a monthly sit-down with judgement in them, not a
+  dashboard tile. Recorded so nobody helpfully builds it.
 
 ## Where every credential lives — names and locations only
 
@@ -377,7 +476,7 @@ written into one.** This is the map, not the keys.
 | `STRIPE_SECRET_KEY` | **Runtime secret** | `fly secrets set`; `.env.local` locally |
 | `STRIPE_WEBHOOK_SECRET` | **Runtime secret** | `fly secrets set`; `stripe listen` gives the local one |
 | `RESEND_API_KEY`, `EMAIL_FROM` | **Runtime secrets** | `fly secrets set` — both or neither |
-| `AUSPOST_API_KEY` | **Runtime secret** (new) | `fly secrets set`; free and instant from developers.auspost.com.au. **Not in `.env.example` yet** |
+| `AUSPOST_API_KEY` | **Runtime secret** | `fly secrets set`; free and instant from developers.auspost.com.au. Listed in `.env.example`; **not set anywhere yet** |
 | `FLY_API_TOKEN` | CI credential | GitHub Actions **Secret** |
 
 Rules that go with the table: **never move a secret into a build arg** (build
@@ -390,33 +489,35 @@ prints names only, which is the only listing that should ever appear in a report
 
 Chase these; do not attempt them.
 
-1. ⚠️ **Rotate the Supabase JWT secret.** An anon key and a `service_role` key
-   were exposed in chat. **The exposed anon key still authenticates**, which
-   means the secret has not been rotated and the leaked `service_role` key — which
-   bypasses row-level security entirely and can read every customer address — is
-   very likely still live. Rotating means updating three places in one sitting:
-   `.env.local`, the GitHub Actions Secret (**then redeploy** — it is a build
-   arg), and `fly secrets set`. The exposed Stripe **live** key has already been
-   rolled; test keys are in use.
-2. **Weigh three items and give the real numbers** — one name charm, one clicker
+1. **`git push origin master`** — the three round-12 commits are made locally
+   and not pushed, and nothing in them is live until she pushes. The device shell
+   has no network and no access to the Windows credential store, so this cannot
+   be done for her.
+2. **Run `0004_letter_eligible_default.sql`** in the Supabase SQL editor, then
+   re-run `verify.sql`, which should print **52** rows all `t`. The other four
+   SQL steps are already done.
+3. **Fill in the catalogue.** 44 products, all still at the seed price of $9.00,
+   **0 of 44 with a filament recipe**, and print times effectively all missing —
+   so every cost, margin and suggested price in the studio reads "Not measured".
+   `/admin/inventory/measure` is the screen for the print-time-and-grams half.
+4. **Weigh three items and give the real numbers** — one name charm, one clicker
    keychain, one pet bowl, each in the mailer actually used: grams, and thickness
    in mm. Every weight and dimension in `lib/shipping/dimensions.ts` and in the
    seed is an estimate. Highest-value input to postage accuracy there is.
-3. **Decide: Large Letter or tracked parcel** for small orders — $3.40 untracked
-   and uninsured versus about $10.20 tracked. Enabling it is a per-row toggle in
-   Supabase **plus** the `transitLabel()` fix, together.
-4. **Run the migrations.** The Supabase project exists and **the database is
-   still empty**: `0001_init.sql`, then `0002_shipping.sql`, then `seed.sql`,
-   then `verify.sql` with every row printing `t`.
-5. **Create the Fly app** — it does not exist yet, and nothing has ever been
-   deployed. First deploy lands at `bamstudio-shop.fly.dev`.
-6. **Delete Porkbun's `*` parking CNAME** on `bamstudioshop.com` (currently
+5. **Decide: Large Letter or tracked parcel** for small orders — $3.40 untracked
+   and uninsured versus about $10.20 tracked. It is now a per-row tick in
+   Supabase and nothing else; `transitLabel()` already takes the real answer.
+6. **Confirm the production secrets on Fly and place one test order.**
+   `STRIPE_WEBHOOK_SECRET` (production, not the local `stripe listen` one),
+   `RESEND_API_KEY`, `EMAIL_FROM` and `NEXT_PUBLIC_SUPPORT_EMAIL`. Nothing here
+   has ever been through a real Stripe session or put a message in a mailbox.
+7. **Delete Porkbun's `*` parking CNAME** on `bamstudioshop.com` (currently
    pointing at `uixie.porkbun.com`) — it shadows email records.
-7. **Get `AUSPOST_API_KEY`** (free, self-serve, instant) and set it as a Fly
+8. **Get `AUSPOST_API_KEY`** (free, self-serve, instant) and set it as a Fly
    secret. Without it postage falls back to a pessimistic table and still works.
-8. **Set up email**: Resend free tier for sending, Porkbun forwarding for
+9. **Set up email**: Resend free tier for sending, Porkbun forwarding for
    receiving. **`EMAIL_FROM` cannot be a gmail.com address.**
-9. ABN, registered business name, business postal address, return address, a
+10. ABN, registered business name, business postal address, return address, a
    support mailbox, real prices, product photography, and **a lawyer's read of
    the three `/legal/*` drafts** — especially the contract-formation clause in
    `app/legal/terms/page.tsx`. Also **name Fly.io as the hosting provider** on

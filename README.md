@@ -53,6 +53,14 @@ app/
   track/                      guest order tracking
   login/ signup/ forgot-password/ reset-password/ auth/
   account/                    orders, favourites, addresses, settings
+  admin/                      the staff area — overview, orders, products,
+                              inventory (print queue, buy list, and
+                              measure/), reports, colours, settings, access.
+                              Every page, route and action calls requireStaff()
+  (admin-join)/admin/join/    accepting a staff invitation. A route group, so
+                              the URL is /admin/join but the page is NOT
+                              wrapped by app/admin/layout.tsx — an invited
+                              person is not staff yet
   about/ faq/ contact/ legal/ not-found.tsx
   api/
     checkout/                 creates the Stripe Checkout Session
@@ -80,24 +88,42 @@ lib/
                               we send them" predicates — import, never re-derive
   rate-limit.ts               in-memory throttle (see the caveat below)
   shipping/                   Australia Post postage. dimensions · weights ·
-                              select · client · cache · fallback · quote.
-                              `quoteBasket()` is the one entry point — and
-                              nothing imports it yet (see Postage below)
+                              select · client · cache · fallback · quote ·
+                              lines. `quoteBasket()` is the one entry point,
+                              used by checkout, the cart and
+                              /api/shipping/quote (see Postage below)
+  auth/staff.ts               requireStaff() and the role → capability map.
+                              The role lives in public.staff, never on profiles
+  costing.ts                  a transcription of the workbook's Products sheet
+                              (columns T–AA). Fractional cents; nulls stay null
   types.ts  format.ts  stripe.ts  safe-next.ts  supabase/
 supabase/
   migrations/0001_init.sql    THE schema — RLS policies, helper functions,
                               grants. (There is no `schema.sql`.)
   migrations/0002_shipping.sql  product measurements, the rate cache, and
                               quote provenance on orders
+  migrations/0003_admin.sql   the staff area: staff, invitations, colours,
+                              filament stock, settings, accessories, recipes
+  migrations/0004_letter_eligible_default.sql
+                              products.letter_eligible defaults to false
+  storage.sql                 the product-photos bucket. NOT a migration and
+                              deliberately not run by verify-sql.sh — run it
+                              by hand once in the Supabase SQL editor
   seed.sql                    catalogue, generated from the workbook
-  verify.sql                  schema smoke test — every row must print `t`
+  verify.sql                  schema smoke test — one table of 52 rows, and
+                              every one must print `t`
 scripts/
   generate-seed.mjs           regenerates seed.sql + fallback-data.ts
-  verify-sql.sh               applies the schema + seed + verify.sql to a
-                              local Postgres 16 and checks every assertion
+  check-costing.mjs           lib/costing.ts against the workbook's own
+                              cached values
+  verify-sql.sh               applies every file in migrations/ + the seed +
+                              verify.sql to a local Postgres 16 and checks
+                              every assertion
   replay-checkout.mjs         replays the real CartView payloads at /api/checkout
 proxy.ts                      Next 16's renamed middleware: refreshes the
-                              Supabase auth cookie, guards /account, and
+                              Supabase auth cookie, guards /account and /admin
+                              (signed-in only — the role cannot be checked
+                              here), carries the query string on next=, and
                               excludes api/webhooks and api/health
 Dockerfile                    deps → build → runtime; node:22-slim
 fly.toml                      app, region, machine size, health check
@@ -403,11 +429,15 @@ against the live API rather than the documentation:
 **Large Letter is the interesting tier and the reason for the care.** Under
 125 g and 260 × 360 × 20 mm it is **$3.40**, against about **$10.20** for the
 cheapest parcel — but it is **untracked and uninsured**. Every product is
-`letter_eligible: false` today, so everything quotes as a tracked parcel:
-slightly dear, never short. Turning it on is a per-row toggle in Supabase **plus**
-a fix to `transitLabel()` in `lib/config.ts`, which currently hardcodes
-"· tracked"; shipping one without the other would tell customers untracked mail
-is tracked. `quoteBasket` returns a `tracked` boolean per quote for exactly this.
+`letter_eligible: false` today, and since
+`supabase/migrations/0004_letter_eligible_default.sql` that is the column's
+default too, so nothing becomes letter-eligible by being typed into the table
+editor and everything quotes as a tracked parcel: slightly dear, never short.
+Turning it on is a per-row tick in Supabase, with no deploy. The half that used
+to have to ship with it is done: `transitLabel(methodId, tracked)` takes tracking
+as a **required argument** rather than hardcoding "· tracked", and the cart
+passes `quoteBasket()`'s own `tracked` boolean. Never pass that argument a
+literal.
 
 Everything rounds toward the shop paying — weights up, limits pulled in, and the
 fallback table returns the band *above* the one a basket falls in. Overcharging
@@ -424,8 +454,7 @@ Australia Post's own API.
 
 `AUSPOST_API_KEY` (free, self-serve) is a **runtime** value: a Fly secret, never
 a build arg. Without it every quote comes from the fallback table and the shop
-keeps working. It is **not yet listed in `.env.example`** — add the line by hand
-for local work.
+keeps working. It is listed in `.env.example`, and is **not set anywhere yet**.
 
 ## Business rules live in one file
 
@@ -493,6 +522,52 @@ If the order cannot be staged (a database blip), checkout **fails and expires
 the Stripe session** rather than letting someone pay for an order we have no
 record of and cannot print.
 
+## The staff area
+
+`/admin` is where the shop is run from: Overview, Orders (including a form for
+typing in a market or TikTok sale), Products, Inventory (the print queue, the
+filament buy list, and *Measure the catalogue*), Reports, Colours, Settings and
+Studio access. It is deployed and has been driven against the live database; the
+tables behind Inventory and Reports are still empty, so those screens say "not
+measured" rather than printing a zero.
+
+**Authority is a table, not a column.** `0001_init.sql` grants every signed-in
+account UPDATE on its own `profiles` row across *all* columns, and RLS cannot
+restrict a policy to a subset of columns — so a `role` there would be
+self-assignable over PostgREST with the anon key that ships in the browser
+bundle. It lives in `public.staff` instead: RLS on, **no policy at all**, and an
+explicit revoke from `anon` and `authenticated`, so only the service-role key can
+read it. `verify.sql` asserts every part of that.
+
+The consequence worth knowing before changing anything: **the role cannot be
+checked in `proxy.ts`**, which holds only the anon client. The proxy establishes
+"signed in at all"; `requireStaff()` in `lib/auth/staff.ts` does the real check
+and is called by every page, route handler and server action under `/admin`. A
+layout is not a security boundary for a route handler, and a server action is a
+public HTTP endpoint with a generated id.
+
+Roles are a whitelist per role rather than a rank: `owner` is everything,
+`studio` is everything but Studio access, and `packing` is orders and nothing
+else — so the person helping post parcels never sees a cost or a margin.
+
+**Invitations.** There is no way to register as staff. The first owner is placed
+by hand in the SQL editor; everyone else is invited, and an invitation can only
+ever grant Studio or Packing. Tokens are stored hashed. `/admin/join?token=…`
+lives in a route group (`app/(admin-join)/admin/join/`) so that the URL is still
+`/admin/join` while the page escapes `app/admin/layout.tsx` — that layout calls
+`requireStaff()`, and an invited person is by definition not staff yet. Accepting
+is a POST, never a page render: a GET that grants authority is one a link preview
+or a scanner can fire on somebody's behalf. `acceptInvitation` is the only server
+action in the shop that does not call `requireStaff()`, and it checks the
+invitation itself instead — including that the signed-in email is the invited
+one.
+
+**Costing.** `lib/costing.ts` transcribes the workbook's Products sheet, columns
+T–AA, in fractional cents with exactly one rounding at the end;
+`scripts/check-costing.mjs` checks it against the values Excel itself cached.
+Nulls stay null, and a piece with no print time and no filament has **no**
+suggested price rather than one derived from the cost of its packaging.
+
 ## Personalisation
 
 Two modes, set per product in `scripts/generate-seed.mjs` and stored in
@@ -516,8 +591,12 @@ npm run build    # production build (run before every deploy)
 npm run lint     # eslint
 npx tsc --noEmit # typecheck
 
-./scripts/verify-sql.sh          # schema + seed + assertions on local Postgres 16
-                                 # ⚠️ applies 0001 only; verify.sql now needs 0002 too
+./scripts/verify-sql.sh          # every migration + seed + assertions on local
+                                 # Postgres 16. It globs supabase/migrations/ —
+                                 # there is no list to keep in step — and prints
+                                 # how many it applied. verify.sql is 52 rows;
+                                 # count the rows as well as the ticks
+node scripts/check-costing.mjs   # lib/costing.ts vs the workbook's cached values
 node scripts/replay-checkout.mjs # replay the real client baskets at /api/checkout
 
 fly status -a bamstudio-shop     # is the machine up, and where
