@@ -4,7 +4,8 @@ import { ProductArt } from "@/components/ProductArt";
 import { ProductGrid } from "@/components/product/ProductCard";
 import { ButtonLink, Icon, Pill, SectionHead } from "@/components/ui";
 import { KeycapWord } from "@/components/builder/Keycap";
-import { getCollections, getProducts } from "@/lib/queries";
+import { ScoopArt } from "@/components/scoop/ScoopArt";
+import { getCollections, getProducts, getScoopTiers } from "@/lib/queries";
 import {
   PRINT_LEAD_TIME,
   SHIPPING,
@@ -12,7 +13,7 @@ import {
   isFreeShipping,
   transitDays,
 } from "@/lib/config";
-import { money } from "@/lib/format";
+import { money, pluralise } from "@/lib/format";
 import type { ArtKey, Tint } from "@/lib/types";
 import { selfCanonical } from "./seo";
 
@@ -132,15 +133,34 @@ const PROMISES = [
 ];
 
 export default async function HomePage() {
-  const [{ products: bestsellers }, { products: fresh }, collections] =
+  const [{ products: bestsellers }, { products: fresh }, collections, tiers] =
     await Promise.all([
       getProducts({ sort: "popular", perPage: 4 }),
       getProducts({ sort: "new", perPage: 4 }),
       getCollections(),
+      getScoopTiers(),
     ]);
 
   const hero = bestsellers.slice(0, 4);
   const featured = collections.find((c) => c.is_popular) ?? collections[0];
+
+  /*
+   * The Lucky Scoop is advertised here ONLY when there is a bowl somebody could
+   * actually buy today.
+   *
+   * `sellable` is the whole gate (lib/scoop.ts): a tier that is unpriced,
+   * unweighed or whose pool cannot currently fill it is not something to send a
+   * shopper to from the home page. Nothing is seeded, so this is empty on every
+   * environment right now and the section below simply does not render — which
+   * is the honest answer, not a placeholder. `/scoop` itself stays a real page
+   * either way; it is just not promoted from here until it has something to
+   * sell.
+   */
+  const scoopTiers = tiers.filter((tier) => tier.availability.sellable);
+  const scoopPrices = scoopTiers
+    .map((tier) => tier.price_cents)
+    .filter((cents): cents is number => cents !== null);
+  const scoopFrom = scoopPrices.length > 0 ? Math.min(...scoopPrices) : null;
 
   return (
     <>
@@ -260,6 +280,49 @@ export default async function HomePage() {
           ) : null}
         </div>
       </section>
+
+      {/* ---------------------------------------------------- scoop promo */}
+      {/*
+        The shop's second "not an ordinary product", in the same register as
+        Design your own above: one card, one idea, one way in.
+
+        What it may NOT do is sell the surprise on its own. The line that earns
+        the click here is the same line that makes the sale honest — every bowl
+        lists what it can draw — so it is in the card rather than saved for the
+        page. Rendered only when `scoopTiers` has something sellable in it; see
+        the gate above.
+      */}
+      {scoopTiers.length > 0 ? (
+        <section className="wrap pt-16">
+          <div className="grid items-center gap-10 rounded-[26px] bg-sky px-8 py-14 lg:grid-cols-[1.1fr_1fr] lg:px-16">
+            <div>
+              <Pill tone="surface" className="text-accent-dark">
+                Also from the stall
+              </Pill>
+              <h2 className="mt-4 mb-3 text-[32px] leading-tight lg:text-[38px]">
+                The Lucky Scoop.
+              </h2>
+              <p className="mb-7 max-w-[440px] text-[#4F5A63]">
+                A bowl of little printed pieces. You pick the bowl and how many
+                come out of it; we draw them by hand when we pack your order.
+                Every bowl lists the whole pool it draws from, so the only
+                surprise is which pieces you get.
+              </p>
+              <ButtonLink href="/scoop" size="lg">
+                <Icon name="gift" size={18} />
+                See the bowls
+              </ButtonLink>
+            </div>
+            <div className="flex flex-col items-center gap-4">
+              <ScoopArt size={150} />
+              <span className="text-[12.5px] text-[#5C6670]">
+                {pluralise(scoopTiers.length, "bowl")}
+                {scoopFrom !== null ? ` · from ${money(scoopFrom)}` : ""}
+              </span>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {/* --------------------------------------------------------- new in */}
       {fresh.length > 0 ? (

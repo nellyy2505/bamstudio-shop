@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getProducts, isDatabaseConfigured } from "@/lib/queries";
+import { getProducts, getScoopTiers, isDatabaseConfigured } from "@/lib/queries";
 import { siteUrl } from "@/lib/stripe";
 
 /**
@@ -132,12 +132,53 @@ async function activeProductSlugs(): Promise<string[]> {
   return slugs;
 }
 
+/**
+ * `/scoop` and the tier pages — **only while a bowl can actually be bought.**
+ *
+ * `/scoop` is deliberately NOT in `STATIC_PATHS`. Unlike `/shop` or `/faq` it
+ * is not always a page worth submitting: with nothing seeded it renders "the
+ * scoops aren't open yet", and a sitemap entry is a claim that a URL is worth
+ * indexing, not that it responds 200. The same test the home page uses to
+ * decide whether to advertise the feature decides whether to submit it here —
+ * `availability.sellable`, which is false for a tier that is unpriced,
+ * unweighed, or whose pool cannot currently fill it (lib/scoop.ts).
+ *
+ * A tier that has gone temporarily unsellable therefore leaves the sitemap and
+ * comes back when the bowl refills. That is the same treatment `getProducts()`
+ * gives a retired product: the sitemap must not advertise a URL the shopfront
+ * would answer with "not available".
+ *
+ * Empty on failure, for the reason `activeProductSlugs()` is: a thinner sitemap
+ * beats a 5xx on /sitemap.xml.
+ */
+async function sellableScoopPaths(): Promise<string[]> {
+  if (!isDatabaseConfigured()) return [];
+
+  try {
+    const sellable = (await getScoopTiers()).filter(
+      (tier) => tier.availability.sellable,
+    );
+    if (sellable.length === 0) return [];
+    return ["/scoop", ...sellable.map((tier) => `/scoop/${tier.slug}`)];
+  } catch (error) {
+    console.error(
+      "sitemap: scoop tier lookup failed, omitting scoop entries:",
+      error instanceof Error ? error.message : error,
+    );
+    return [];
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const origin = siteUrl();
-  const slugs = await activeProductSlugs();
+  const [slugs, scoopPaths] = await Promise.all([
+    activeProductSlugs(),
+    sellableScoopPaths(),
+  ]);
 
   return [
     ...STATIC_PATHS.map((path) => ({ url: `${origin}${path}` })),
+    ...scoopPaths.map((path) => ({ url: `${origin}${path}` })),
     ...slugs.map((slug) => ({ url: `${origin}/product/${slug}` })),
   ];
 }

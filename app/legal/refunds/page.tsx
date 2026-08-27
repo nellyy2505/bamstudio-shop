@@ -205,6 +205,65 @@ export default function RefundsPage() {
         it goes on the printer.
       </p>
 
+      {/*
+        LUCKY SCOOPS. Stated unconditionally, not gated on a bowl being on sale
+        today. A policy is read after the sale as often as before it: gating this
+        on `getScoopTiers()` would delete the terms that applied to a customer's
+        order the moment the owner retired the tier they bought from, which is
+        exactly when they would come looking for them.
+
+        WHAT IS DELIBERATELY MISSING, AND IT NEEDS THE OWNER'S DECISION.
+        There is no change-of-mind rule for a scoop here. The section above
+        grants 30 days on "a stock design" and refuses it on "personalised
+        items"; a scoop is neither — it is a tier, not a product row, and it is
+        not made to anybody's specification — so no rule on this page currently
+        reaches it either way, and none is invented here. Two drafts, one of
+        which she has to choose:
+
+          (a) ACCEPT, matching stock designs. "A Lucky Scoop can come back for
+              change of mind within 30 days, on the same terms as any stock
+              design: unopened, unused and in its original packaging, with the
+              return postage at your cost. Once the bag has been opened we
+              cannot put the pieces back in the bowl and sell them as a scoop
+              again, so an opened scoop cannot be returned for change of mind."
+
+          (b) DECLINE. "Lucky Scoops cannot be returned for change of mind. The
+              pieces are drawn and bagged for your order and cannot go back into
+              the bowl. This does not affect your rights below if a scoop is
+              faulty, short, or not what the bowl described."
+
+        (b) is permitted — change-of-mind refunds are a goodwill policy, not an
+        ACL entitlement — but it must be stated BEFORE purchase to be relied on,
+        and if she picks it the same sentence belongs on the tier page. Until she
+        picks one, silence favours the customer, which is the safe direction to
+        be wrong in.
+      */}
+      <h2>Lucky Scoops</h2>
+      <p>
+        A{" "}
+        <Link href="/scoop" className={LINK}>
+          Lucky Scoop
+        </Link>{" "}
+        is a set number of pieces drawn from a pool we publish in full. The
+        bowl&rsquo;s page says how many pieces it holds and lists every design it
+        can draw from, and that list is the description of what you are buying —
+        your pieces come out of it and out of nothing else.
+      </p>
+      <p>
+        So a scoop that arrives with fewer pieces than the bowl says, or with a
+        piece that was not on that bowl&rsquo;s list, is not what you ordered,
+        and the rules below for wrong items apply to it. The pieces themselves
+        are ordinary stock designs, so a faulty or damaged one is put right
+        exactly as it would be if you had bought it on its own.
+      </p>
+      <p>
+        What we cannot change is which pieces came out. Nobody picks them for
+        you and nobody picks them by machine — one of us draws them by hand when
+        your order is packed — and getting a piece you would not have chosen is
+        not a fault. Your Australian Consumer Law rights apply to a scoop in
+        full, exactly as they do to everything else here.
+      </p>
+
       <h2>Faulty, damaged or wrong items</h2>
       <p>
         Tell us within 14 days of delivery, or as soon as a fault appears if it

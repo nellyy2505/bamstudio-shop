@@ -16,6 +16,7 @@ import {
 } from "@/lib/contact";
 import { isEmailConfigured } from "@/lib/email";
 import { money } from "@/lib/format";
+import { getScoopTiers } from "@/lib/queries";
 import { selfCanonical } from "../seo";
 
 export const metadata: Metadata = {
@@ -277,7 +278,78 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
   },
 ];
 
-export default function FaqPage() {
+/**
+ * The scoop answer, and why it is conditional.
+ *
+ * A help centre answers questions people are actually in a position to ask.
+ * Nothing is seeded, `getScoopTiers()` carries no sample tier, and this page is
+ * already `force-dynamic` — so the entry is added only when a bowl exists, and
+ * on a shop with no scoops the question simply is not there rather than
+ * describing a product that cannot be bought.
+ *
+ * What it does not say is as deliberate as what it does. Nothing about whether
+ * the same design can come out twice (an unsettled owner decision — a sentence
+ * either way would settle it), and nothing about the filming, which is a habit
+ * rather than a term of sale and has no business in an answer about what you
+ * are buying.
+ */
+const SCOOP_FAQ: { id?: string; question: string; answer: ReactNode } = {
+  id: "scoop",
+  question: "What exactly do I get in a Lucky Scoop?",
+  answer: (
+    <>
+      <p>
+        A set number of pieces, drawn from a list you can read before you pay.
+        Every bowl on the{" "}
+        <Link
+          href="/scoop"
+          className="font-bold text-accent underline underline-offset-2"
+        >
+          Lucky Scoop page
+        </Link>{" "}
+        says how many pieces it holds and shows the whole pool it draws from —
+        all of it, as ordinary product cards you can click into. Your pieces
+        come out of that list and nowhere else.
+      </p>
+      <p>
+        What you do not get is the choice. One of us picks your pieces out of
+        the bowl by hand when the order is packed; there is no randomiser, there
+        is nothing to select at checkout, and we cannot take requests for
+        particular pieces. If a bag ever arrives short, or with something that
+        was not in that bowl&rsquo;s list, that is not what you ordered — see
+        the{" "}
+        <Link
+          href="/legal/refunds"
+          className="font-bold text-accent underline underline-offset-2"
+        >
+          refund policy
+        </Link>
+        .
+      </p>
+    </>
+  ),
+};
+
+export default async function FaqPage() {
+  /*
+   * One read, one decision: is there a bowl to answer questions about? The
+   * `sellable` gate the home page and the sitemap use is deliberately NOT
+   * applied — a bowl that is published but temporarily empty is still something
+   * a reader can see on the shop and ask about.
+   */
+  const scoopsPublished = (await getScoopTiers()).length > 0;
+
+  const faqs = [...FAQS];
+  if (scoopsPublished) {
+    // Immediately before the returns answer: "what exactly do I get" and "can I
+    // send it back" are the two questions a surprise bag raises, in that order.
+    // Found by id rather than index so reordering the list above cannot silently
+    // drop it somewhere odd.
+    const returnsAt = faqs.findIndex((faq) => faq.id === "returns");
+    if (returnsAt === -1) faqs.push(SCOOP_FAQ);
+    else faqs.splice(returnsAt, 0, SCOOP_FAQ);
+  }
+
   return (
     <div className="wrap pt-8">
       <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Help centre" }]} />
@@ -323,7 +395,7 @@ export default function FaqPage() {
       <section className="mx-auto mt-14 max-w-3xl">
         <h2 className="mb-5 text-2xl md:text-[27px]">Common questions</h2>
         <div className="flex flex-col gap-3">
-          {FAQS.map((faq) => (
+          {faqs.map((faq) => (
             <details
               key={faq.question}
               id={faq.id}
