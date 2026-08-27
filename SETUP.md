@@ -85,77 +85,166 @@ Go to **Project Settings → API Keys** (and **Data API** for the URL):
 
 ### 1c. Create the tables
 
-> ✅ **Steps 1–5 below are DONE.** `0001_init.sql`, `0002_shipping.sql`,
-> `0003_admin.sql`, `seed.sql` and `storage.sql` have all been run on your
-> project, along with the one-line statement that makes you the owner of the
-> studio, and `verify.sql` came back with all 50 rows saying `t` on 26 August.
+> **This step has changed, and it is the change you asked for.** You no longer
+> paste SQL into the Supabase editor. The database updates itself when you
+> deploy, and the deploy stops if the database did not end up the way the code
+> expects.
 >
-> ⚠️ **Three files are still to run: steps 6, 7 and 8.** All three are new, all
-> are quick, and all are safe to re-run. Run them in number order — `0004`, then
-> `0005`, then `0006` — and then re-run the check at step 9.
+> Steps 1–5 below were done by hand, before that existed. Steps 6 onward are how
+> it works from now on.
 
-1. ~~In Supabase, open **SQL Editor → New query**, copy all of
-   `supabase/migrations/0001_init.sql`, paste, **Run**.~~ Done.
-2. ~~New query. All of **`supabase/migrations/0002_shipping.sql`**, paste,
-   **Run**.~~ Done. It added the weight and size columns postage is priced from,
-   the postage rate cache, and three columns on `orders` that record how a
-   postage price was arrived at.
-3. ~~New query. All of **`supabase/migrations/0003_admin.sql`**, paste,
-   **Run**.~~ Done. That is the studio itself: who may get behind the shopfront,
-   the colour list, filament stock, the costing settings and the accessories.
-4. ~~New query. All of `supabase/seed.sql`.~~ Done — your 44 products and 6
-   colourway collections. No reviews; those only ever come from real customers.
-5. ~~New query. All of `supabase/storage.sql`.~~ Done. That is the
-   `product-photos` bucket the Products screen uploads into. (It is deliberately
-   a separate file from the migrations, because it needs Supabase's Storage
-   feature and cannot be tested anywhere else.)
-6. ⚠️ **To do: new query. Copy all of
-   `supabase/migrations/0004_letter_eligible_default.sql`, paste, Run.**
-   Small but worth doing before you add any product by hand. `letter_eligible`
-   decides whether an item is quoted as a $3.40 **untracked** Large Letter or a
-   ~$10.20 **tracked** parcel, and the column was set up so that a row you typed
-   in yourself arrived claiming the cheap untracked option — for something nobody
-   had measured. Every difference is money you pay, and a lost letter cannot be
-   traced. This file makes a new row default to "parcel" instead, and clears the
-   flag on any row that got it by accident. It is safe to re-run.
-7. ⚠️ **To do, and only after step 6: new query. Copy all of
-   `supabase/migrations/0005_sale_integrity.sql`, paste, Run.** This is the
-   money one. Three things it adds:
-   - **A record of whether a confirmation email actually went out.** If the
-     machine restarts mid-send, the email is currently just lost. After this,
-     Stripe re-delivering the payment can send it, and the studio overview can
-     tell you which orders are still waiting.
-   - **A running count of anything you sell more of than you had ready.** The
-     shop prints to order, so selling past the shelf is allowed on purpose — it
-     is a "print this one first" note, not an error. Before this, the count
-     silently stopped at zero and you would never have known.
-   - **A list of payments that took money you cannot honour** — someone's card
-     clearing for an order you had already cancelled. Until now that was one
-     line in a log nobody reads. It now shows on your studio overview until you
-     mark it refunded. **You still issue the refund yourself, in Stripe** —
-     nothing here moves money.
-8. ⚠️ **To do, and after step 7: new query. Copy all of
-   `supabase/migrations/0006_enquiries.sql`, paste, Run.** This one is about the
-   contact form. At the moment, when somebody writes to you through the shop,
-   their message is emailed to you and **stored nowhere** — so if the mail fails
-   to send, or you have not set up email yet, or there is no support address on
-   file, the words they typed are simply gone. After this, the message is saved
-   first and the email becomes a nudge about something already saved. It also
-   starts keeping the addresses of people who ask to hear about new drops.
-   **Neither of those is a mailing list you can send to yet** — there is still
-   no newsletter and no unsubscribe link, and nothing on the shop promises one.
-9. **Then re-run the check.** New query, copy all of `supabase/verify.sql`,
-   paste, **Run**. **Every row must say `t`, and there should now be 86 of
-   them** — count the rows as well as the ticks, because a shorter table means
-   an older copy of the file, which is a pass that never looked at part of your
-   database. (It was 50 when you last ran it in August, 52 after step 6, 65
-   after step 7, and 86 after step 8.) If instead of a short table you get a red **error** naming
-   something that does not exist, that is a different problem: a file above has
-   not been run. It checks the things that otherwise fail silently in production
-   — most importantly that the webhook is allowed to allocate order numbers and
-   move stock. Without those grants, customers can pay and no order is ever
-   recorded. It writes a few throwaway rows and rolls them back, so it is safe
-   to re-run any time.
+**What is already in your database, done by hand:**
+
+1. ~~`supabase/migrations/0001_init.sql`~~ Done.
+2. ~~`supabase/migrations/0002_shipping.sql`~~ Done — the weight and size columns
+   postage is priced from, the postage rate cache, and three columns on `orders`
+   that record how a postage price was arrived at.
+3. ~~`supabase/migrations/0003_admin.sql`~~ Done — the studio itself: who may get
+   behind the shopfront, the colour list, filament stock, the costing settings
+   and the accessories.
+4. ~~`supabase/seed.sql`~~ Done — your 44 products and 6 colourway collections.
+   No reviews; those only ever come from real customers.
+5. ~~`supabase/storage.sql`~~ Done — the `product-photos` bucket the Products
+   screen uploads into. (Deliberately a separate file from the migrations,
+   because it needs Supabase's Storage feature and cannot be tested anywhere
+   else. It is **not** part of the automatic system below; it is a one-off and
+   it has been done.)
+
+`0004`, `0005` and `0006` are written and **have not been run**. They are what
+the automatic system will apply the first time you use it.
+
+---
+
+#### 6. Add the one new setting
+
+**Settings → Secrets and variables → Actions → Secrets tab → New repository
+secret.**
+
+| Name | Value |
+|---|---|
+| `SUPABASE_DB_URL` | See below |
+
+To get the value: Supabase dashboard → your project → **Connect** (button at the
+top) → **Session pooler** → copy the URI. It looks like
+
+```
+postgresql://postgres.abcdefgh:[YOUR-PASSWORD]@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres
+```
+
+Replace `[YOUR-PASSWORD]` with your database password — Project Settings →
+Database → **Reset database password** if you do not have it written down.
+
+Three things that will otherwise waste an afternoon:
+
+- ⚠️ **Session pooler, not "Direct connection."** The direct address answers on
+  IPv6 only, and GitHub's machines are IPv4 only. A direct URL works from your
+  own computer and then fails in GitHub with "network unreachable", which looks
+  like a broken secret and is not.
+- ⚠️ **If your password contains any of `: / ? # [ ] @`, reset it to one
+  without them.** Those characters mean something inside a web address, and the
+  connection fails looking like a wrong password.
+- ⚠️ **It is a Secret, not a Variable.** Variables are shown in plain text in the
+  GitHub interface. This value is full read-and-write access to every order,
+  every customer address and every payment record you hold — it is the single
+  most dangerous string in this project.
+
+#### 7. Take a backup. This is not optional and it is the reason the first run refuses.
+
+**There is no undo.** Nothing in this repo can reverse a migration; the only way
+back is a backup taken before it ran. The system knows this and **will refuse
+its first run** until you tell it you have taken one.
+
+In the Supabase dashboard, your project:
+
+- **On a paid plan (Pro and up):** **Database → Backups → Point in Time.**
+  Check PITR is switched on and note the time right now — that is the moment you
+  can rewind to. Or **Database → Backups → Scheduled backups** and check today's
+  is listed.
+- **On the free plan there are no automatic backups at all.** Take one yourself.
+  Either **Database → Backups** and download the latest daily file, or, from
+  your own computer:
+
+  ```bash
+  supabase db dump --db-url "$SUPABASE_DB_URL" -f backup-before-migration.sql
+  ```
+
+  Keep that file somewhere that is **not** this project folder.
+
+This is worth doing properly once. **Turning on Point-in-Time Recovery is the
+single best thing you can do for this shop's data**, and it is the difference
+between "we lost an hour" and "we lost the orders."
+
+#### 8. The first run — the only time you tick these boxes
+
+Go to the repo's **Actions** tab → **Run migrations** (in the left-hand list) →
+**Run workflow**. You get three boxes:
+
+| Box | What to put in it, this once |
+|---|---|
+| **Just tell me what would happen** | ✅ tick it, for a first go |
+| **I have taken a backup** | leave blank on the dry run |
+| **numbers already run by hand** | `0001 0002 0003 0004` |
+
+Run it. It changes nothing and prints what it *would* do. Read that.
+
+Then run it again, this time:
+
+| Box | Value |
+|---|---|
+| **Just tell me what would happen** | ⬜ untick |
+| **I have taken a backup** | ✅ tick — you did, at step 7 |
+| **numbers already run by hand** | `0001 0002 0003 0004` |
+
+That tells your database "you have already had those four, do not run them
+again", then runs `0005` and `0006`, then checks all 86 assertions and goes red
+if any of them fails. **Green means done.**
+
+**`0001 0002 0003 0004` goes in that box exactly once, ever.** After this first
+run your database keeps its own list of what it has had. From then on you leave
+all three boxes empty.
+
+#### 9. From now on — you do nothing
+
+Every push to `master` runs the migrations first and only deploys the code if
+they worked. Adding a new migration is: put a new file in
+`supabase/migrations/`, named `0007_something.sql` (**digits, then an
+underscore** — a name like `0007b_fix.sql` is silently ignored by the tool, so
+`scripts/migrate.sh` checks the names and refuses to run rather than let that
+happen), push it, and that is the whole procedure.
+
+You can still open **Actions → Run migrations** any time — to do a dry run, or
+to fix the database without deploying code.
+
+#### What replaced the old checklist
+
+| You used to | Now |
+|---|---|
+| Paste each migration into the SQL editor, in the right order | Push. `scripts/migrate.sh` applies whatever is missing, oldest first |
+| Remember which ones you had already run | The database keeps the list, in `supabase_migrations.schema_migrations` |
+| Remember to re-run `verify.sql` afterwards | It runs automatically, every time, and a red assertion stops the deploy |
+| Squint at 86 rows looking for an `f` | It names the failing ones and fails the run |
+
+`supabase/verify.sql` is still exactly what it was and you can still paste it
+into the SQL editor whenever you want reassurance. **Every row must say `t`, and
+there should be 86 of them** — count the rows as well as the ticks, because a
+shorter table means an older copy of the file, which is a pass that never looked
+at part of your database. It writes a few throwaway rows and rolls them back, so
+it is safe to run against the live shop any time.
+
+#### Checking a migration before it touches anything real
+
+If you ever want to be sure before you push — on your own computer, no cloud,
+nothing at risk:
+
+```bash
+./scripts/verify-sql.sh --rehearse
+```
+
+That builds a throwaway PostgreSQL database on your machine, makes it look like
+your live one, and then runs **the same script GitHub runs**, so you watch the
+real thing happen somewhere it cannot hurt. It needs PostgreSQL 16 and the
+Supabase CLI installed locally (`apt install postgresql-16`,
+`npm install -g supabase`).
 
 Check **Table Editor → products** whenever you like: each row has
 `weight_grams`, `length_mm`, `width_mm`, `thickness_mm` and `letter_eligible`.
@@ -163,12 +252,12 @@ Hover a column name to see what it is for. **Those numbers are estimates** — s
 "What only you can supply" for the three weighings that would replace the
 guesswork.
 
-> The schema is the six files in `supabase/migrations/`, in number order, and
-> `supabase/storage.sql` afterwards. All of them are safe to re-run: if you
-> applied an earlier version, run it again and it adds anything missing rather
-> than starting over, leaving your data alone. `0001` also revokes a grant that
-> an earlier version handed out too widely, so re-running it on an existing
-> database is not optional.
+> **Never edit a migration file that has already run.** If `0005` is wrong, the
+> fix is a new `0007`, not a change to `0005`. Once a file has been applied, the
+> repo and the live database agree about it; editing it makes them disagree with
+> no way to tell which is right, and that is a worse problem than the one being
+> fixed. Every file in `supabase/migrations/` says this at the top, in its own
+> words.
 
 ### 1d. Turn on Google sign-in
 
@@ -580,6 +669,7 @@ In your repo, go to **Settings → Secrets and variables → Actions** and add:
 |---|---|
 | `FLY_API_TOKEN` | Run `fly tokens create deploy -a bamstudio-shop` and paste the output |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Project Settings → API Keys |
+| `SUPABASE_DB_URL` | Supabase → **Connect** → **Session pooler** → the URI, with your database password pasted in. This is what lets the deploy update your database's tables before the new code goes live. Full instructions — including why it must be the pooler and not "Direct connection" — are in **Step 1c** above. |
 
 **Variables tab**
 
@@ -593,11 +683,29 @@ In your repo, go to **Settings → Secrets and variables → Actions** and add:
 | `NEXT_PUBLIC_INSTAGRAM_URL` | Optional |
 | `NEXT_PUBLIC_TIKTOK_URL` | Optional |
 
-Only the first four (both Secrets, plus `NEXT_PUBLIC_SITE_URL` and
+Only the first five (all three Secrets, plus `NEXT_PUBLIC_SITE_URL` and
 `NEXT_PUBLIC_SUPABASE_URL`) are required. The workflow checks them **by name**
 before it builds anything and stops with a message naming whichever is missing,
 rather than letting you find out thirty screens into a build log. The optional
 ones each print a one-line note when blank.
+
+> ⚠️ **Check what `NEXT_PUBLIC_SITE_URL` is actually set to before your next
+> deploy.** The table above says `https://bamstudio-shop.fly.dev`, and the notes
+> at the top of `.github/workflows/deploy.yml` say `https://bamstudioshop.com`.
+> Both cannot be right, and the second one is wrong today: that domain is still
+> parked at Porkbun (Step 5f) and does not serve the shop. This value is **baked
+> into the browser bundle when the image is built** and it is what Stripe uses
+> as the address to send a paying customer back to. If the Variable really holds
+> `bamstudioshop.com`, **a customer who pays lands on a domain-for-sale page**,
+> and the `/track` links in emails point there too. Open Settings → Secrets and
+> variables → Actions → Variables and read the value. Until Step 5f is finished
+> it must be `https://bamstudio-shop.fly.dev`.
+
+**What the deploy does now, and in what order.** Every push to `master` runs two
+jobs. The first updates the database and checks it; the second builds and
+deploys the code, and **only starts if the first one went green**. If a
+migration fails, nothing is deployed and the shop keeps serving the version it
+was already serving. See Step 1c for the database half.
 
 Then push to `master` (or hit **Run workflow**). The first build takes a few
 minutes; watch it in the Actions tab. When it finishes:
@@ -807,12 +915,15 @@ Do these in order on launch day:
 
 0. ~~Rotate the Supabase JWT secret.~~ ✅ **Done, 26 August.** Nothing further is
    needed there.
-0b. **Run `0004_letter_eligible_default.sql` and then
-   `0005_sale_integrity.sql`, in that order, then re-run `verify.sql`** and
-   check it prints **86** rows, every one `t` (Step 1c, steps 6–8). `0005` is
-   the one that makes a lost confirmation email recoverable, makes an oversell
-   visible instead of silently clamped, and gives you a list of payments that
-   owe a refund. The other SQL files are already applied.
+0b. **Do the one-time database setup in Step 1c, steps 6–8** — add the
+   `SUPABASE_DB_URL` secret, take a backup, then run **Actions → Run
+   migrations** once with `0001 0002 0003 0004` in the "already run by hand"
+   box. That applies `0004`, `0005` and `0006` and checks all **86** assertions
+   for you. You never paste SQL into the Supabase editor again after this.
+   `0005` is the one that makes a lost confirmation email recoverable, makes an
+   oversell visible instead of silently clamped, and gives you a list of
+   payments that owe a refund; `0006` stops a customer's contact-form message
+   from existing only inside an email that might not send.
 0c. **Push the three commits sitting on your computer** (Step 5a) — the deploy
    only runs on a push, so until then the live shop is missing three fixes.
 1. **Fill in "My price"** in the workbook for every product, then run
@@ -902,9 +1013,12 @@ Do these in order on launch day:
 >    **Check what is actually unpushed before you trust that number** —
 >    `git status` and `git log origin/master..master --oneline` are the only
 >    honest answer, and this line has gone stale before.
-> 2. **Run `supabase/migrations/0004_letter_eligible_default.sql`, then
->    `supabase/migrations/0005_sale_integrity.sql`**, and re-run `verify.sql`,
->    expecting **86** rows all `t` (Step 1c).
+> 2. **Do the one-time database setup** — Step 1c, steps 6–8. Add the
+>    `SUPABASE_DB_URL` secret, take a backup, and run **Actions → Run
+>    migrations** once with `0001 0002 0003 0004` in the "already run by hand"
+>    box. That applies `0004`, `0005` and `0006` and checks all **86**
+>    assertions. After this, migrations run themselves on every deploy and the
+>    deploy stops if the database is not what the code expects.
 > 3. **Fill in the studio.** Your 44 products are all still priced at the seed's
 >    $9.00, none of them has a filament recipe, and almost none has a print time
 >    — so every cost, margin and suggested price in the studio says "Not

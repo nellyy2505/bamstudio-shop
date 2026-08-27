@@ -13,6 +13,18 @@
 #   Secrets tab
 #     FLY_API_TOKEN                  `fly tokens create deploy -a bamstudio-shop`
 #     NEXT_PUBLIC_SUPABASE_ANON_KEY  Supabase → Project Settings → API Keys
+#     SUPABASE_DB_URL                Supabase → Connect → Session pooler → URI,
+#                                    with your database password pasted in.
+#                                    This is what lets the deploy update the
+#                                    database's tables before the new code goes
+#                                    live. It is the most powerful value in this
+#                                    repo — full read/write to every order and
+#                                    customer address — so it is a Secret, never
+#                                    a Variable, and it is used ONLY by the
+#                                    migrate job, never passed to the build.
+#                                    Full instructions, including which of
+#                                    Supabase's connection strings to copy, are
+#                                    at the top of migrate.yml.
 #
 #   Variables tab
 #     NEXT_PUBLIC_SITE_URL           https://bamstudioshop.com
@@ -43,6 +55,37 @@
 #   values can't use them: Next inlines those into the browser bundle during
 #   the build, long before a Fly secret is visible.)
 #
+# THE DATABASE IS CHANGED BEFORE THE CODE IS, AND ONLY IF IT SUCCEEDS
+#   This workflow now has two jobs, in this order:
+#
+#     1. migrate  — runs .github/workflows/migrate.yml: applies any migration
+#                   files the database has not run yet, then runs
+#                   supabase/verify.sql and fails if a single assertion comes
+#                   back false.
+#     2. deploy   — `needs: migrate`, so it does not start at all unless job 1
+#                   finished green. A failed migration means NO rollout: the
+#                   shop keeps serving the version it was already serving.
+#
+#   That order — schema first, code second — is the only safe one, because a
+#   new page that reads a column the database does not have is a 500 for a
+#   customer, whereas a column nothing reads yet is harmless.
+#
+#   ⚠️ THE CONSEQUENCE YOU HAVE TO DESIGN FOR. Fly does a rolling deploy: for
+#   about a minute the OLD code is still serving requests against the NEW
+#   database. So every migration must be one the code that is ALREADY LIVE can
+#   survive. In practice: only ADD things. Add a column, add a table, add a
+#   function. Never drop or rename a column, or change what one means, in the
+#   same release that stops using it — do that as two releases, weeks apart
+#   ("expand, then migrate, then contract").
+#
+#   0005 and 0006 are safe under that rule and were read to check it. 0006 only
+#   adds two new tables. 0005 adds two columns and one table, all additions.
+#   The one thing in 0005 that is not a pure addition is `decrement_stock`: it
+#   is dropped and recreated to return a number instead of nothing. The live
+#   webhook calls it and ignores whatever comes back, so the change is
+#   invisible to it, and the drop and the recreate are inside one transaction,
+#   so there is no instant where the function is missing.
+#
 # Action reference and the deploy command follow Fly's own guide:
 #   https://fly.io/docs/launch/continuous-deployment-with-github-actions/
 # Fly's example uses @master; pinned to the @v1 tag here so a future change to
@@ -56,19 +99,50 @@ on:
     branches: [master]
   workflow_dispatch: # lets you deploy from the Actions tab without pushing
 
-# A newer push supersedes an older one still building — cancel it rather than
-# racing two rollouts onto the same machine.
+# Only ever one of these at a time, so two rollouts cannot race onto the same
+# machine.
+#
+# `cancel-in-progress` was `true` — kill the older run when a newer push
+# arrives. It is now `false`, and the reason is the migrate job. Cancelling a
+# run now means cancelling a migration half-way through. The damage is bounded
+# (each migration file runs in its own transaction, so a killed one rolls back
+# and is not recorded as applied) but the result is a database part-way between
+# two releases, and it is worth nothing to save four minutes of build time.
+#
+# `false` still prevents the race the old comment was worried about: a second
+# push waits for the first to finish rather than running alongside it.
 concurrency:
   group: deploy-bamstudio-shop
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
+  # ---------------------------------------------------------------- 1 of 2
+  # The database first. This calls .github/workflows/migrate.yml — the same
+  # file the "Run migrations" button in the Actions tab runs, so there is one
+  # description of how this database gets changed and not two that can drift.
+  #
+  # `secrets: inherit` hands it this repo's secrets; it uses exactly one,
+  # SUPABASE_DB_URL.
+  #
+  # No `baseline` and no `ack_backup` here on purpose: the one-time baseline
+  # and the one-time "I have taken a backup" are decisions a person makes,
+  # from the Actions tab, once — not something a `git push` should be able to
+  # do by accident.
+  migrate:
+    name: Database
+    uses: ./.github/workflows/migrate.yml
+    secrets: inherit
+
+  # ---------------------------------------------------------------- 2 of 2
   deploy:
     name: Build and deploy
     runs-on: ubuntu-latest
+    # THIS LINE IS THE SAFETY. Without it, a migration that failed would be
+    # followed by a rollout of code written for a database that does not exist.
+    needs: migrate
 
     # Read once here, used by both steps below. Referenced as shell variables
     # rather than pasted into the commands, so an odd character in a value

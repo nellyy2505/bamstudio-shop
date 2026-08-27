@@ -1,0 +1,199 @@
+# ---------------------------------------------------------------------------
+# Run the database migrations, then check the database is what the code
+# expects. This is the ONLY thing that should ever change the shop's database
+# structure — no more pasting SQL into the Supabase editor.
+#
+# IT RUNS IN TWO SITUATIONS
+#
+#   1. Automatically, as the first half of every deploy. `deploy.yml` calls
+#      this file and will not roll out any code unless it finishes green.
+#   2. By hand, from the repo's **Actions** tab → **Run migrations** →
+#      **Run workflow**. Use this when you want to change the database
+#      WITHOUT deploying code — the first-ever run, or a day when something
+#      is half-applied and you want to look before you leap.
+#
+# WHAT IT ACTUALLY DOES — all of it lives in `scripts/migrate.sh`, which is
+# also the script you can run on your own computer. This file is only the
+# button. Read the top of that script; it is written for you.
+#
+# ---------------------------------------------------------------------------
+# WHAT YOU MUST SET UP IN GITHUB FIRST — one secret, and only one
+#   Repo → Settings → Secrets and variables → Actions → **Secrets** tab
+#
+#     SUPABASE_DB_URL
+#
+#   Where to get it: Supabase dashboard → your project → **Connect** (the
+#   button at the top) → **Session pooler** → copy the URI. It looks like:
+#
+#     postgresql://postgres.abcdefgh:YOURPASSWORD@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres
+#
+#   Replace `[YOUR-PASSWORD]` with your database password. If you do not have
+#   it written down: Project Settings → Database → **Reset database password**,
+#   and paste the new one in here.
+#
+#   ⚠️ It must be the **Session pooler** URI, not "Direct connection". The
+#   direct one answers on IPv6 only and GitHub's machines are IPv4 only, so
+#   the direct URL works from your laptop and then fails here with a
+#   "network unreachable" that looks like a broken secret and is not.
+#
+#   ⚠️ If your database password contains any of  : / ? # [ ] @  reset it to
+#   one without them. Those characters mean something inside a URL and the
+#   connection fails looking like a wrong password.
+#
+#   IT IS A SECRET, NOT A VARIABLE, and it is the most dangerous value in
+#   this repo — it is full read/write access to every order, every customer
+#   address and every payment record. Variables are shown in plain text in
+#   the GitHub UI and printed in logs; Secrets are masked and cannot be read
+#   back once saved. Nothing else in this workflow is a Variable, because
+#   nothing else here needs one.
+#
+#   This is a DIFFERENT thing from the values in deploy.yml. Those describe
+#   the shop to the browser. This one is the key to the filing cabinet.
+#
+# WHAT IS DELIBERATELY *NOT* HERE
+#   SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY and the rest still live only
+#   on Fly (`fly secrets set ...`). Migrations do not need them, and this
+#   workflow must never grow a reason to.
+# ---------------------------------------------------------------------------
+
+name: Run migrations
+
+on:
+  # Called by deploy.yml before it rolls anything out.
+  workflow_call:
+    inputs:
+      baseline:
+        description: Space-separated migration numbers to record as already-applied without running them.
+        type: string
+        required: false
+        default: ""
+      ack_backup:
+        description: Set true to confirm a backup has been taken.
+        type: boolean
+        required: false
+        default: false
+      dry_run:
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      SUPABASE_DB_URL:
+        required: true
+
+  # The button in the Actions tab.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Just tell me what would happen — change nothing"
+        type: boolean
+        default: false
+      ack_backup:
+        description: "I have taken a backup (required for the very first run)"
+        type: boolean
+        default: false
+      baseline:
+        description: 'One time only: numbers already run by hand, e.g. "0001 0002 0003 0004"'
+        type: string
+        default: ""
+
+# Never two of these at once against the same database, and never cancel one
+# half-way. `cancel-in-progress: false` is deliberate and is NOT the same
+# choice deploy.yml makes for building: killing a build wastes a few minutes,
+# killing a migration mid-flight leaves a database nobody can describe.
+concurrency:
+  group: migrate-bamstudio-shop
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Migrate and verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # Pinned to a tag rather than a branch so a future change to the action
+      # cannot alter what touches the database without you choosing it — the
+      # same reasoning deploy.yml gives for pinning setup-flyctl to @v1.
+      - name: Install the Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      # `psql` is what runs supabase/verify.sql. It is normally already on
+      # the runner; installed here so a change to GitHub's machine image
+      # cannot silently turn the safety check off.
+      - name: Make sure psql is available
+        shell: bash
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends postgresql-client
+          fi
+          psql --version
+
+      - name: Check the database secret exists
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "MISSING: SUPABASE_DB_URL"
+            echo
+            echo "Add it under Settings -> Secrets and variables -> Actions -> Secrets."
+            echo "Get the value from Supabase: your project -> Connect -> Session pooler."
+            echo "See the notes at the top of .github/workflows/migrate.yml."
+            exit 1
+          fi
+          echo "SUPABASE_DB_URL is present."
+
+      # ------------------------------------------------------------------
+      # Everything real happens in one script, so what runs here and what you
+      # can run on your own machine are the same code. `set -e` inside it,
+      # and a non-zero exit here, is what stops the deploy: the job that
+      # deploys `needs:` this one, so a failure here means no rollout at all
+      # and the shop keeps serving the version that was already working.
+      # ------------------------------------------------------------------
+      - name: Migrate and verify
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          MIGRATE_ACK_BACKUP: ${{ (inputs.ack_backup && 'yes') || 'no' }}
+          BASELINE: ${{ inputs.baseline }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=()
+          # Written as `if` blocks, not `[ ... ] && ...`, because this shell
+          # runs with -e: a bare test that comes out false would end the step
+          # with a "failure" nobody can explain.
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          if [ -n "$BASELINE" ]; then
+            # Unquoted on purpose: "0001 0002" must become two arguments.
+            # shellcheck disable=SC2206
+            args+=(--baseline $BASELINE)
+          fi
+          ./scripts/migrate.sh ${args[@]+"${args[@]}"}
+
+      - name: Say what happened
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "### Database is up to date and all assertions passed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Migration or verification FAILED — nothing was deployed"
+              echo
+              echo "Open the **Migrate and verify** step above and read the last"
+              echo "twenty lines. It names what went wrong."
+              echo
+              echo "The shop is still running the version it was running before."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

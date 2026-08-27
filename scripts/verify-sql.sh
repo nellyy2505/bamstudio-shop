@@ -17,8 +17,60 @@
 #   ./scripts/verify-sql.sh
 #
 # Exits non-zero if any assertion is not `t`, so it can gate a release.
+#
+# ---------------------------------------------------------------------------
+# TWO MODES
+# ---------------------------------------------------------------------------
+#
+#   ./scripts/verify-sql.sh
+#       The original one, unchanged. Builds a database from nothing, applies
+#       every migration with psql, applies the seed, runs the assertions. This
+#       answers "is the schema, as a whole, correct?"
+#
+#   ./scripts/verify-sql.sh --rehearse
+#       REHEARSAL. Answers a different and more urgent question: "will the
+#       thing that runs against the live shop work?" It builds a database
+#       shaped like production — only the migrations that have actually been
+#       applied there, and no ledger — and then hands it to `scripts/migrate.sh`,
+#       the exact script GitHub runs on every deploy. That script does the
+#       baselining, applies whatever is pending, and runs the assertions
+#       itself.
+#
+#       Use this before a migration ever touches the real database. Nothing
+#       leaves your machine and there is nothing to break.
+#
+#       Which migrations count as "already applied in production" is the
+#       PROD_APPLIED list below. It is a fact about the live database, not
+#       about this repo, so it is written down here rather than derived —
+#       and it only ever needs touching again if someone applies a migration
+#       by hand outside this system, which is the practice all of this exists
+#       to end.
+#
+#       Needs the Supabase CLI (`npm install -g supabase`).
 
 set -euo pipefail
+
+# --------------------------------------------------------------- arguments
+REHEARSE=0
+for arg in "$@"; do
+  case "$arg" in
+    --rehearse) REHEARSE=1 ;;
+    -h|--help)
+      echo "usage: verify-sql.sh [--rehearse]"
+      echo "  (no flags)  build the schema from nothing and run the assertions"
+      echo "  --rehearse  rehearse the real deploy-time migration against a"
+      echo "              production-shaped copy, using scripts/migrate.sh"
+      exit 0 ;;
+    *) echo "verify-sql.sh: unknown option '$arg' (try --help)" >&2; exit 2 ;;
+  esac
+done
+
+# The migrations the LIVE Supabase project has had pasted into it by hand,
+# before scripts/migrate.sh existed. Used only by --rehearse, to make the
+# throwaway database look like the real one before the real runner is pointed
+# at it. Baselining against an empty database would prove nothing: the
+# interesting question is whether the runner correctly leaves these alone.
+PROD_APPLIED=(0001 0002 0003 0004)
 
 # Everything the harness owns lives outside the repo: the cluster is disposable
 # scaffolding, not a project artefact, and must never end up in a commit.
@@ -232,6 +284,63 @@ fi
 if [ "${#MIGRATIONS[@]}" -eq 0 ]; then
   echo "ERROR: no migrations found in $SQL_DIR/migrations" >&2
   exit 2
+fi
+
+if [ "$REHEARSE" = 1 ]; then
+  # ---------------------------------------------------------- rehearsal
+  # Apply ONLY what production has already had applied to it, exactly the way
+  # production got it — by hand, with no record kept. Everything after this
+  # point is scripts/migrate.sh doing what it will do to the real shop.
+  for v in "${PROD_APPLIED[@]}"; do
+    found=""
+    for m in "${MIGRATIONS[@]}"; do
+      case "$(basename "$m")" in "${v}_"*) found="$m" ;; esac
+    done
+    if [ -z "$found" ]; then
+      echo "ERROR: PROD_APPLIED lists $v but supabase/migrations/ has no ${v}_*.sql" >&2
+      echo "       Either the file was renamed — which it must not be, production has run it —" >&2
+      echo "       or PROD_APPLIED at the top of this script is out of date." >&2
+      exit 2
+    fi
+    echo "==> [as production did, by hand] $(basename "$found")"
+    psql_run "-d $DBNAME -q -f '$found'" >/dev/null
+  done
+
+  echo "==> applying supabase/seed.sql (production has the catalogue in it)"
+  psql_run "-d $DBNAME -q -f '$SQL_DIR/seed.sql'" >/dev/null
+
+  echo
+  echo "=========================================================================="
+  echo " The throwaway database now looks like the live shop: ${PROD_APPLIED[*]}"
+  echo " applied, and no record anywhere that they were. Handing it to"
+  echo " scripts/migrate.sh — the same script GitHub runs on every deploy."
+  echo "=========================================================================="
+  echo
+
+  # A unix-socket URL. Tested: the Supabase CLI and psql both accept this
+  # form, so the rehearsal needs no TCP port open and nothing is reachable
+  # from outside this machine.
+  REHEARSAL_DB_URL="postgresql://postgres@localhost/$DBNAME?host=$PGSOCK&port=$PGPORT&sslmode=disable"
+
+  # MIGRATE_ACK_BACKUP=yes: there is nothing here to back up, the database is
+  # deleted and rebuilt on the next run. This is the ONE place that answer is
+  # automatic, and it is safe precisely because the database is disposable.
+  #
+  # The baseline is passed on purpose. Watching migrate.sh apply only 0005 and
+  # 0006 — and leave 0001-0004 alone — is the whole point of the rehearsal.
+  echo "==> scripts/migrate.sh --baseline ${PROD_APPLIED[*]}"
+  MIGRATE_ACK_BACKUP=yes \
+  SUPABASE_DB_URL="$REHEARSAL_DB_URL" \
+    "$REPO_ROOT/scripts/migrate.sh" --baseline "${PROD_APPLIED[@]}"
+
+  echo
+  echo "=========================================================================="
+  echo " REHEARSAL PASSED. What just happened is what will happen to the live"
+  echo " database on the next deploy, assuming the live one really is at"
+  echo " ${PROD_APPLIED[*]}. Run migrate.sh --dry-run against the real one to"
+  echo " confirm that before you trust it."
+  echo "=========================================================================="
+  exit 0
 fi
 
 for m in "${MIGRATIONS[@]}"; do
