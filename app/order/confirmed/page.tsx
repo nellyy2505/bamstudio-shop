@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { ProductImage } from "@/components/ProductArt";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { ButtonLink, Icon, Pill } from "@/components/ui";
 import { ClearCartOnMount } from "./ClearCartOnMount";
 import { getStripe } from "@/lib/stripe";
@@ -43,6 +45,53 @@ export const dynamic = "force-dynamic";
 type SearchParams = Promise<{ session_id?: string | string[] }>;
 
 const STEPS = ["Confirmed", "Printing", "Packed", "Shipped"];
+
+/**
+ * Throttle on the Stripe reads below.
+ *
+ * This page was the only route family in the shop with no rate limit, and it
+ * is `force-dynamic` and takes the session id straight off the query string.
+ * Nothing leaks — a session id that is not ours makes `retrieve()` throw, and
+ * the catch turns that into "we couldn't check this order" — but each visit
+ * spends up to two Stripe API calls (`sessions.retrieve` and, when no order
+ * row exists yet, `listLineItems`), and Stripe's rate limit is per *account*.
+ * A loop on this URL therefore costs nothing to run and 429s real checkouts
+ * for real customers, which is the failure that matters.
+ *
+ * 30 a minute per IP, which is deliberately loose. This page tells people to
+ * refresh it — the order number is allocated by the webhook, so the copy in
+ * OrderNumberCard says "Refresh this page and it should appear above" — and a
+ * customer who has just been charged and is watching for their number must
+ * never be the one who gets throttled. Thirty refreshes inside a minute is
+ * well past anything a person does and still cheap against Stripe's budget.
+ * The window matches the other unauthenticated routes (/api/checkout,
+ * /api/track, /api/contact) so there is one shape to reason about.
+ */
+const CONFIRM_LIMIT = 30;
+const CONFIRM_WINDOW_MS = 60_000;
+
+/**
+ * The caller's bucket key, from the same `clientKey()` every route handler
+ * uses.
+ *
+ * `clientKey()` takes a Request because every other call site is a route
+ * handler that has one; a page is handed the request headers and nothing else.
+ * So the headers are wrapped back into the shape the shared helper expects,
+ * rather than growing a second copy of the "which value identifies a caller"
+ * decision here — that decision is subtle (see the header of lib/rate-limit.ts
+ * on Fly appending to `x-forwarded-for`) and must exist in exactly one place.
+ *
+ * The URL is a placeholder: `clientKey()` reads headers only, and `.invalid` is
+ * reserved by RFC 2606 so it can never resolve — the same device lib/safe-next.ts
+ * uses for the same reason.
+ */
+async function confirmationKey(): Promise<string> {
+  const inbound = await headers();
+  return clientKey(
+    new Request("https://order-confirmed.invalid", { headers: [...inbound] }),
+    "order-confirmed",
+  );
+}
 
 /**
  * Does the Stripe webhook email this customer their confirmation?
@@ -125,6 +174,29 @@ export default async function OrderConfirmedPage({
   // Read the session straight from Stripe so the page is correct even if the
   // webhook has not landed yet.
   if (sessionId) {
+    // Checked here rather than at the top of the page on purpose: a visit with
+    // no `session_id` calls Stripe not at all, so it costs nothing to serve and
+    // must not spend anyone's allowance. Only the visits that would hit Stripe
+    // are counted.
+    const limit = rateLimit(
+      await confirmationKey(),
+      CONFIRM_LIMIT,
+      CONFIRM_WINDOW_MS,
+    );
+    if (!limit.ok) {
+      // Bail out BEFORE the Stripe calls — throttling that still spends the
+      // quota protects nothing. The early return also means <ClearCartOnMount />
+      // is never rendered on this path, so a basket survives being throttled,
+      // exactly as it survives an unpaid session.
+      //
+      // A page cannot set a 429 or a Retry-After the way the route handlers do,
+      // so the wait is stated in the copy instead. Nothing here claims anything
+      // about the payment: we did not ask Stripe, so we do not know, and telling
+      // someone who has just been charged that no money was taken is the one
+      // mistake this page exists to avoid.
+      return <NotPaid hasSession checked={false} throttled />;
+    }
+
     try {
       const session = await getStripe().checkout.sessions.retrieve(sessionId);
 
@@ -641,6 +713,7 @@ function OrderNumberCard({
 function NotPaid({
   hasSession,
   checked,
+  throttled = false,
 }: {
   hasSession: boolean;
   /**
@@ -652,6 +725,17 @@ function NotPaid({
    * statement to a customer who is out of pocket.
    */
   checked: boolean;
+  /**
+   * Did the rate limit above stop us asking Stripe at all?
+   *
+   * Kept apart from `checked` because the two are different facts and the copy
+   * has to match: `checked: false` on its own means we tried Stripe and could
+   * not reach it, and saying that here would be untrue — we never tried. The
+   * remedy differs too. A Stripe outage is "try again in a few minutes"; this
+   * clears on its own in under a minute and the only thing to do is stop
+   * refreshing.
+   */
+  throttled?: boolean;
 }) {
   const unconfirmable = hasSession && !checked;
   return (
@@ -663,12 +747,24 @@ function NotPaid({
         <h1 className="mt-5 mb-2 text-3xl">
           {!hasSession
             ? "No order to show"
-            : unconfirmable
-              ? "We couldn't check this order"
-              : "This order wasn't completed"}
+            : throttled
+              ? "Just a moment"
+              : unconfirmable
+                ? "We couldn't check this order"
+                : "This order wasn't completed"}
         </h1>
         <p className="max-w-md text-muted">
-          {!hasSession ? (
+          {throttled ? (
+            // Says only what is true: we did not ask, so we do not know. It
+            // never denies a payment and never suggests paying again.
+            <>
+              This page has been checked a lot in the last minute, so we&apos;ve
+              paused looking your order up. Nothing is wrong and nothing is
+              lost — if you were charged, Stripe has the payment. Wait about a
+              minute, then reload this page and your order details will be
+              here. Your basket is exactly as you left it in the meantime.
+            </>
+          ) : !hasSession ? (
             // No "check your email for the receipt": the confirmation email is
             // only sent for an order that was actually paid for, and there is
             // no session here to say one was. The contact line below is the
