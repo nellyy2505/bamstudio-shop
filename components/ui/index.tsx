@@ -1,5 +1,6 @@
 import Link from "next/link";
-import type { ComponentProps, ReactNode } from "react";
+import { Children, Fragment, cloneElement, isValidElement } from "react";
+import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { Icon } from "./Icon";
 
 export { Icon } from "./Icon";
@@ -148,6 +149,109 @@ export function Stars({
 export const inputClass =
   "h-12 w-full rounded-xl border border-line2 bg-surface px-4 text-[15px] text-ink placeholder:text-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20";
 
+/** Elements that can carry `aria-describedby` and `aria-invalid` meaningfully. */
+const CONTROL_TAGS = new Set(["input", "select", "textarea"]);
+
+type ControlAria = {
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
+};
+
+function isControl(node: ReactNode): node is ReactElement<ControlAria> {
+  return (
+    isValidElement(node) &&
+    typeof node.type === "string" &&
+    CONTROL_TAGS.has(node.type)
+  );
+}
+
+/** A control's own `aria-describedby` is kept; the field's id is appended. */
+function withFieldAria(
+  control: ReactElement<ControlAria>,
+  describedBy: string | undefined,
+  invalid: boolean,
+): ReactElement {
+  const own = control.props;
+  const ids = [own["aria-describedby"], describedBy].filter(Boolean).join(" ");
+  return cloneElement(control, {
+    "aria-describedby": ids || undefined,
+    "aria-invalid": invalid ? true : own["aria-invalid"],
+  });
+}
+
+/**
+ * Points the field's control at the message underneath it.
+ *
+ * The control is `children`, so the only way to put an attribute on it from
+ * here is to clone it. That is narrower than it sounds — this walks to the
+ * *first* `input`/`select`/`textarea` and clones only that:
+ *
+ *  - a single control (every caller in the shop today) is cloned;
+ *  - a control wrapped in a fragment — the sign-up password box, which puts a
+ *    strength meter beside its input — is found one level in. A fragment takes
+ *    no props of its own, so cloning it directly would put `aria-invalid` on a
+ *    `React.Fragment` and React would warn and drop it;
+ *  - **anything else is returned untouched.** Several children, a custom
+ *    component, plain text, `null`: nothing is cloned, nothing throws, and the
+ *    field renders exactly as it did before. The error still gets an `id` and
+ *    `role="alert"`, so it is still announced when it appears — only the
+ *    on-focus link is lost, and no caller is in that shape.
+ */
+function describeControl(
+  children: ReactNode,
+  describedBy: string | undefined,
+  invalid: boolean,
+): ReactNode {
+  if (isControl(children)) return withFieldAria(children, describedBy, invalid);
+
+  if (isValidElement(children) && children.type === Fragment) {
+    const inner = Children.toArray(
+      (children.props as { children?: ReactNode }).children,
+    );
+    const index = inner.findIndex(isControl);
+    if (index === -1) return children;
+    const next = [...inner];
+    next[index] = withFieldAria(
+      inner[index] as ReactElement<ControlAria>,
+      describedBy,
+      invalid,
+    );
+    return cloneElement(children as ReactElement, undefined, ...next);
+  }
+
+  return children;
+}
+
+/**
+ * A labelled form control with its hint or its error underneath.
+ *
+ * The message is wired to the control, not just placed near it. Before this,
+ * `{error}` was a bare `<span>` with no `id`, nothing referenced it and the
+ * control was never marked invalid — so on every form in the shop the failure
+ * was carried by red text in a particular position and by nothing else. A
+ * screen reader user tabbing back to a rejected field heard the label again and
+ * no reason. `app/product/[slug]/ProductBuy.tsx` had already done this by hand
+ * for its one field; this is that pattern moved somewhere every form gets it.
+ *
+ * Three decisions worth keeping:
+ *
+ *  - **The ids are derived, not generated.** `useId()` is a hook, and this
+ *    module carries no `"use client"` — `app/admin/settings/page.tsx`,
+ *    `app/admin/orders/page.tsx` and four more render `Field` from *server*
+ *    components, where a hook cannot run. Deriving from `htmlFor` (which all 81
+ *    call sites pass) is stable across the server render and hydration by
+ *    construction, and matches the id already on the control.
+ *  - **`role="alert"`, not `aria-live="polite"`.** The message is mounted at
+ *    the moment it becomes true. A live region has to already be in the DOM to
+ *    announce a change to itself, so `aria-live` on a node that appears with
+ *    its content is unreliable; `role="alert"` announces on insertion. Making
+ *    the region permanent instead would put an empty child in a `gap-1.5`
+ *    column and move every form by 6px.
+ *  - **`aria-invalid` is set, and the message is prefixed "Error:" for screen
+ *    readers only.** Visually, error and hint differ by colour and weight; that
+ *    prefix is what tells a listener which one is being read. Neither is
+ *    visible, so no form looks any different.
+ */
 export function Field({
   label,
   hint,
@@ -163,6 +267,14 @@ export function Field({
   action?: ReactNode;
   children: ReactNode;
 }) {
+  // `htmlFor` is optional on this component but is passed everywhere; the label
+  // slug is a deterministic fallback so an id always exists to point at.
+  const base =
+    htmlFor ||
+    label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ||
+    "field";
+  const messageId = error ? `${base}-error` : hint ? `${base}-hint` : undefined;
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between">
@@ -171,11 +283,20 @@ export function Field({
         </label>
         {action}
       </div>
-      {children}
+      {describeControl(children, messageId, Boolean(error))}
       {error ? (
-        <span className="text-xs font-semibold text-danger">{error}</span>
+        <span
+          id={messageId}
+          role="alert"
+          className="text-xs font-semibold text-danger"
+        >
+          <span className="sr-only">Error: </span>
+          {error}
+        </span>
       ) : hint ? (
-        <span className="text-xs text-muted">{hint}</span>
+        <span id={messageId} className="text-xs text-muted">
+          {hint}
+        </span>
       ) : null}
     </div>
   );

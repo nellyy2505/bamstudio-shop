@@ -174,14 +174,60 @@ export const PERSONALISATION_TEXT_PATTERN = /^[A-Za-z0-9 '&.\-/]+$/;
 /** Charm is included by default; dropping it takes a dollar off. */
 export const BUILDER_NO_CHARM_DISCOUNT = 100;
 
-/** Letters we don't keep deep stock of — printed to order, adds a day. */
-export const SLOW_LETTERS = ["Q", "X", "Z", "F"];
+/*
+ * There is deliberately no `SLOW_LETTERS` here any more.
+ *
+ * It listed Q, X, Z and F as "letters we don't keep deep stock of — printed to
+ * order, adds a day", and the builder printed that sentence to customers. Both
+ * halves were untrue. Nothing in this codebase measures stock per letter, and
+ * nothing anywhere adds a day to the lead time for a name that contains one —
+ * `PRINT_LEAD_TIME` is flat. It also implied the other twenty-two letters are
+ * *not* printed to order, which is a stock claim by implication: every keycap
+ * is printed for the order it belongs to.
+ *
+ * The builder's copy was removed first, which left this constant with no
+ * readers at all. It is deleted rather than kept: a named list sitting in the
+ * business-rules file is one a future screen will find, believe and print.
+ */
 
 export const BUILDER_ATTACHMENTS = [
   { id: "cord", label: "Bag charm cord", price_delta: 0 },
   { id: "keyring", label: "Keyring", price_delta: 0 },
   { id: "strap", label: "Phone strap", price_delta: 0 },
 ] as const;
+
+/**
+ * What the shop will accept in one basket.
+ *
+ * These are business rules in exactly the sense this file exists for: change
+ * one and the basket, the postage quote and the Stripe session all have to move
+ * together. They were four literals hand-copied into two Zod schemas
+ * (`app/api/checkout/route.ts` and `app/api/shipping/quote/route.ts`) and then
+ * transcribed a third time into `components/cart/limits.ts` — three copies,
+ * nothing enforcing that they agreed, and a disagreement would not have failed
+ * loudly: the client would happily build a basket the server then refuses with
+ * a blanket "Invalid basket.", and the cart's postage call would come back 400
+ * and render as "Calculated at checkout" with no total and no reason given.
+ * That stopgap file is gone; this is the only copy.
+ *
+ * Both routes already import this module, and it is safe for them to: it
+ * imports nothing at all and reads only NEXT_PUBLIC_ values, so it drags no
+ * server-only code — no Supabase client, no Stripe, no secret — into a route
+ * schema, and it stays importable from the client components below.
+ *
+ * Why the client enforces them too: a basket that breaches either cap is
+ * refused wholesale, so the honest thing is to stop the basket being built that
+ * way and to say what the limit is at the point it is reached.
+ */
+export const BASKET_LIMITS = {
+  /** Most of any one line. Units, not lines. */
+  maxLineQuantity: 20,
+  /**
+   * Most distinct lines in a basket. Counted in lines, not units — twenty of
+   * one clicker is one line.
+   */
+  maxLines: 40,
+} as const;
 
 /**
  * Who pays the postage — never how much the postage is.

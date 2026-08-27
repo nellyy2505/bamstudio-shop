@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { BUILDER_MAX_LETTERS, SHIPPING } from "@/lib/config";
+import { BASKET_LIMITS, BUILDER_MAX_LETTERS, SHIPPING } from "@/lib/config";
 import { loadProductsBySlug } from "@/lib/queries";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { toShippingLines } from "@/lib/shipping/lines";
@@ -33,7 +33,7 @@ export const runtime = "nodejs";
  */
 const LineSchema = z.object({
   slug: z.string().min(1).max(120),
-  quantity: z.number().int().min(1).max(20),
+  quantity: z.number().int().min(1).max(BASKET_LIMITS.maxLineQuantity),
   attachment_id: z.string().max(60).nullable().optional(),
   custom: z
     .object({
@@ -49,7 +49,11 @@ const LineSchema = z.object({
 });
 
 const BodySchema = z.object({
-  lines: z.array(LineSchema).min(1).max(40),
+  // The same two caps checkout enforces, from the same place — see
+  // BASKET_LIMITS in lib/config.ts. If this schema and checkout's ever
+  // disagreed, a basket would quote here and then be refused at payment, or
+  // quote as "Calculated at checkout" and then go through.
+  lines: z.array(LineSchema).min(1).max(BASKET_LIMITS.maxLines),
 });
 
 export async function POST(request: Request) {

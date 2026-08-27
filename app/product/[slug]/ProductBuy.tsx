@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button, Icon, cx, inputClass } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
 import { money } from "@/lib/format";
 import {
+  BASKET_LIMITS,
   PERSONALISATION_TEXT_MAX,
   PERSONALISATION_TEXT_PATTERN,
 } from "@/lib/config";
@@ -16,6 +17,7 @@ import type { Product } from "@/lib/types";
 export function ProductBuy({ product }: { product: Product }) {
   const { add } = useCart();
   const router = useRouter();
+  const capNoteId = useId();
 
   const colours = product.colours ?? [];
   const attachments = product.attachments ?? [];
@@ -26,6 +28,10 @@ export function ProductBuy({ product }: { product: Product }) {
   const [added, setAdded] = useState(false);
   const [personalText, setPersonalText] = useState("");
   const [textError, setTextError] = useState<string | null>(null);
+  /** Why the basket would not take this — never colour or silence alone. */
+  const [basketError, setBasketError] = useState<string | null>(null);
+
+  const atMax = quantity >= BASKET_LIMITS.maxLineQuantity;
 
   const needsText = product.personalisation_mode === "text";
   const label = product.personalisation_label ?? "Text to print";
@@ -68,7 +74,7 @@ export function ProductBuy({ product }: { product: Product }) {
     }
     setTextError(null);
 
-    add({
+    const result = add({
       product_id: product.id,
       slug: product.slug,
       name: product.short_name,
@@ -82,6 +88,30 @@ export function ProductBuy({ product }: { product: Product }) {
       is_personalised: needsText,
       personalisation_text: needsText ? personalText.trim() : null,
     });
+
+    /*
+     * The basket enforces the same caps checkout does, so `add` can take less
+     * than it was asked for — or nothing at all. Reporting that is the whole
+     * point: before this, a basket built past either cap reached checkout and
+     * came back as a blanket "Invalid basket." with no way to tell which line
+     * was the problem, and the cart's postage quote silently fell back to
+     * "Calculated at checkout" with no total and no reason given.
+     */
+    if (result === "full") {
+      setBasketError(
+        `Your basket already holds ${BASKET_LIMITS.maxLines} different items, which is ` +
+          "the most one order can carry. Check out what you have, or remove " +
+          "something to make room.",
+      );
+      return false;
+    }
+    setBasketError(
+      result === "clamped"
+        ? `Your basket now holds ${BASKET_LIMITS.maxLineQuantity} of this — the most we ` +
+            "can print of one item in a single order."
+        : null,
+    );
+
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
     return true;
@@ -187,9 +217,16 @@ export function ProductBuy({ product }: { product: Product }) {
           <button
             type="button"
             onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-            disabled={quantity <= 1}
+            /* `aria-disabled`, not `disabled`, for the same reason as the +
+               button below: pressing it at 2 takes the quantity to 1, and a
+               `disabled` button leaves the tab order in that instant, dropping
+               the keyboard user's focus to the body mid-task. */
+            aria-disabled={quantity <= 1 || undefined}
             aria-label="Decrease quantity"
-            className="flex h-12 w-12 items-center justify-center disabled:opacity-40"
+            className={cx(
+              "flex h-12 w-12 items-center justify-center",
+              quantity <= 1 && "opacity-40",
+            )}
           >
             <Icon name="minus" size={16} />
           </button>
@@ -198,9 +235,19 @@ export function ProductBuy({ product }: { product: Product }) {
           </span>
           <button
             type="button"
-            onClick={() => setQuantity((q) => Math.min(20, q + 1))}
+            /* No-op at the cap rather than `disabled`: a disabled button leaves
+               the tab order the instant it is pressed, so a keyboard user loses
+               focus to the body and never hears why nothing happened. */
+            onClick={() =>
+              setQuantity((q) => Math.min(BASKET_LIMITS.maxLineQuantity, q + 1))
+            }
+            aria-disabled={atMax || undefined}
+            aria-describedby={atMax ? capNoteId : undefined}
             aria-label="Increase quantity"
-            className="flex h-12 w-12 items-center justify-center"
+            className={cx(
+              "flex h-12 w-12 items-center justify-center",
+              atMax && "opacity-40",
+            )}
           >
             <Icon name="plus" size={16} />
           </button>
@@ -225,6 +272,21 @@ export function ProductBuy({ product }: { product: Product }) {
           )}
         </Button>
       </div>
+
+      {/* Only rendered at the cap, so nothing moves until it is reached. */}
+      {atMax ? (
+        <p id={capNoteId} role="status" className="mt-3 text-xs text-muted">
+          {BASKET_LIMITS.maxLineQuantity} is the most we can print of one item in a
+          single order. Need more? Get in touch and we&apos;ll sort it out.
+        </p>
+      ) : null}
+
+      {basketError ? (
+        <p role="alert" className="mt-3 text-xs font-semibold text-danger">
+          <span className="sr-only">Error: </span>
+          {basketError}
+        </p>
+      ) : null}
 
       <Button
         variant="ghost"

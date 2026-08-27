@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { ProductArt } from "@/components/ProductArt";
 import { ProductGrid } from "@/components/product/ProductCard";
 import {
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
 import {
+  BASKET_LIMITS,
   isFreeShipping,
   PAYMENT_BADGES,
   PRINT_LEAD_TIME,
@@ -59,6 +60,12 @@ function postageText(cents: number | null): string {
 
 function LineRow({ line }: { line: CartLine }) {
   const { setQuantity, remove } = useCart();
+  // Client component, so a hook id is safe and is stable across renders. A
+  // line's `key` is built from colour and free-text personalisation and is not
+  // usable as a DOM id.
+  const capNoteId = useId();
+
+  const atMax = line.quantity >= BASKET_LIMITS.maxLineQuantity;
 
   const variant = [
     line.colour,
@@ -105,19 +112,41 @@ function LineRow({ line }: { line: CartLine }) {
             <button
               type="button"
               onClick={() => setQuantity(line.key, line.quantity - 1)}
-              aria-label={`Decrease quantity of ${line.name}`}
+              /* At one, this button empties the line rather than decreasing it.
+                 Saying "decrease" there describes something the click does not
+                 do, and removal is not an action to take by surprise. */
+              aria-label={
+                line.quantity <= 1
+                  ? `Remove ${line.name} from your basket`
+                  : `Decrease quantity of ${line.name}`
+              }
               className="flex h-11 w-11 items-center justify-center"
             >
               <Icon name="minus" size={15} />
             </button>
-            <span className="w-8 text-center text-[15px] font-bold">
+            <span
+              aria-live="polite"
+              className="w-8 text-center text-[15px] font-bold"
+            >
               {line.quantity}
             </span>
             <button
               type="button"
-              onClick={() => setQuantity(line.key, line.quantity + 1)}
+              /* No-op at the cap rather than `disabled`. A disabled button
+                 drops out of the tab order the moment it is pressed, so the
+                 keyboard user who reached the limit loses focus to the body
+                 and never hears why nothing happened. `aria-disabled` keeps it
+                 focusable and points at the note that says what the limit is. */
+              onClick={() => {
+                if (!atMax) setQuantity(line.key, line.quantity + 1);
+              }}
+              aria-disabled={atMax || undefined}
+              aria-describedby={atMax ? capNoteId : undefined}
               aria-label={`Increase quantity of ${line.name}`}
-              className="flex h-11 w-11 items-center justify-center"
+              className={cx(
+                "flex h-11 w-11 items-center justify-center",
+                atMax && "opacity-40",
+              )}
             >
               <Icon name="plus" size={15} />
             </button>
@@ -126,13 +155,25 @@ function LineRow({ line }: { line: CartLine }) {
           <button
             type="button"
             onClick={() => remove(line.key)}
-            className="flex items-center gap-1.5 text-[13px] text-muted hover:text-danger"
+            /* min-h-11 gives this a 44px tap target on a phone without moving
+               anything: the row is already 44px tall because of the stepper. */
+            className="flex min-h-11 items-center gap-1.5 text-[13px] text-muted hover:text-danger"
           >
             <Icon name="trash" size={15} />
             Remove
             <span className="sr-only"> {line.name}</span>
           </button>
         </div>
+
+        {/* Only rendered at the cap, so nothing moves until it is reached.
+            `role="status"` announces it on arrival; `aria-describedby` above
+            reads it again to anyone who tabs back onto the + button. */}
+        {atMax ? (
+          <p id={capNoteId} role="status" className="mt-2 text-xs text-muted">
+            {BASKET_LIMITS.maxLineQuantity} is the most we can print of one item in a
+            single order. Need more? Get in touch and we&apos;ll sort it out.
+          </p>
+        ) : null}
       </div>
     </div>
   );
