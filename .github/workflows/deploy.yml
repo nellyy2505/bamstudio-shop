@@ -70,6 +70,15 @@
 #   new page that reads a column the database does not have is a 500 for a
 #   customer, whereas a column nothing reads yet is harmless.
 #
+#   ⚠️ A RED ✗ ON THIS WORKFLOW IS NOT ALWAYS A BREAKAGE. The migrate job stops
+#   for two different reasons and it says which, in a panel at the top of the
+#   run page: "⏸️ Action needed" means everything works and it is waiting on
+#   you (a backup confirmed, a setting added) and your database was not
+#   touched; "❌ Migration failed" means something is genuinely wrong. Both are
+#   red and both stop the rollout, because the only thing a green tick here may
+#   ever mean is "the database and the code agree". Read the panel, not the
+#   cross. The full reasoning is in scripts/migrate.sh under "WHEN IT REFUSES".
+#
 #   ⚠️ THE CONSEQUENCE YOU HAVE TO DESIGN FOR. Fly does a rolling deploy: for
 #   about a minute the OLD code is still serving requests against the NEW
 #   database. So every migration must be one the code that is ALREADY LIVE can

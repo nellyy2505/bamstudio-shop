@@ -198,8 +198,8 @@ Then run it again, this time:
 | **I have taken a backup** | ✅ tick — you did, at step 7 |
 | **numbers already run by hand** | `0001 0002 0003 0004` |
 
-That tells your database "you have already had those three, do not run them
-again", then runs `0004`, `0005`, `0006` and `0007`, then checks all 126
+That tells your database "you have already had those four, do not run them
+again", then runs `0005`, `0006` and `0007`, then checks all 126
 assertions and goes red if any of them fails. **Green means done.**
 
 > **Four numbers, and why exactly these four.** `0001` to `0004` are the ones
@@ -209,6 +209,27 @@ assertions and goes red if any of them fails. **Green means done.**
 > ran and its change is lost for good; leave out one that did run and it is
 > applied a second time. `0005`, `0006` and `0007` are **not** in the list,
 > because they have never been run — they are what this first run applies.
+
+> **A red ✗ here is not always a breakage — read the panel, not the cross.**
+> This is the thing that caught you out on the first real run: the backup gate
+> did its job, changed nothing, and still showed a red ✗ that looked exactly
+> like a broken migration.
+>
+> Every run now puts a panel at the **top of the run page, above the log**, and
+> it is one of two things:
+>
+> | What you see | What it means |
+> |---|---|
+> | ⏸️ **Action needed — nothing in your database was changed** | Nothing is wrong. It is waiting on something only you can give it — tick the backup box, add the secret. It names the one step. Do it, run again, it goes green. |
+> | ❌ **Migration failed** | Something is genuinely wrong: a migration file is misnamed, the database could not be reached, or one of the 126 checks came back false. The panel says whether your database had already been changed before it stopped. |
+>
+> Both are red and both stop the deploy, and that is deliberate. A green tick
+> next to "nothing was migrated" is how a database and the code that reads it
+> quietly drift apart — so the run stays red until the database and the code
+> agree. Green here only ever means *both* halves are done.
+>
+> There is a coloured banner in the run's header saying the same thing in one
+> line: blue for "action needed", red for "failed".
 
 **`0001 0002 0003 0004` goes in that box exactly once, ever.** After this first
 run your database keeps its own list of what it has had. From then on you leave
@@ -253,9 +274,54 @@ nothing at risk:
 
 That builds a throwaway PostgreSQL database on your machine, makes it look like
 your live one, and then runs **the same script GitHub runs**, so you watch the
-real thing happen somewhere it cannot hurt. It needs PostgreSQL 16 and the
-Supabase CLI installed locally (`apt install postgresql-16`,
-`npm install -g supabase`).
+real thing happen somewhere it cannot hurt. It needs the Supabase CLI
+(`npm install -g supabase`) and a local PostgreSQL — see just below for which.
+
+#### Which PostgreSQL the checks run against, and why it matters
+
+**PostgreSQL 17, because that is what your Supabase database runs.** Every run
+of `scripts/migrate.sh` prints the live server's version; on 27 August 2026 it
+printed `PostgreSQL 17.6`.
+
+That sounds obvious and it was wrong until now. `scripts/verify-sql.sh` stood up
+PostgreSQL **16** and refused to run against anything else, so all 126
+assertions had only ever been proved on a version your shop does not use. Nobody
+chose that — 16 was what happened to be installed the day it was written. It is
+the same shape of mistake this project has now made three times: a stand-in that
+does not reproduce the real platform, printing green about a database the schema
+never ships to.
+
+So the version is no longer buried in the script:
+
+```bash
+./scripts/verify-sql.sh                  # PostgreSQL 17 — what you actually run
+./scripts/verify-sql.sh --pg-version 16  # the old target, for comparison
+./scripts/verify-sql.sh --both           # 16 then 17, back to back
+```
+
+Every run **prints the version it is testing against, in its first line and its
+last**, and says whether that is the one production uses. If you ask for a
+version that is not installed it stops and tells you how to install it — it will
+never quietly test a different one, because quietly testing a different one is
+what went wrong.
+
+Installing 17 on Ubuntu needs PostgreSQL's own package repository; Ubuntu's own
+stops at 16. `./scripts/verify-sql.sh` prints the exact commands if it cannot
+find it. On a Mac: `brew install postgresql@17`.
+
+**When 17 was first run, on 27 August 2026, nothing behaved differently.** All
+126 assertions returned `t` on both 16 and 17, in the same order with the same
+labels; the seven migrations, the seed and `verify.sql` produced identical
+output on both; and the two things most likely to differ between versions — the
+search index column and the way search results are ranked — produced identical
+results down to the byte. Nothing needed fixing. The harness targets 17 anyway,
+because matching your database is not something you only bother with once a
+difference has already cost you an afternoon.
+
+If `migrate.sh` ever prints a major version other than 17 against your live
+database — Supabase upgrading you to 18, say — that is the moment to change
+`PROD_PG_MAJOR` at the top of `scripts/verify-sql.sh` to match. It is one line,
+and it is the only place that fact is written down.
 
 Check **Table Editor → products** whenever you like: each row has
 `weight_grams`, `length_mm`, `width_mm`, `thickness_mm` and `letter_eligible`.
@@ -1260,6 +1326,23 @@ items as non-returnable except when faulty, and the privacy policy's list of
 who your customers' data is shared with.
 
 ## Troubleshooting
+
+### "There was an error when I pushed" — check whether it actually was one
+
+Open the run in the **Actions** tab and look at the **panel at the top of the
+page**, above the log.
+
+- **⏸️ Action needed — nothing in your database was changed.** Not an error.
+  The system stopped on purpose and is waiting for you. The panel names the one
+  thing to do — usually ticking **I have taken a backup**. Do it, run again.
+- **❌ Migration failed.** A real problem. The panel says what, and whether your
+  database was changed before it stopped. Your shop is still serving the version
+  it was serving before either way — nothing is deployed when this is red.
+
+Both look identical in the list of runs, because both are a red ✗ and both stop
+the deploy. The cross only ever means "the new code was not rolled out". The
+panel is the message.
+
 
 **Products don't load / the shop shows the same few items**
 Supabase env vars are missing or wrong, so the fallback catalogue is showing.

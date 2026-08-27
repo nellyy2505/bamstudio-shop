@@ -50,6 +50,30 @@
 #   This is a DIFFERENT thing from the values in deploy.yml. Those describe
 #   the shop to the browser. This one is the key to the filing cabinet.
 #
+# A RED ✗ IS NOT ALWAYS A BREAKAGE — READ THE PANEL, NOT THE CROSS
+#
+#   This workflow stops for two different reasons and it now says which, in a
+#   panel at the TOP of the run page, above the log:
+#
+#     ⏸️ Action needed — nothing in your database was changed.
+#        Everything works. It is waiting on something only you can give it: a
+#        backup confirmed, or a setting added. Do the one step the panel names
+#        and run it again.
+#
+#     ❌ Migration failed — something is genuinely wrong.
+#        A migration file is misnamed, the database cannot be reached, or one
+#        of the 126 schema checks came back false. The panel says whether your
+#        database had already been changed before it stopped.
+#
+#   Both show a red ✗ in the list of runs, and both stop the deploy. That is on
+#   purpose — see "WHY A REQUEST STILL FAILS THE RUN" in scripts/migrate.sh.
+#   The cross only means "the code was not rolled out". The panel is the message.
+#
+#   This exists because the first real run against the live database hit the
+#   backup gate, worked perfectly, changed nothing — and was reported as "error
+#   when push", because a correct refusal and a broken migration looked
+#   identical from the outside.
+#
 # WHAT IS DELIBERATELY *NOT* HERE
 #   SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY and the rest still live only
 #   on Fly (`fly secrets set ...`). Migrations do not need them, and this
@@ -136,17 +160,44 @@ jobs:
           fi
           psql --version
 
+      # A missing secret is a REQUEST, not a failure: nothing is broken and
+      # nothing has been touched, the workflow simply has not been told which
+      # database to talk to. It gets the same blue "Action needed" treatment
+      # scripts/migrate.sh gives its own requests, so the two are consistent
+      # wherever the stop happens to come from.
       - name: Check the database secret exists
         shell: bash
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::notice title=Action needed - nothing was changed::SUPABASE_DB_URL has not been added yet. Next: Settings -> Secrets and variables -> Actions -> Secrets."
             echo "MISSING: SUPABASE_DB_URL"
             echo
             echo "Add it under Settings -> Secrets and variables -> Actions -> Secrets."
             echo "Get the value from Supabase: your project -> Connect -> Session pooler."
             echo "See the notes at the top of .github/workflows/migrate.yml."
+            {
+              echo "## ⏸️ Action needed — nothing in your database was changed"
+              echo
+              echo "**The setting that says which database to use has not been added yet.**"
+              echo
+              echo "### Do this next"
+              echo
+              echo "1. **Settings → Secrets and variables → Actions → Secrets tab → New repository secret**"
+              echo "2. Name it \`SUPABASE_DB_URL\`"
+              echo "3. For the value: Supabase dashboard → your project → **Connect** → **Session pooler** → copy the URI, and paste your database password where it says \`[YOUR-PASSWORD]\`"
+              echo
+              echo "It must be the **Session pooler** URI, not \"Direct connection\" — the direct one"
+              echo "answers on IPv6 only and GitHub's machines are IPv4 only."
+              echo
+              echo "---"
+              echo
+              echo "**This run is marked ✗ on purpose, and nothing is broken.** Add the secret and run it again."
+            } >> "$GITHUB_STEP_SUMMARY"
+            # Tell the summary step below that this stop has already been
+            # explained, so it does not append a second, contradicting panel.
+            echo request > "$RUNNER_TEMP/migrate-outcome"
             exit 1
           fi
           echo "SUPABASE_DB_URL is present."
@@ -163,6 +214,10 @@ jobs:
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           MIGRATE_ACK_BACKUP: ${{ (inputs.ack_backup && 'yes') || 'no' }}
+          # Where the script records which KIND of stop this was, for the
+          # summary step below. Named explicitly rather than left to the
+          # script's $RUNNER_TEMP default, so both halves name one path.
+          MIGRATE_OUTCOME_FILE: ${{ runner.temp }}/migrate-outcome
           BASELINE: ${{ inputs.baseline }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
@@ -181,19 +236,45 @@ jobs:
           fi
           ./scripts/migrate.sh ${args[@]+"${args[@]}"}
 
-      - name: Say what happened
+      # A FALLBACK, and only that. scripts/migrate.sh writes its own panel —
+      # a precise one that knows whether this was a request or a failure and
+      # whether the database was touched — and drops a note in
+      # $MIGRATE_OUTCOME_FILE to say so. This step must not append a second,
+      # vaguer panel underneath a good one: two panels disagreeing about what
+      # happened is the confusion this whole change exists to remove.
+      #
+      # It fires when the job died BEFORE the script could explain itself —
+      # a checkout that failed, the Supabase CLI action erroring, the runner
+      # being cancelled. Those have no panel of their own, and a run page with
+      # no explanation at all is exactly what we are getting rid of.
+      - name: Say what happened, if the script could not
         if: always()
         shell: bash
         run: |
+          if [ -s "$RUNNER_TEMP/migrate-outcome" ]; then
+            echo "Outcome already reported by the step that produced it: $(cat "$RUNNER_TEMP/migrate-outcome")"
+            exit 0
+          fi
+
           if [ "${{ job.status }}" = "success" ]; then
             echo "### Database is up to date and all assertions passed" >> "$GITHUB_STEP_SUMMARY"
-          else
-            {
-              echo "### Migration or verification FAILED — nothing was deployed"
-              echo
-              echo "Open the **Migrate and verify** step above and read the last"
-              echo "twenty lines. It names what went wrong."
-              echo
-              echo "The shop is still running the version it was running before."
-            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+
+          echo "::error title=Migration FAILED before it could explain itself::The job stopped before scripts/migrate.sh ran. Open the failed step and read its log."
+          {
+            echo "## ❌ The run stopped before the migration script could say why"
+            echo
+            echo "This is **not** one of the ordinary stops — those explain themselves in a"
+            echo "panel of their own. Something failed earlier: the checkout, installing the"
+            echo "Supabase tool, or the run being cancelled."
+            echo
+            echo "### Do this next"
+            echo
+            echo "Open the step above with the red ✗ and read the last twenty lines of it."
+            echo
+            echo "---"
+            echo
+            echo "**Nothing was deployed.** The shop is still running the version it was"
+            echo "running before, and in all likelihood your database was never reached."
+          } >> "$GITHUB_STEP_SUMMARY"
