@@ -30,6 +30,11 @@ const INVITE_WORDS: Record<InvitationRow["state"], string> = {
   expired: "expired",
 };
 
+// Without its own title a page falls back to the layout default, so seven
+// studio screens all read "Studio · Bam Studio" in the tab and a person with
+// three of them open cannot tell which is which.
+export const metadata = { title: "Studio access · Studio" };
+
 export default async function AccessPage() {
   const me = await requireStaff("access");
 

@@ -13,6 +13,11 @@ import { money } from "@/lib/format";
  * dressed up as a statistic. Everything on this page is a count from the
  * database at request time.
  */
+// Without its own title a page falls back to the layout default, so seven
+// studio screens all read "Studio · Bam Studio" in the tab and a person with
+// three of them open cannot tell which is which.
+export const metadata = { title: "Overview · Studio" };
+
 export default async function AdminOverviewPage() {
   const staff = await requireStaff();
 

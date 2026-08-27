@@ -17,6 +17,11 @@ import { getReports } from "../data";
  * says less than two months of data written as a table, and it says it less
  * honestly — the eye reads a trend into a slope that is one order wide.
  */
+// Without its own title a page falls back to the layout default, so seven
+// studio screens all read "Studio · Bam Studio" in the tab and a person with
+// three of them open cannot tell which is which.
+export const metadata = { title: "Reports · Studio" };
+
 export default async function ReportsPage() {
   await requireStaff("reports");
 

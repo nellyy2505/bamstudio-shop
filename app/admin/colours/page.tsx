@@ -21,6 +21,11 @@ import { Field, Pill, cx, inputClass } from "@/components/ui";
  *      invalid HTML, and the browser silently drops the inner one, so the
  *      count would look like it saved and never leave the page.
  */
+// Without its own title a page falls back to the layout default, so seven
+// studio screens all read "Studio · Bam Studio" in the tab and a person with
+// three of them open cannot tell which is which.
+export const metadata = { title: "Colours · Studio" };
+
 export default async function ColoursPage() {
   const staff = await requireStaff("colours");
 

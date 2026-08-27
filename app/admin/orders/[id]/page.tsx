@@ -38,6 +38,11 @@ const STATUS_STEPS = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+// Without its own title a page falls back to the layout default, so seven
+// studio screens all read "Studio · Bam Studio" in the tab and a person with
+// three of them open cannot tell which is which.
+export const metadata = { title: "Order · Studio" };
+
 export default async function OrderDetailPage({
   params,
 }: {

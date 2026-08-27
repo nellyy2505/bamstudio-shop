@@ -43,6 +43,11 @@ async function loadAllProducts(): Promise<{ rows: ProductRow[]; capped: boolean 
   return { rows, capped: true };
 }
 
+// Without its own title a page falls back to the layout default, so seven
+// studio screens all read "Studio · Bam Studio" in the tab and a person with
+// three of them open cannot tell which is which.
+export const metadata = { title: "Record a sale · Studio" };
+
 export default async function RecordSalePage() {
   await requireStaff("orders");
 
