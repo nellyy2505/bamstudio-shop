@@ -1,18 +1,25 @@
 -- Schema smoke test.
 --
--- Run this in the Supabase SQL editor after applying 0001_init.sql,
--- 0002_shipping.sql and seed.sql. It returns ONE table of 45 rows and every
--- `pass` must be `t`. These are the guarantees that only fail in production —
--- a missing grant here means paid orders are never recorded, and you would
--- first hear about it from a customer.
+-- Run this in the Supabase SQL editor after applying every file in
+-- supabase/migrations/ in order and then seed.sql. It returns ONE table of 52
+-- rows and every `pass` must be `t`. These are the guarantees that only fail
+-- in production — a missing grant here means paid orders are never recorded,
+-- and you would first hear about it from a customer.
 --
--- Count the rows as well as the ticks. 45 rows means all three migrations
--- are applied; 29 rows all `t` would be a green result that never looked at
--- the staff area, and 24 that never looked at shipping either.
+-- Count the rows as well as the ticks. This file has grown with the schema —
+-- 24 assertions, then 29 with shipping, 50 with the staff area, 52 with the
+-- letter_eligible default — so a shorter table than 52 means an older copy of
+-- this file, and an older copy is a green result that never looked at part of
+-- the schema. That reads like a pass and is not one.
 --
--- It writes four throwaway orders (and one order item) inside a transaction it
--- rolls back, so it is safe to run against a live database, though quiet hours
--- are still kinder.
+-- A migration that is not applied does not shorten the table, it stops the run:
+-- the first assertion that names a missing object raises instead of returning
+-- `f`. `scripts/verify-sql.sh` applies every file in supabase/migrations/
+-- rather than a hand-written list, because the list fell behind twice.
+--
+-- It writes four throwaway orders (one with an order item) and one throwaway
+-- product inside a transaction it rolls back, so it is safe to run against a
+-- live database, though quiet hours are still kinder.
 
 begin;
 
@@ -326,6 +333,38 @@ select 'a colour in use cannot be deleted',
                   and contype = 'f' and confdeltype = 'r'
                   and confrelid = 'public.colours'::regclass);
 
+-- 0004_letter_eligible_default.sql. `letter_eligible` decides whether an item
+-- is quoted as a $3.40 untracked Large Letter or a ~$10.20 tracked parcel, and
+-- lib/shipping/weights.ts is written on the assumption that an unstated value
+-- means parcel. 0002 shipped the column defaulting to `true`, so a row typed
+-- into the Supabase table editor arrived claiming cheap postage for something
+-- nobody had measured. These two rows are the proof that is closed.
+--
+-- Two assertions rather than one because they fail for different reasons. The
+-- first reads the declared default, so it catches a migration that changes it.
+-- The second inserts a row the way the table editor does — every shipping
+-- column left alone — so it catches a trigger, a rule or a rewritten column
+-- that produces `true` while the catalogue still says `false`.
+insert into public.products
+  (slug, sku, name, short_name, category, theme, art, tint, price, rating)
+values
+  -- rating 0 on purpose: the column defaults to 5.0 and 'no fabricated
+  -- ratings' above counts any product with a rating. That check has already
+  -- run by this point, but a row that would break it if this block were ever
+  -- moved is a trap, not a test.
+  ('verify-default-probe', 'VERIFY-000', 'Verify default probe', 'Probe',
+   'Clicker keychain', 'mono', 'clicker', 'sky', 100, 0);
+
+insert into _checks (check_name, pass)
+select 'new products default to parcel' as check,
+       (select column_default from information_schema.columns
+         where table_schema = 'public' and table_name = 'products'
+           and column_name = 'letter_eligible') = 'false' as pass
+union all
+select 'a hand-added product is not letter-eligible',
+       (select letter_eligible from public.products
+         where slug = 'verify-default-probe') = false;
+
 -- Search is bounded: a lone wildcard must not match the whole catalogue.
 insert into _checks (check_name, pass)
 select 'search rejects a bare wildcard' as check,
@@ -334,7 +373,7 @@ union all
 select 'search ignores empty input',
        (select count(*) from public.search_products('   ')) = 0;
 
--- Every assertion, in one result set. `pass` must be `t` on all 45 rows.
+-- Every assertion, in one result set. `pass` must be `t` on all 52 rows.
 select check_name as check, pass from _checks order by ord;
 
 rollback;

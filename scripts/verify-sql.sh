@@ -22,6 +22,15 @@ set -euo pipefail
 
 # Everything the harness owns lives outside the repo: the cluster is disposable
 # scaffolding, not a project artefact, and must never end up in a commit.
+#
+# BOTH $PGWORK AND THE CHECKOUT MUST BE REACHABLE BY THE `postgres` USER.
+# Every server-side command runs as `postgres` (see as_postgres below), and the
+# migrations are read by the *server process*, not by the caller. A checkout
+# under a 0700 home directory — /root on a stock container is exactly that —
+# fails with a bare "Permission denied" on the first `psql -f`, which reads
+# like a missing file and is not. Either check the repo out somewhere
+# traversable, or `chmod o+x` the directories above it and set
+# `PGWORK=/var/tmp/pgwork`.
 PGBIN="${PGBIN:-/usr/lib/postgresql/16/bin}"
 PGWORK="${PGWORK:-/root/pgwork}"
 PGDATA="${PGDATA:-$PGWORK/data}"
@@ -183,22 +192,56 @@ SQL
 
 printf '%s\n' "$PREREQ_SQL" | psql_run "-d $DBNAME -q -f -" >/dev/null
 
-echo "==> applying supabase/migrations/0001_init.sql"
+# ------------------------------------------------------------- migrations
+# Every .sql in supabase/migrations/, in filename order, with no list to keep
+# in step. The list used to be written out here by hand, and it fell behind
+# twice: `0002_shipping.sql` sat unapplied for two rounds while `verify.sql`
+# asserted against it, so the run stopped at `products.weight_grams` and the
+# 29 shipping assertions were never executed. A hand-maintained list makes
+# adding a migration a two-file change, and the file nobody remembers is this
+# one — the failure is silent because a migration that is never applied cannot
+# fail, it just takes its assertions with it.
+#
 # NB: CLAUDE.md and WORKLOG.md both say to pipe `schema.sql` — no such file
-# exists. The migration IS the schema; that is what gets applied here.
-psql_run "-d $DBNAME -q -f '$SQL_DIR/migrations/0001_init.sql'" >/dev/null
+# exists. The migrations ARE the schema; that is what gets applied here.
+#
+# Numeric prefixes and `LC_ALL=C` together make the order the same everywhere:
+# a glob sorts by the collation in force, and en_US.UTF-8 does not sort ASCII
+# the way C does. Order is not cosmetic here — 0002 and 0003 both ALTER tables
+# 0001 creates.
+# nullglob so an empty directory yields an empty array rather than the literal
+# pattern. The glob is collected into an array first and only then piped to
+# sort: piping the unexpanded glob straight into `printf` would print one blank
+# line when it matched nothing, the read loop would take that blank line for a
+# migration, and the empty-directory check below would pass on a list holding
+# one empty filename.
+shopt -s nullglob
+MIGRATION_FILES=("$SQL_DIR"/migrations/*.sql)
+shopt -u nullglob
 
-# 0002 adds the shipping columns and the rate cache. verify.sql asserts against
-# both migrations, so skipping this one makes the harness fail on
-# `products.weight_grams` rather than on anything real.
-echo "==> applying supabase/migrations/0002_shipping.sql"
-psql_run "-d $DBNAME -q -f '$SQL_DIR/migrations/0002_shipping.sql'" >/dev/null
+MIGRATIONS=()
+if [ "${#MIGRATION_FILES[@]}" -gt 0 ]; then
+  while IFS= read -r m; do
+    MIGRATIONS+=("$m")
+  done < <(printf '%s\n' "${MIGRATION_FILES[@]}" | LC_ALL=C sort)
+fi
 
-# 0003 adds the staff area: roles, invitations, the colour palette and the
-# costing settings. Its assertions are the ones that prove a customer cannot
-# make themselves an admin, so a run that skips it proves nothing about that.
-echo "==> applying supabase/migrations/0003_admin.sql"
-psql_run "-d $DBNAME -q -f '$SQL_DIR/migrations/0003_admin.sql'" >/dev/null
+# An empty migrations directory means a bad checkout or a wrong path, not a
+# database with nothing in it. Applying the seed on top of no schema would
+# fail confusingly several steps later.
+if [ "${#MIGRATIONS[@]}" -eq 0 ]; then
+  echo "ERROR: no migrations found in $SQL_DIR/migrations" >&2
+  exit 2
+fi
+
+for m in "${MIGRATIONS[@]}"; do
+  echo "==> applying supabase/migrations/$(basename "$m")"
+  psql_run "-d $DBNAME -q -f '$m'" >/dev/null
+done
+
+# Printed so a run says out loud how many migrations it applied. A drop in
+# this number between two runs is the signature of the failure above.
+echo "==> applied ${#MIGRATIONS[@]} migration(s)"
 
 echo "==> applying supabase/seed.sql"
 psql_run "-d $DBNAME -q -f '$SQL_DIR/seed.sql'" >/dev/null
