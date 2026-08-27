@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { BASKET_LIMITS, BUILDER_MAX_LETTERS, SHIPPING } from "@/lib/config";
-import { loadProductsBySlug } from "@/lib/queries";
+import { loadProductsBySlug, loadScoopTiersBySlug } from "@/lib/queries";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { toShippingLines } from "@/lib/shipping/lines";
+import { toScoopShippingLines } from "@/lib/scoop-line";
 import { quoteBasket } from "@/lib/shipping/quote";
 
 export const runtime = "nodejs";
@@ -48,13 +49,43 @@ const LineSchema = z.object({
     .optional(),
 });
 
-const BodySchema = z.object({
-  // The same two caps checkout enforces, from the same place — see
-  // BASKET_LIMITS in lib/config.ts. If this schema and checkout's ever
-  // disagreed, a basket would quote here and then be refused at payment, or
-  // quote as "Calculated at checkout" and then go through.
-  lines: z.array(LineSchema).min(1).max(BASKET_LIMITS.maxLines),
+/**
+ * A Lucky Scoop line. Slug and quantity, and nothing else — a scoop has no
+ * colour, no finding and no letters, and its weight comes from the TIER row the
+ * server loads, never from the browser.
+ *
+ * Separate from `LineSchema` rather than folded into it, because the two
+ * resolve against different tables. `scoop_tiers.slug` and `products.slug` are
+ * separate unique indexes; the same string can legitimately exist in both, and
+ * a single array of bare slugs would leave this route guessing which table a
+ * line meant — with "guessed wrong" costing a weight, and therefore a postage
+ * price, taken from the wrong object.
+ */
+const ScoopLineSchema = z.object({
+  slug: z.string().min(1).max(120),
+  quantity: z.number().int().min(1).max(BASKET_LIMITS.maxLineQuantity),
 });
+
+const BodySchema = z
+  .object({
+    // The same two caps checkout enforces, from the same place — see
+    // BASKET_LIMITS in lib/config.ts. If this schema and checkout's ever
+    // disagreed, a basket would quote here and then be refused at payment, or
+    // quote as "Calculated at checkout" and then go through.
+    //
+    // `min(1)` has moved off the array and onto the refinement below: a basket
+    // holding only scoops has no product lines at all, and neither array being
+    // required to be non-empty on its own is what lets that basket quote. The
+    // cap is on the TOTAL for the same reason — forty of each is eighty lines,
+    // which checkout would refuse after the customer had been shown a price.
+    lines: z.array(LineSchema).default([]),
+    scoop_lines: z.array(ScoopLineSchema).default([]),
+  })
+  .refine(
+    (body) =>
+      body.lines.length + body.scoop_lines.length >= 1 &&
+      body.lines.length + body.scoop_lines.length <= BASKET_LIMITS.maxLines,
+  );
 
 export async function POST(request: Request) {
   // A cart re-quotes on every basket edit, so this is looser than checkout's
@@ -78,22 +109,48 @@ export async function POST(request: Request) {
     );
   }
 
-  const products = await loadProductsBySlug(body.lines.map((l) => l.slug));
-  const lines = toShippingLines(body.lines, products);
+  const [products, tiers] = await Promise.all([
+    loadProductsBySlug(body.lines.map((l) => l.slug)),
+    loadScoopTiersBySlug(body.scoop_lines.map((l) => l.slug)),
+  ]);
 
   /*
-   * A line the server has no row for is dropped by toShippingLines(), and a
-   * basket that loses every line is an *empty* basket to quoteBasket() — which
+   * One basket, weighed as one package. The two builders differ only in which
+   * table a line's weight comes from — `toScoopShippingLines` explains why a
+   * scoop is always quoted as a parcel — and both hand back the same
+   * `ShippingLine` shape, so `quoteBasket()` remains the single entry point
+   * that checkout also calls.
+   *
+   * A SCOOP THAT HAS STOPPED BEING SELLABLE STILL QUOTES HERE, deliberately.
+   * `availability.sellable` is a decision about whether the shop may take money
+   * for a tier; it is not a fact about what the parcel weighs. Refusing to
+   * weigh an emptied bowl would replace a real postage figure with "calculated
+   * at checkout" and tell the customer nothing about the actual problem, which
+   * checkout then states plainly when they try to pay. Products behave the same
+   * way — an oversold one still quotes.
+   */
+  const lines = [
+    ...toShippingLines(body.lines, products),
+    ...toScoopShippingLines(body.scoop_lines, tiers),
+  ];
+
+  /*
+   * A line the server has no row for is dropped by the builders, and a basket
+   * that loses every line is an *empty* basket to quoteBasket() — which
    * correctly prices nothing at zero. That combination would have shown a
    * customer FREE postage for a basket of retired products, so refuse instead:
    * this basket cannot be measured, and "calculated at checkout" is the honest
    * thing for the cart to show.
    *
+   * A tier that RLS no longer publishes — deactivated, or unpriced again — is
+   * dropped by exactly the same arithmetic, which is the intended answer: an
+   * unpublished tier is not a thing whose postage can be quoted.
+   *
    * Checkout answers the same case with a 409 naming the product, and is the
    * surface that matters — no money can be taken here. Matching the status
    * keeps the two routes telling the same story about the same basket.
    */
-  if (lines.length !== body.lines.length) {
+  if (lines.length !== body.lines.length + body.scoop_lines.length) {
     return NextResponse.json(
       { error: "Something in your basket is no longer available." },
       { status: 409 },

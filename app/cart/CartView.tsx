@@ -14,7 +14,12 @@ import {
   SectionHead,
   cx,
 } from "@/components/ui";
-import { useCart } from "@/components/cart/CartProvider";
+import {
+  isProductLine,
+  isScoopLine,
+  useCart,
+  type BasketLine,
+} from "@/components/cart/CartProvider";
 import {
   BASKET_LIMITS,
   isFreeShipping,
@@ -26,8 +31,9 @@ import {
   transitRangeLabel,
 } from "@/lib/config";
 import type { QuotableLine } from "@/lib/shipping/lines";
+import { scoopVariantLabel } from "@/lib/scoop-line";
 import { gstComponent, money, pluralise } from "@/lib/format";
-import type { CartLine, Product, Tint } from "@/lib/types";
+import type { Product, Tint } from "@/lib/types";
 
 const TINT_BG: Record<Tint, string> = {
   blush: "bg-blush",
@@ -58,7 +64,7 @@ function postageText(cents: number | null): string {
   return cents === null ? "Calculated at checkout" : money(cents);
 }
 
-function LineRow({ line }: { line: CartLine }) {
+function LineRow({ line }: { line: BasketLine }) {
   const { setQuantity, remove } = useCart();
   // Client component, so a hook id is safe and is stable across renders. A
   // line's `key` is built from colour and free-text personalisation and is not
@@ -67,20 +73,30 @@ function LineRow({ line }: { line: CartLine }) {
 
   const atMax = line.quantity >= BASKET_LIMITS.maxLineQuantity;
 
-  const variant = [
-    line.colour,
-    line.attachment_label,
-    line.custom
-      ? `${line.custom.collection_name} · ${line.custom.letters}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const scoop = isScoopLine(line);
+  // A scoop's slug is its tier's, and tiers live under /scoop, not /product.
+  // Both are the row's own `slug`; only the prefix differs.
+  const href = scoop ? `/scoop/${line.slug}` : `/product/${line.slug}`;
+
+  // What the customer bought, in one line under the name. For a scoop that is
+  // the promise and nothing else — "5 pieces" — because at this moment nobody,
+  // the studio included, knows what will be in it.
+  const variant = scoop
+    ? scoopVariantLabel(line.piece_count)
+    : [
+        line.colour,
+        line.attachment_label,
+        line.custom
+          ? `${line.custom.collection_name} · ${line.custom.letters}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
   return (
     <div className="flex gap-4 border-b border-line py-5 sm:gap-5">
       <Link
-        href={`/product/${line.slug}`}
+        href={href}
         className={cx(
           "flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl sm:h-24 sm:w-24",
           TINT_BG[line.tint],
@@ -92,13 +108,24 @@ function LineRow({ line }: { line: CartLine }) {
       <div className="min-w-0 flex-1">
         <div className="flex justify-between gap-4">
           <div className="min-w-0">
-            <Link href={`/product/${line.slug}`} className="font-bold hover:text-accent-dark">
+            <Link href={href} className="font-bold hover:text-accent-dark">
               {line.name}
             </Link>
             {variant ? (
               <p className="mt-0.5 text-[13px] text-muted">{variant}</p>
             ) : null}
-            {line.is_personalised ? (
+            {/* Said in the basket rather than only on the tier page, because
+                this is the last screen before payment and "you do not choose
+                what is in it" is a term of the sale. No claim about a video:
+                whether every scoop is filmed is the owner's decision and is not
+                settled (0007_lucky_scoop.sql), and a promise made here would be
+                one the studio had never agreed to. */}
+            {scoop ? (
+              <p className="mt-1 text-xs text-faint">
+                Drawn by hand after you order — the pieces are a surprise
+              </p>
+            ) : null}
+            {!scoop && line.is_personalised ? (
               <p className="mt-1 text-xs text-faint">
                 Personalised — can only be returned if faulty
               </p>
@@ -215,8 +242,17 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
    * Serialised rather than passed as an array so the effect re-runs on a
    * genuine basket change and not on every render's new array identity.
    */
-  const basketSignature = JSON.stringify(
-    lines.map((line) => ({
+  /*
+   * A scoop has no product row and therefore no weight of its own; the TIER
+   * carries a worst-case packed weight, which is a different table and a
+   * different lookup on the server. So the two kinds of line are sent to the
+   * quote route in two arrays rather than one — the server can then load each
+   * from the table it actually lives in, and neither kind can be silently
+   * resolved against the wrong one. (`scoop_tiers.slug` and `products.slug` are
+   * separate unique indexes; nothing stops the same string existing in both.)
+   */
+  const basketSignature = JSON.stringify({
+    lines: lines.filter(isProductLine).map((line) => ({
       slug: line.slug,
       quantity: line.quantity,
       attachment_id: line.attachment_id ?? null,
@@ -224,11 +260,17 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
         ? { letters: line.custom.letters, with_charm: line.custom.with_charm }
         : null,
     })),
-  );
+    scoop_lines: lines
+      .filter(isScoopLine)
+      .map((line) => ({ slug: line.slug, quantity: line.quantity })),
+  });
 
   useEffect(() => {
-    const payload = JSON.parse(basketSignature) as QuotableLine[];
-    if (payload.length === 0) return;
+    const payload = JSON.parse(basketSignature) as {
+      lines: QuotableLine[];
+      scoop_lines: { slug: string; quantity: number }[];
+    };
+    if (payload.lines.length + payload.scoop_lines.length === 0) return;
 
     let stale = false;
 
@@ -237,7 +279,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
         const res = await fetch("/api/shipping/quote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lines: payload }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         // A basket edited twice in quick succession must not let the older
@@ -302,7 +344,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          lines: lines.map((line) => ({
+          lines: lines.filter(isProductLine).map((line) => ({
             product_id: line.product_id,
             slug: line.slug,
             colour: line.colour,
@@ -311,6 +353,20 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
             custom: line.custom,
             personalisation_text: line.personalisation_text ?? undefined,
           })),
+          /*
+           * Scoops go in their own array for the same reason they do in the
+           * quote above: a tier is a different table, and a line that says only
+           * "slug" cannot be resolved against the right one without being told
+           * which kind it is. The slug and the quantity are ALL that is sent —
+           * no price, no piece count, no weight. Checkout recomputes every one
+           * of those from the tier row, exactly as it recomputes a product's
+           * price, and refuses the tier outright if it is not sellable right
+           * now. What the browser is holding is a fortnight-old copy of a
+           * shop-editable row; it is a display value, never an input to a bill.
+           */
+          scoop_lines: lines
+            .filter(isScoopLine)
+            .map((line) => ({ slug: line.slug, quantity: line.quantity })),
           shipping_method: method,
           gift_note: giftNote || undefined,
         }),

@@ -33,7 +33,47 @@ type Personalisation = {
   with_charm?: boolean;
 };
 
-type DetailItem = OrderItem & { personalisation: Personalisation | null };
+type DetailItem = OrderItem & {
+  personalisation: Personalisation | null;
+  /**
+   * Set on a Lucky Scoop line and null on every other. The query already asks
+   * for `order_items(*)`, so this only teaches the type about a column the row
+   * has carried since 0007_lucky_scoop.sql.
+   *
+   * WHAT THIS PAGE SHOWS FOR A SCOOP, AND WHAT IT DELIBERATELY DOES NOT.
+   *
+   * It shows what was bought — "Pet scoop", "5 pieces", the price — which comes
+   * out of `product_name` and `variant_label` with no special handling, because
+   * the tier's name and its promise are exactly what the customer chose. This
+   * flag adds one sentence and nothing else: that the pieces are drawn after
+   * the order, so a line the customer cannot recognise the contents of does not
+   * read as a mistake on their receipt.
+   *
+   * It does NOT show what went in, once the studio has packed it, and that is a
+   * decision rather than an omission. Three reasons, in order of weight:
+   *
+   *  1. The contents live in `scoop_packs` / `scoop_pack_items`, which
+   *     0007_lucky_scoop.sql puts behind RLS with NO policy and an explicit
+   *     revoke — service_role in and out. Publishing them means granting a read
+   *     to `authenticated` and writing a policy that joins packs → order_items →
+   *     orders → user_id. That is a new door onto the table that records what
+   *     every named customer received, opened for a feature nobody has asked
+   *     for, and RLS on a three-table join is the sort of policy that is wrong
+   *     in a way nobody notices.
+   *  2. It would have to be built twice and one of the two cannot be built
+   *     safely. /track reaches the same order with an order number and an email
+   *     — a credential weak enough that `lookup_order`'s column list is treated
+   *     as a security boundary — so a customer who checked out as a guest could
+   *     only see it there, where it least belongs.
+   *  3. The parcel is the reveal. The scoop is a surprise that arrives in the
+   *     post; a page that listed the pieces the day before it landed would spoil
+   *     the thing that was sold, and the studio has a video for the telling.
+   *
+   * If this is ever revisited, the honest shape is a service-role read on a
+   * page already behind auth, not a widening of `lookup_order`.
+   */
+  scoop_tier_id: string | null;
+};
 
 type OrderRow = Omit<Order, "items"> & { order_items: DetailItem[] };
 
@@ -277,6 +317,15 @@ export default async function OrderDetailPage({
                   {item.variant_label ? (
                     <p className="mt-0.5 text-[13px] text-muted">
                       {item.variant_label}
+                    </p>
+                  ) : null}
+                  {item.scoop_tier_id ? (
+                    <p className="mt-1 text-[13px] text-muted">
+                      {/* No claim about a video, and none about returns: both
+                          are undecided (0007), and a receipt is the wrong place
+                          to decide them by implication. */}
+                      Drawn and packed by hand from this scoop&apos;s pool —
+                      the pieces are chosen after the order.
                     </p>
                   ) : null}
                   {item.personalisation?.letters ? (

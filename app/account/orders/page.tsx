@@ -70,6 +70,19 @@ function one(value: string | string[] | undefined): string | undefined {
 function reorderLines(items: OrderItemRow[]): Omit<CartLine, "key">[] {
   return items.flatMap((item) => {
     const product = firstOf(item.products);
+    /*
+     * A LUCKY SCOOP IS NOT RE-ORDERABLE HERE, and it drops out of this test
+     * rather than needing one of its own: a scoop line has no `product_id`, so
+     * the `products` embed is null and the line is skipped.
+     *
+     * That is the right answer and not merely a convenient one. "Buy again"
+     * restores the exact variant that was ordered, and there is no such thing
+     * for a scoop — the tier may since have been retired, re-priced or given a
+     * different pool, and the one thing that certainly cannot be repeated is
+     * the draw. Another scoop is bought from the tier page, where the price and
+     * the pool are the current ones and `availability.sellable` is asked before
+     * anything reaches a basket.
+     */
     if (!product || product.is_personalised) return [];
 
     const attachments = product.attachments ?? [];

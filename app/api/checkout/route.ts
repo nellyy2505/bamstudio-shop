@@ -6,6 +6,7 @@ import {
   getCollections,
   isDatabaseConfigured,
   loadProductsBySlug,
+  loadScoopTiersBySlug,
 } from "@/lib/queries";
 import {
   BASKET_LIMITS,
@@ -29,6 +30,12 @@ import { toShippingLines } from "@/lib/shipping/lines";
 // live in app/admin/actions.ts — every export from a "use server" file becomes
 // a callable HTTP endpoint.
 import { unitCostsAtSale } from "@/lib/cost-basis";
+import {
+  scoopArt,
+  scoopLineMetadata,
+  scoopVariantLabel,
+  toScoopShippingLines,
+} from "@/lib/scoop-line";
 import { quoteBasket } from "@/lib/shipping/quote";
 
 export const runtime = "nodejs";
@@ -56,17 +63,51 @@ const LineSchema = z.object({
     .optional(),
 });
 
-const BodySchema = z.object({
-  // Both caps come from lib/config.ts. They used to be literals here and in
-  // /api/shipping/quote, with a third transcription in the cart, and nothing
-  // held the three copies together — a basket the client would build and this
-  // schema would refuse comes back as a blanket "Invalid basket." naming no
-  // line. One definition, imported by every surface that has to respect it.
-  lines: z.array(LineSchema).min(1).max(BASKET_LIMITS.maxLines),
-  email: z.string().email().optional(),
-  shipping_method: z.enum(["standard", "express"]).default("standard"),
-  gift_note: z.string().max(500).optional(),
+/**
+ * A Lucky Scoop line. A slug and a quantity, and deliberately nothing else.
+ *
+ * There is no price here, no piece count and no weight, because there is
+ * nothing on this wire the server would believe: the tier row supplies all
+ * three, exactly as `products` supplies a product's price. Nor is there a
+ * colour, a finding or personalisation — a scoop has none of those, and a field
+ * that accepted one would invite a caller to think it might.
+ *
+ * Separate from `LineSchema` rather than folded into it. `scoop_tiers.slug` and
+ * `products.slug` are separate unique indexes on separate tables, so the same
+ * string may exist in both; one array of bare slugs would leave this route
+ * deciding which table a line meant, and deciding wrong charges a tier's price
+ * for a charm — or worse, decrements a charm for a tier.
+ */
+const ScoopLineSchema = z.object({
+  slug: z.string().min(1).max(120),
+  quantity: z.number().int().min(1).max(BASKET_LIMITS.maxLineQuantity),
 });
+
+const BodySchema = z
+  .object({
+    // Both caps come from lib/config.ts. They used to be literals here and in
+    // /api/shipping/quote, with a third transcription in the cart, and nothing
+    // held the three copies together — a basket the client would build and this
+    // schema would refuse comes back as a blanket "Invalid basket." naming no
+    // line. One definition, imported by every surface that has to respect it.
+    //
+    // `min(1)` has moved off this array onto the refinement below, because a
+    // basket of nothing but scoops has no product lines at all. The refinement
+    // preserves both halves of what `min(1).max(maxLines)` said — a body with
+    // neither kind of line is still "Invalid basket.", and the line cap is now
+    // counted across the whole basket rather than per array, so forty of each
+    // cannot become eighty.
+    lines: z.array(LineSchema).default([]),
+    scoop_lines: z.array(ScoopLineSchema).default([]),
+    email: z.string().email().optional(),
+    shipping_method: z.enum(["standard", "express"]).default("standard"),
+    gift_note: z.string().max(500).optional(),
+  })
+  .refine(
+    (body) =>
+      body.lines.length + body.scoop_lines.length >= 1 &&
+      body.lines.length + body.scoop_lines.length <= BASKET_LIMITS.maxLines,
+  );
 
 type SummaryLine = {
   product_id: string;
@@ -80,6 +121,36 @@ type SummaryLine = {
   unit_price: number;
   quantity: number;
   personalisation: unknown;
+};
+
+/**
+ * A priced scoop line, ready to be staged.
+ *
+ * A SEPARATE ARRAY FROM `SummaryLine[]`, AND THAT IS THE POINT. Two things in
+ * this file walk the product summary and must never see a scoop:
+ * `stockMap()`, which builds the `slug:qty` map the webhook's rebuild path
+ * decrements from, and `unitCostsAtSale()`, which looks a product's making cost
+ * up by id. A scoop has no shelf to come off and no recipe to cost, so both
+ * would be wrong for it — `stockMap` catastrophically so, since the slug it
+ * would emit could match a real product and take that product off the shelf.
+ *
+ * Keeping the two lists apart makes that structural. A filter would work today
+ * and would be one forgotten `if` away from not working; a type that cannot be
+ * passed to either function cannot be forgotten.
+ *
+ * Note the fields that are absent rather than nulled: no `colour`, no
+ * `attachment_id`, no `personalisation`. And note `unit_cost_cents` is nowhere
+ * here at all — it is written as NULL at the insert, and the studio stamps the
+ * real figure when the pack is recorded.
+ */
+type ScoopSummaryLine = {
+  tier_id: string;
+  name: string;
+  art: string;
+  tint: string;
+  variant: string;
+  unit_price: number;
+  quantity: number;
 };
 
 /**
@@ -129,6 +200,7 @@ async function savePendingOrder(input: {
   shippingMethod: string;
   giftNote: string | null;
   items: SummaryLine[];
+  scoopItems: ScoopSummaryLine[];
   /**
    * What was quoted, as opposed to what was charged. `shipping` above can be 0
    * because of the free-postage promotion while the studio still pays the
@@ -195,10 +267,11 @@ async function savePendingOrder(input: {
       console.error("Could not cost the basket; lines keep a null cost:", error);
     }
 
-    const { error: itemsError } = await supabase.from("order_items").insert(
-      input.items.map((item) => ({
+    const { error: itemsError } = await supabase.from("order_items").insert([
+      ...input.items.map((item) => ({
         order_id: order.id,
         product_id: item.product_id,
+        scoop_tier_id: null,
         product_name: item.name,
         variant_label: item.variant,
         art: item.art,
@@ -212,7 +285,43 @@ async function savePendingOrder(input: {
         // count and say out loud, rather than a zero that reads as 100% margin.
         unit_cost_cents: costs.get(item.product_id) ?? null,
       })),
-    );
+      /*
+       * A SCOOP LINE. Everything below is decided by one fact: this was sold
+       * before anybody knew what would be in it.
+       *
+       *  - `scoop_tier_id` and NOT `product_id`. The two are mutually exclusive
+       *    in the schema, and the null here is what the CHECK constraint wants
+       *    to see. It is also what keeps the line out of stock claiming: the
+       *    webhook's decrement loop asks for a product id and there is none.
+       *  - `product_name` is the TIER'S name, because "Pet scoop" is what the
+       *    customer chose and what /track, the account pages, the confirmation
+       *    email and the studio's packing list all render.
+       *  - `unit_cost_cents` is NULL, and stays null until the pack is recorded.
+       *    There is no recipe to cost a scoop from at this moment, so any figure
+       *    written here would be invented. `unitCostsAtSale()` is never called
+       *    with a tier id — it could only answer for a product.
+       *  - `personalisation` is null. A scoop is not made to a customer's spec;
+       *    marking it personalised would also, in this codebase, suppress its
+       *    stock movement, which is the right outcome reached by a wrong reason.
+       */
+      ...input.scoopItems.map((item) => ({
+        order_id: order.id,
+        product_id: null,
+        scoop_tier_id: item.tier_id,
+        product_name: item.name,
+        variant_label: item.variant,
+        art: item.art,
+        tint: item.tint,
+        colour: null,
+        attachment_id: null,
+        unit_price: item.unit_price,
+        quantity: item.quantity,
+        personalisation: null,
+        // Not "unknown yet" as a zero. Null, until the studio records what
+        // actually went in and `recordScoopPack` stamps the real figure.
+        unit_cost_cents: null,
+      })),
+    ]);
 
     if (itemsError) {
       // An order row with no items is worse than no row at all: the webhook
@@ -319,7 +428,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const products = await loadProductsBySlug(body.lines.map((l) => l.slug));
+  const [products, tiers] = await Promise.all([
+    loadProductsBySlug(body.lines.map((l) => l.slug)),
+    // Read through RLS on purpose — see loadScoopTiersBySlug. A draft or
+    // unpriced tier is simply not in this map, so it can never be charged for.
+    loadScoopTiersBySlug(body.scoop_lines.map((l) => l.slug)),
+  ]);
 
   // Personalised lines are priced against a real collection, never the
   // colourway name the client claims.
@@ -346,12 +460,19 @@ export async function POST(request: Request) {
       product_data: {
         name: string;
         description?: string;
-        metadata: { slug: string };
+        // `slug` is the unique key that lets the webhook's rebuild path find the
+        // row a line was charged for. The scoop keys (see SCOOP_METADATA in
+        // lib/scoop-line.ts) are what let it tell a tier's slug from a
+        // product's — the two live in different tables and can be the same
+        // string — so the index signature is what carries them without every
+        // ordinary line pretending it might have them.
+        metadata: Record<string, string>;
       };
     };
     quantity: number;
   }[] = [];
   const summary: SummaryLine[] = [];
+  const scoopSummary: ScoopSummaryLine[] = [];
   let subtotal = 0;
 
   for (const line of body.lines) {
@@ -532,6 +653,119 @@ export async function POST(request: Request) {
     });
   }
 
+  /* ------------------------------------------------------------ the scoops */
+
+  for (const line of body.scoop_lines) {
+    const tier = tiers.get(line.slug);
+
+    // Not published. RLS is the first gate and it has already been applied —
+    // an inactive or unpriced tier never entered the map — so an absence here
+    // means the tier is a draft, was retired, or never existed. The 409 wording
+    // matches the product branch above: same shape of problem, same answer.
+    if (!tier) {
+      return NextResponse.json(
+        { error: `“${line.slug}” is no longer available.` },
+        { status: 409 },
+      );
+    }
+
+    /*
+     * THE SELLABILITY GATE, and it has to be here rather than only on the
+     * shopfront.
+     *
+     * RLS hides a draft; it knows nothing about whether the bowl is empty,
+     * because that is a fact about `products.stock_on_hand` across the tier's
+     * pool and it changes with every sale and every print. The tier page's
+     * judgement was made when that page was rendered, which may have been ten
+     * minutes and three other customers ago. This POST is the last moment
+     * before money moves, so it is the only place the question can be asked
+     * with an answer worth having.
+     *
+     * A scoop is the ONE product in this shop where an empty shelf must stop a
+     * sale. Everything else is printed to order, so 0005_sale_integrity.sql
+     * deliberately lets an oversell through and prints the backlog — a two-day
+     * print is not a lost order. You cannot print a surprise on Tuesday to
+     * satisfy Monday's order without deciding for the customer what they got,
+     * and the pool exists precisely to stop the shop deciding that. So this
+     * refuses, and it refuses BEFORE the Stripe session is created: the
+     * alternative is a charged customer and a bowl with nothing in it, which
+     * needs a person, a refund and an apology.
+     *
+     * `blockers` are written for the studio ("no packed weight"), so they are
+     * logged and not shown. The customer gets a sentence about the thing they
+     * were trying to buy.
+     */
+    if (!tier.availability.sellable) {
+      console.warn(
+        `Refused a scoop checkout for tier ${tier.slug}: ` +
+          tier.availability.blockers.join("; "),
+      );
+      return NextResponse.json(
+        {
+          error:
+            `“${tier.name}” has just sold out — there aren't enough pieces in ` +
+            "the bowl to fill another one. Nothing has been charged.",
+        },
+        { status: 409 },
+      );
+    }
+
+    /*
+     * The price, recomputed from the tier row — never from the browser, exactly
+     * as a product's is. `price_cents` is nullable in the column and in the
+     * type, and both RLS and `availability.sellable` have already refused a
+     * null, so this is unreachable. It is written anyway because the thing it
+     * guards is a `0` reaching Stripe as a free scoop, and "unreachable" is a
+     * claim about two other pieces of code staying as they are.
+     */
+    const price = tier.price_cents;
+    if (price === null || price <= 0) {
+      console.error(
+        `Tier ${tier.slug} is sellable but has no usable price — refusing.`,
+      );
+      return NextResponse.json(
+        { error: `“${tier.name}” is not on sale just now.` },
+        { status: 409 },
+      );
+    }
+
+    // The promise, and the only thing about the contents that is knowable now.
+    const variant = scoopVariantLabel(tier.piece_count);
+    const { art, tint } = scoopArt(tier.theme);
+
+    subtotal += price * line.quantity;
+
+    lineItems.push({
+      price_data: {
+        currency: "aud",
+        unit_amount: price,
+        product_data: {
+          // The tier's name — what the customer chose and what every screen
+          // that renders this order will print.
+          name: tier.name,
+          description: variant,
+          // Carries the tier id, the piece count and the theme as well as the
+          // slug, so the webhook's Stripe-rebuild path can write a scoop line
+          // that is identical to the one staged below without looking anything
+          // up — and, critically, without mistaking a tier slug for a product
+          // slug and decrementing a charm. See SCOOP_METADATA.
+          metadata: scoopLineMetadata(tier),
+        },
+      },
+      quantity: line.quantity,
+    });
+
+    scoopSummary.push({
+      tier_id: tier.id,
+      name: tier.name,
+      art,
+      tint,
+      variant,
+      unit_price: price,
+      quantity: line.quantity,
+    });
+  }
+
   /*
    * Postage, from Australia Post, priced on the *server's* copy of the basket.
    *
@@ -553,7 +787,23 @@ export async function POST(request: Request) {
    * to reconcile a carrier bill later.
    */
   const quote = await quoteBasket(
-    toShippingLines(body.lines, products),
+    [
+      ...toShippingLines(body.lines, products),
+      /*
+       * A scoop has no product row and so no weight of its own. The TIER
+       * carries a worst-case packed weight, and `toScoopShippingLines` — the
+       * same builder `POST /api/shipping/quote` uses, so the cart's figure and
+       * this one cannot come from two expressions — turns it into a line
+       * `quoteBasket()` weighs alongside the charms.
+       *
+       * It also makes the whole basket a parcel. `scoop_tiers` deliberately has
+       * no `letter_eligible` column (0007), and `selectPackaging` rule 1 is
+       * "every line", so one scoop is enough. That is the intended answer: a
+       * Large Letter is untracked and uninsured, and a scoop that goes missing
+       * cannot be reprinted, because what was in it came out of a bowl.
+       */
+      ...toScoopShippingLines(body.scoop_lines, tiers),
+    ],
     body.shipping_method,
   );
   const shipping = isFreeShipping(subtotal, body.shipping_method)
@@ -613,6 +863,16 @@ export async function POST(request: Request) {
         // "slug:qty,slug:qty" — the only way the webhook's rebuild path can
         // find products to decrement. Personalised lines are omitted: they
         // hold no ready-to-ship stock.
+        //
+        // Scoops cannot appear here at all, and that is structural rather than
+        // filtered: `stockMap` takes `SummaryLine[]`, scoops live in
+        // `scoopSummary`, and the compiler will not let one be passed for the
+        // other. It matters more than it looks. A tier slug in this map would
+        // be looked up in `products` by the webhook, and `scoop_tiers.slug` and
+        // `products.slug` are separate unique indexes — a tier and a charm may
+        // share a string. A scoop's stock does not move here in any case: it
+        // moves in the studio, one decrement per piece, when the pack is
+        // recorded (0007_lucky_scoop.sql).
         stock: stockMap(summary),
       },
     });
@@ -626,6 +886,7 @@ export async function POST(request: Request) {
       shippingMethod: body.shipping_method,
       giftNote: body.gift_note ?? null,
       items: summary,
+      scoopItems: scoopSummary,
       quoteSource: quote.source,
       quotedWeightGrams: quote.weightGrams,
       // Empty only for an empty basket, which cannot reach here — checkout

@@ -12,6 +12,12 @@ import { PRINT_LEAD_TIME, SHIPPING, SHOP } from "@/lib/config";
 // live in app/admin/actions.ts — every export from a "use server" file becomes
 // a callable HTTP endpoint.
 import { unitCostsAtSale } from "@/lib/cost-basis";
+// A Lucky Scoop is sold before its contents are decided, so it is the one line
+// on an order with no product row behind it. These three are what let this file
+// write such a line back exactly as checkout would have: which Stripe metadata
+// keys carry the tier, what the promise reads as, and which illustration goes
+// in the two NOT NULL columns a scoop has no product to fill.
+import { SCOOP_METADATA, scoopArt, scoopVariantLabel } from "@/lib/scoop-line";
 import { money } from "@/lib/format";
 
 export const runtime = "nodejs";
@@ -443,6 +449,55 @@ function productSlugOf(item: Stripe.LineItem): string | null {
 }
 
 /**
+ * What checkout stamped on a Lucky Scoop line, or null for every other line.
+ *
+ * THE DEFECT THIS CLOSES, before it existed. `fillItemsFromStripe` resolves
+ * each Stripe line to a product row **by slug**, and `scoop_tiers.slug` and
+ * `products.slug` are separate unique indexes on separate tables — nothing
+ * prevents a tier called `mixed-scoop` and a charm called `mixed-scoop` from
+ * both existing. Without a marker, a rebuilt scoop line would look its tier's
+ * slug up in `products`, find that charm, write the charm's `product_id` onto
+ * the line, cost it from the charm's recipe, and then hand it to
+ * `decrementStock` — which would take a charm off the shelf for a scoop nobody
+ * has drawn. The mutual-exclusion CHECK would not catch it, because the line
+ * would carry a product id and no tier id: a scoop silently rebuilt as a
+ * charm, on an order the customer has already paid for.
+ *
+ * So the tier's **id** rides on the line's own product metadata, which survives
+ * the `expand: ['data.price.product']` this file already does, and this is the
+ * first question asked about every line — before any lookup.
+ *
+ * The id rather than the slug on purpose: the id is what
+ * `order_items.scoop_tier_id` needs, and a slug can be renamed between the
+ * session being created and a delayed payment clearing days later.
+ *
+ * `pieces` is parsed defensively and falls back to the tier's own promise being
+ * unstated rather than to a made-up number — see `fillItemsFromStripe`.
+ */
+function scoopOf(item: Stripe.LineItem): {
+  tierId: string;
+  pieces: number | null;
+  theme: string | null;
+} | null {
+  const metadata = expandedProduct(item)?.metadata;
+  const tierId = metadata?.[SCOOP_METADATA.tier];
+  if (typeof tierId !== "string" || tierId.length === 0) return null;
+
+  const rawPieces = Number(metadata?.[SCOOP_METADATA.pieces]);
+  const theme = metadata?.[SCOOP_METADATA.theme];
+
+  return {
+    tierId,
+    // Null, not 1 and not 5. A piece count we cannot read is a promise we
+    // cannot restate, and the label is left off rather than invented — see
+    // where it is used.
+    pieces:
+      Number.isInteger(rawPieces) && rawPieces > 0 ? rawPieces : null,
+    theme: typeof theme === "string" && theme.length > 0 ? theme : null,
+  };
+}
+
+/**
  * Recovers the printable detail of a line from the variant description
  * checkout composed, which is the only place Stripe carries it:
  *
@@ -639,17 +694,27 @@ async function fillItemsFromStripe(
   // finding's label back into its id, and no artwork). The line's product name
   // is looked up too, but only as the fallback for orders placed before
   // checkout started stamping the slug.
+  //
+  // SCOOP LINES ARE EXCLUDED FROM BOTH LOOKUPS. A scoop has no product row to
+  // find, and its tier's slug and name can each collide with a real product's
+  // — `scoop_tiers` and `products` have their own unique indexes, and
+  // `short_name` is not unique even within `products`. Letting a tier's strings
+  // into these lists would not merely waste a lookup: `byName` is first-writer-
+  // wins, so a tier called "Pet scoop" could claim that key and hand its row to
+  // an actual product line of the same name further down the basket.
+  const productLines = lineItems.data.filter((item) => scoopOf(item) === null);
+
   const slugs = [
     ...new Set([
       ...parseStockMap(session.metadata?.stock).keys(),
-      ...lineItems.data
+      ...productLines
         .map((item) => productSlugOf(item))
         .filter((slug): slug is string => Boolean(slug)),
     ]),
   ];
   const names = [
     ...new Set(
-      lineItems.data
+      productLines
         .map((item) => productNameOf(item))
         .filter((name): name is string => Boolean(name)),
     ),
@@ -714,6 +779,56 @@ async function fillItemsFromStripe(
   const { error } = await supabase.from("order_items").insert(
     lineItems.data.map((item) => {
       const name = productNameOf(item) ?? "Item";
+
+      /*
+       * A LUCKY SCOOP. Asked first, before any product lookup, because a scoop
+       * must never be resolved against `products` at all — see `scoopOf`.
+       *
+       * Everything written here matches what checkout stages on the ordinary
+       * path, and for the same reasons:
+       *
+       *  - `scoop_tier_id` set, `product_id` NULL. Mutually exclusive in the
+       *    schema, and the null product id is also what keeps this line out of
+       *    `decrementStock`'s loop. A scoop's stock moves in the studio when
+       *    the pack is recorded, not here — at this moment nobody knows which
+       *    products would even be decremented.
+       *  - `product_name` is the tier's name as it was at the sale, read off
+       *    the Stripe line rather than re-read from `scoop_tiers`. The name is
+       *    editable in the studio, and what this customer bought is a fact
+       *    about this order — the same argument `unit_price` is copied under.
+       *  - `unit_cost_cents` NULL. There is no recipe to cost a scoop from and
+       *    the pack has not happened; a zero would read as 100% margin on
+       *    something that has not been made yet.
+       *  - `art`/`tint` come from the theme, through the one map checkout also
+       *    uses, so a rebuilt scoop renders identically to a staged one. Both
+       *    columns are NOT NULL and a scoop has no product row to fill them.
+       *  - `variant_label` restates the promise, and is left EMPTY rather than
+       *    guessed when the piece count did not survive the round trip. "5
+       *    pieces" on an order that promised three is a worse answer than
+       *    saying nothing; the tier id is on the line either way, so the studio
+       *    can still see what was owed.
+       */
+      const scoop = scoopOf(item);
+      if (scoop) {
+        const { art, tint } = scoopArt(scoop.theme);
+        return {
+          order_id: orderId,
+          product_id: null,
+          scoop_tier_id: scoop.tierId,
+          product_name: name,
+          variant_label:
+            scoop.pieces === null ? "" : scoopVariantLabel(scoop.pieces),
+          art,
+          tint,
+          unit_price: item.price?.unit_amount ?? 0,
+          quantity: item.quantity ?? 1,
+          colour: null,
+          attachment_id: null,
+          personalisation: null,
+          unit_cost_cents: null,
+        };
+      }
+
       // Slug first: it is the unique key and cannot pick the wrong row. The
       // name fallback stays because Stripe replays history — a session created
       // before checkout began stamping the slug can still reach this webhook
@@ -729,6 +844,13 @@ async function fillItemsFromStripe(
       return {
         order_id: orderId,
         product_id: product?.id ?? null,
+        // Explicitly null, and not merely omitted. PostgREST requires every
+        // object in a bulk insert to carry the SAME key set — a scoop line in
+        // the same basket contributes `scoop_tier_id`, so leaving it off here
+        // would fail the whole insert with "All object keys must match" and
+        // strand a paid, mixed order with nothing to print. It is also the
+        // truthful value: this line is a product, not a scoop.
+        scoop_tier_id: null,
         product_name: name,
         // The same string checkout writes to variant_label on the staged
         // path: it is read straight back off the line's own product.
@@ -897,7 +1019,43 @@ type ConfirmationItem = {
   quantity: number | null;
   unit_price: number | null;
   personalisation: unknown;
+  /**
+   * Set on a Lucky Scoop line and null on every other. Read only to decide
+   * whether the email has to explain that the contents are not chosen yet —
+   * the line itself renders from `product_name` and `variant_label` like any
+   * other, because "Pet scoop / 5 pieces" is precisely what was bought.
+   */
+  scoop_tier_id: string | null;
 };
+
+/** True for an order carrying at least one Lucky Scoop. */
+function hasScoop(items: ConfirmationItem[]): boolean {
+  return items.some((item) => Boolean(item.scoop_tier_id));
+}
+
+/**
+ * The one sentence a scoop adds to a confirmation, and the several it must not.
+ *
+ * WHAT IT SAYS. That the pieces have not been chosen yet. Every other line on
+ * this email describes a thing the customer picked; a scoop is the one they did
+ * not, and a receipt that listed "Pet scoop — 5 pieces — $25.00" beside a
+ * keyring, with no further word, would read as though five named pieces were
+ * already set aside. Under the Australian Consumer Law the description binds,
+ * and "lucky" does not waive it, so the email restates the actual bargain.
+ *
+ * WHAT IT DELIBERATELY DOES NOT SAY. Nothing about a video. 0007 records that
+ * whether every scoop is filmed is one of the decisions only the owner can
+ * make, and it is not settled — `scoop_packs.video_url` is nullable precisely
+ * so an order arriving at midnight is not unpostable until it has been filmed.
+ * A promise of a video in a confirmation email is a term of sale nobody agreed
+ * to. Nothing about returns either: whether a surprise is "made to order" for
+ * change-of-mind purposes is a legal question this email must not answer by
+ * implication, and the personalisation sentence below is correctly not
+ * triggered by a scoop.
+ */
+const SCOOP_NOTE =
+  "Your Lucky Scoop is drawn and packed by hand after you order, from the " +
+  "pool shown on its page — so what's in it isn't decided yet.";
 
 type ConfirmationOrder = {
   email: string | null;
@@ -968,6 +1126,9 @@ function confirmationText(
     `find an order, so it's worth keeping this email.`,
     ``,
     `We don't send dispatch or tracking emails, so /track is the place to look.`,
+    // Only for an order that has one. See SCOOP_NOTE for what this sentence
+    // does and does not undertake.
+    ...(hasScoop(items) ? [``, `About your scoop`, SCOOP_NOTE] : []),
     // Only for an order that actually has one: telling someone who bought a
     // plain keyring that their order is non-returnable would be untrue.
     ...(items.some((item) => item.personalisation)
@@ -1035,6 +1196,9 @@ function confirmationHtml(
     `<p style="margin:0 0 12px;"><strong>What happens next</strong><br>Everything is printed to order. Printing takes ${escapeHtml(PRINT_LEAD_TIME.label)} before your parcel is posted, and postage time is on top of that — the printing window is not a delivery date.</p>`,
     `<p style="margin:0 0 12px;"><strong>Checking on your order</strong><br><a href="${escapeHtml(track)}" style="color:#b4506b;">${escapeHtml(track)}</a> shows where it is up to. You'll need the order number above and the email address you ordered with — it takes both to find an order, so it's worth keeping this email.</p>`,
     `<p style="margin:0 0 12px;">We don't send dispatch or tracking emails, so /track is the place to look.</p>`,
+    hasScoop(items)
+      ? `<p style="margin:0 0 12px;"><strong>About your scoop</strong><br>${escapeHtml(SCOOP_NOTE)}</p>`
+      : "",
     items.some((item) => item.personalisation)
       ? `<p style="margin:0 0 12px;">Personalised pieces can't be returned unless they arrive faulty.</p>`
       : "",
@@ -1063,7 +1227,13 @@ async function sendOrderConfirmation(
     .select(
       "email, subtotal, shipping, total, shipping_method, " +
         "confirmation_email_sent_at, " +
-        "order_items(product_name, variant_label, quantity, unit_price, personalisation)",
+        // `scoop_tier_id` is here so the email can tell a Lucky Scoop from a
+        // charm. It is a marker and nothing more — no pack, no contents, no
+        // pieces. Those live in `scoop_packs`/`scoop_pack_items`, which are
+        // service_role in and out, and at the moment this email is sent they do
+        // not exist yet in any case.
+        "order_items(product_name, variant_label, quantity, unit_price, " +
+        "personalisation, scoop_tier_id)",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -1301,7 +1471,7 @@ async function decrementStock(
 
   const { data: items, error: itemsError } = await supabase
     .from("order_items")
-    .select("product_id, quantity, personalisation")
+    .select("product_id, scoop_tier_id, quantity, personalisation")
     .eq("order_id", orderId);
 
   if (itemsError) {
@@ -1314,6 +1484,24 @@ async function decrementStock(
 
   let applied = 0;
   for (const item of items ?? []) {
+    /*
+     * A LUCKY SCOOP MOVES NO STOCK HERE, AND THIS IS THE LINE THAT SAYS SO.
+     *
+     * A scoop is sold before its contents are decided. At this moment — money
+     * taken, order numbered — nobody, the studio included, knows which products
+     * are going in the bag, so there is nothing to decrement. Stock comes off
+     * later, in the pack panel, one `decrement_stock` per piece actually drawn,
+     * guarded by `scoop_packs.stock_applied` so a re-saved panel cannot take the
+     * same pieces twice (0007_lucky_scoop.sql).
+     *
+     * The `!item.product_id` test below would already skip it, because a scoop
+     * line's product id is null by CHECK constraint. That is an ACCIDENT of two
+     * facts holding at once, not a decision, and it evaporates silently the day
+     * anyone backfills a product id or relaxes the constraint — after which
+     * every scoop sold would quietly take a charm off the shelf that nobody had
+     * drawn. Asking the question directly is what makes the rule survive that.
+     */
+    if (item.scoop_tier_id) continue;
     if (!item.product_id || item.personalisation) continue;
     const { data: shortfall, error } = await supabase.rpc("decrement_stock", {
       p_product_id: item.product_id,

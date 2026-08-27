@@ -483,6 +483,29 @@ function OrderResult({ order }: { order: TrackedOrder }) {
         </div>
       ) : null}
 
+      {/*
+       * A LUCKY SCOOP RENDERS HERE WITH NO SPECIAL CASE, AND THAT IS A
+       * DECISION rather than an oversight.
+       *
+       * A scoop line carries the TIER'S name in `product_name` and its promise
+       * in `variant_label`, so it comes through this loop as "Pet scoop /
+       * 5 pieces · Qty 1" — precisely what the customer bought, and everything
+       * that was knowable at the moment they bought it. Nothing on this page has
+       * to learn what a scoop is for that to be true.
+       *
+       * WHAT IS NOT SHOWN, AND WHY NOT HERE OF ALL PLACES. Once the studio
+       * records the pack the pieces are known, and they stay off this page.
+       * `lookup_order` (0001_init.sql) returns a fixed column list and that list
+       * IS the security boundary: /track is reachable by anyone holding an order
+       * number and the email it was placed with, and an order number is a public
+       * sequence plus four hex characters. Every field added to that function is
+       * a field a brute-forcer is handed too, and "what was in this person's
+       * parcel" is not one to add — least of all for a page whose only throttle
+       * is one process's memory (WORKLOG §0.I). The contents live in
+       * `scoop_pack_items`, which 0007_lucky_scoop.sql keeps service_role in and
+       * out, and the customer learns them the way the product intends: by
+       * opening the parcel.
+       */}
       {items.length > 0 ? (
         <div className="mt-6 border-t border-line pt-6">
           <h3 className="mb-4 text-[15px]">
