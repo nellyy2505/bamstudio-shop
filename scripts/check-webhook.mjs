@@ -114,6 +114,9 @@ const TIER = {
   active: true,
   created_at: "2026-08-01T00:00:00Z",
   pool: [],
+  // `sellable` is "switched on and priced" and nothing else. `drawable` and
+  // `scoopsAvailable` are studio information — how full the bowl is — and no
+  // longer gate anything; scenario 8c is the assertion that keeps it that way.
   availability: {
     poolSize: 12,
     drawable: 9,
@@ -562,22 +565,39 @@ async function postCheckout(body) {
 }
 
 /*
- * 8. A tier that stopped being sellable between add-to-cart and checkout — the
- *    bowl emptied while the customer was deciding. RLS cannot catch this: it
- *    knows the tier is published and nothing about how much is on the shelf.
- *    Checkout must refuse BEFORE a Stripe session exists, or the customer is
- *    charged for a bag that cannot be filled.
+ * 8. A TIER THAT CHANGED BETWEEN ADD-TO-CART AND CHECKOUT.
+ *
+ * This scenario used to be one case: the bowl emptied while the customer was
+ * deciding, and checkout refused. That behaviour is gone and it should be. THE
+ * SHOP PRINTS TO ORDER — `decrement_stock` returns a shortfall and keeps
+ * selling (0005_sale_integrity.sql) because a piece that runs out is printed
+ * again, and a scoop is no different: she scoops from the bowl and prints the
+ * rest before packing. The gate could only ever take a paid product off the
+ * shop because a shelf count dipped. `lib/scoop.ts` has the correction in full.
+ *
+ * The race it was testing is real, though, so the scenario is re-pointed rather
+ * than deleted, at the changes that still have to stop a sale: a tier the owner
+ * SWITCHED OFF (8a) and a tier she UNPRICED (8b). Those are about whether the
+ * thing is for sale at all, and RLS alone cannot be relied on to catch them —
+ * this harness reaches checkout through a fake `loadScoopTiersBySlug`, which is
+ * exactly the point: if the route's own guard were deleted, only these two
+ * assertions would notice. (The third refusal — a slug that is not a tier at
+ * all — is scenario 10.)
+ *
+ * 8c is the new behaviour, asserted positively, and it is the one that stops
+ * the gate coming back: an empty bowl checks out like anything else.
  */
 {
-  begin("8. A tier that stopped being sellable between add-to-cart and checkout");
+  begin("8a. A tier switched off between add-to-cart and checkout");
   queries.catalogue.tiers.set("pet-scoop", {
     ...TIER,
+    active: false,
     availability: {
       poolSize: 12,
-      drawable: 2,
-      scoopsAvailable: 0,
+      drawable: 9,
+      scoopsAvailable: 3,
       sellable: false,
-      blockers: ["pool can fill 0 scoops — 2 of the 5 pieces it promises are in stock"],
+      blockers: ["not active"],
     },
   });
 
@@ -598,17 +618,107 @@ async function postCheckout(body) {
   check("no order was staged", supabase.store.tables.orders.length === 0);
   check(
     "the studio's blockers were not shown to the customer",
-    !String(body.error).includes("pool can fill"),
+    !String(body.error).includes("not active"),
+    body.error,
+  );
+  // The refusal must not blame the shelf. "Sold out" was the old wording and it
+  // is now never true of a scoop — saying it would tell a customer to come back
+  // for something that never went away.
+  check(
+    "the customer is not told it sold out",
+    !/sold out/i.test(String(body.error)),
+    body.error,
+  );
+}
+
+{
+  begin("8b. A tier unpriced between add-to-cart and checkout");
+  queries.catalogue.tiers.set("pet-scoop", {
+    ...TIER,
+    price_cents: null,
+    availability: {
+      poolSize: 12,
+      drawable: 9,
+      scoopsAvailable: 3,
+      sellable: false,
+      blockers: ["no price"],
+    },
+  });
+
+  const { response, body } = await postCheckout({
+    lines: [],
+    scoop_lines: [{ slug: "pet-scoop", quantity: 1 }],
+    shipping_method: "standard",
+  });
+
+  check("refuses with 409", response.status === 409, `got ${response.status}`);
+  check("names the tier", String(body.error).includes("Pet scoop"), body.error);
+  check(
+    "no Stripe session was created",
+    stripe.stripeState.created.length === 0,
+    JSON.stringify(stripe.stripeState.created),
+  );
+  check("no order was staged", supabase.store.tables.orders.length === 0);
+  check(
+    "the studio's blockers were not shown to the customer",
+    !String(body.error).includes("no price"),
+    body.error,
+  );
+  // Nothing may reach Stripe at any price for an unpriced tier — a 0 here would
+  // be a free scoop, which is why price_cents is nullable and never zero (0007).
+  check(
+    "no free scoop was priced on the way past",
+    stripe.stripeState.created.length === 0,
+  );
+}
+
+{
+  begin("8c. An EMPTY BOWL still checks out — the gate that was removed");
+  // Everything the old rule refused on: the pool cannot fill a single scoop off
+  // the shelf. The tier is switched on and priced, so it is for sale, so this
+  // sale completes. She prints the missing pieces before she packs it.
+  queries.catalogue.tiers.set("pet-scoop", {
+    ...TIER,
+    availability: {
+      poolSize: 12,
+      drawable: 2,
+      scoopsAvailable: 0,
+      sellable: true,
+      blockers: [],
+    },
+  });
+
+  const { response, body } = await postCheckout({
+    lines: [],
+    scoop_lines: [{ slug: "pet-scoop", quantity: 3 }],
+    shipping_method: "standard",
+  });
+
+  check("accepted", response.status === 200, `got ${response.status}: ${body.error ?? ""}`);
+  check("a Stripe session was created", stripe.stripeState.created.length === 1);
+  // Three scoops from a bowl that can fill none. The old rule capped the line at
+  // `scoopsAvailable`; nothing does now but BASKET_LIMITS.
+  const staged = supabase.store.tables.order_items.find((l) => l.scoop_tier_id);
+  check("the whole quantity was staged, uncapped by the shelf", staged?.quantity === 3, JSON.stringify(staged));
+  check(
+    "priced from the tier row",
+    supabase.store.tables.orders[0]?.subtotal === TIER.price_cents * 3,
+    String(supabase.store.tables.orders[0]?.subtotal),
+  );
+  check(
+    "and still no stock came off for it",
+    decrementsFor().length === 0,
+    JSON.stringify(decrementsFor()),
   );
 }
 
 /*
- * 9. A sellable tier, checked out. Proves the other half: the price comes off
- *    the tier row, the line is staged with a tier id and no product id, and no
- *    cost is invented.
+ * 9. A tier that is on sale, checked out. Proves the other half: the price
+ *    comes off the tier row, the line is staged with a tier id and no product
+ *    id, and no cost is invented.
  */
 {
-  begin("9. A sellable scoop, checked out");
+  begin("9. A scoop that is on sale, checked out");
   queries.catalogue.tiers.set("pet-scoop", TIER);
   queries.catalogue.products.set(PRODUCT.slug, PRODUCT);
 
@@ -783,7 +893,7 @@ if (failures.length > 0) {
   console.log();
   process.exit(1);
 }
-console.log(`OK: all ${passed} assertions passed across 12 scenarios`);
+console.log(`OK: all ${passed} assertions passed across 14 scenarios`);
 
 /*
  * ───────────────────────────────────────────────────────────────────────────

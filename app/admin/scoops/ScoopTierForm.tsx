@@ -270,14 +270,21 @@ export function ScoopTierForm({
           </div>
         ) : null}
 
-        {tier && tier.active && !tier.availability.sellable ? (
+        {tier && tier.active && tier.availability.scoopsAvailable === 0 ? (
           <div className="mt-4">
-            {/* Switched on but not sellable today. That is a stock fact, not a
-                setting — the shopfront simply does not list it until the bowl
-                can fill it again, and nothing needs changing here. */}
+            {/*
+              A PRINT SIGNAL, NOT A WARNING THAT ANYTHING IS OFF. This panel
+              used to say the tier had stopped being offered because the bowl
+              could not fill it. It no longer stops: the shop prints to order,
+              so a short bowl is printed before the scoop is packed, and a
+              listing that vanished over a shelf count was refusing money for
+              nothing (lib/scoop.ts). Same number, honest consequence.
+            */}
             <Alert>
-              Switched on, but not being offered right now: {tier.availability.blockers.join(", and ")}.
-              It comes back on its own as the shelf fills.
+              Still on sale, but the bowl can&rsquo;t fill a scoop off the shelf
+              today — {tier.availability.drawable} of{" "}
+              {tier.availability.poolSize} pieces have one in. Print what you
+              need before the next one is packed.
             </Alert>
           </div>
         ) : null}

@@ -23,9 +23,9 @@ import type { ScoopTierListing } from "@/lib/queries";
  *    and it is displayed, never derived — and checkout recomputes it from the
  *    same row before charging anything, so what is on this screen is a preview
  *    of a server calculation rather than an input to one.
- *  - `availability.sellable` decides whether the control works at all, and when
- *    it does not, this says so in words. A dead button that gives no reason is
- *    the failure this component was told not to have.
+ *  - There is no stock question. A scoop is capped by `BASKET_LIMITS` and
+ *    nothing else, exactly like every other product — see the note on the
+ *    stepper below, and `lib/scoop.ts` for why.
  *
  * The prop contract is `{ tier: ScoopTierListing }` and it is fixed: the tier
  * page imports this as a default export and passes exactly what
@@ -40,36 +40,30 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
   const [added, setAdded] = useState(false);
   const [basketError, setBasketError] = useState<string | null>(null);
 
-  const { sellable, scoopsAvailable } = tier.availability;
-
   /*
-   * The upper bound on this stepper, and why the pool is part of it.
+   * The upper bound on this stepper is `BASKET_LIMITS.maxLineQuantity` — what
+   * the shop will send of one item in one order — AND NOTHING ELSE.
    *
-   * `BASKET_LIMITS.maxLineQuantity` is what the shop will print in one order.
-   * `scoopsAvailable` is how many whole scoops this pool could fill right now —
-   * distinct products with at least one on the shelf, arithmetic in
-   * `lib/scoop.ts`. Offering twenty when the bowl holds three is not a basket
-   * limit problem: it is promising three bags that cannot be filled, on the one
-   * product in this shop that cannot be printed to order after the fact.
-   *
-   * It is the smaller of the two, always. When the pool is what binds, the note
-   * below says so — worded as the limit it is rather than as a stock count, so
-   * this does not become another uncapped "only N left" claim.
+   * It used to be the smaller of that and `availability.scoopsAvailable`, the
+   * number of whole scoops the pool could fill off the shelf. That cap is gone.
+   * THE SHOP PRINTS TO ORDER: if the bowl is short when she comes to pack, she
+   * prints the rest and scoops. Capping the stepper at a shelf count refused
+   * money for bags she could perfectly well fill, on the one product where the
+   * customer cannot even tell which pieces were printed fresh. `lib/scoop.ts`
+   * records the correction; do not reintroduce a pool term here.
    */
-  const poolLimit = Math.max(0, scoopsAvailable);
-  const maxQuantity = Math.min(BASKET_LIMITS.maxLineQuantity, poolLimit);
-  const poolIsTheLimit = sellable && poolLimit < BASKET_LIMITS.maxLineQuantity;
+  const maxQuantity = BASKET_LIMITS.maxLineQuantity;
   const atMax = quantity >= maxQuantity;
 
   // Nullable in the column and in the type. RLS never publishes an unpriced
-  // tier and `sellable` is false for one, so this is belt and braces — but a
-  // price is the one field where a fallback would be a lie, so there is none:
-  // an absent price renders as no price at all.
+  // tier, so this is belt and braces — but a price is the one field where a
+  // fallback would be a lie, so there is none: an absent price renders as no
+  // price at all.
   const price = tier.price_cents;
   const { tint } = scoopArt(tier.theme);
 
   function addToBasket(): boolean {
-    if (!sellable || price === null) return false;
+    if (price === null) return false;
 
     const result = add({
       scoop_tier_id: tier.id,
@@ -111,31 +105,21 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
   }
 
   /*
-   * NOT SELLABLE, SAID PLAINLY.
+   * NO PRICE, SAID PLAINLY — and this is the ONLY thing that stops the control
+   * rendering. There is no longer an empty-bowl branch: a bowl that needs
+   * topping up is a print job, not a closed shop (`lib/scoop.ts`).
    *
-   * `availability.blockers` are deliberately not printed. They are written for
-   * the studio — "no packed weight", "not active" — and telling a shopper that
-   * a tier has no packed weight is both meaningless to them and a peek into the
-   * shop's own admin. The customer gets the one thing that is true of every
-   * blocker from where they are standing: it is not buyable at the moment.
-   *
-   * The empty-bowl case is separated because it is the one with a genuine
-   * "come back" in it, and because it is the only one a customer could plausibly
-   * have caused by buying the last one thirty seconds ago.
+   * RLS never publishes an unpriced tier, so a shopper should never reach this.
+   * It stays because the alternative to a sentence is a price of "$0.00" or a
+   * button that charges nothing.
    */
-  if (!sellable || price === null) {
-    const bowlIsEmpty = price !== null && tier.active && poolLimit < 1;
-
+  if (price === null) {
     return (
       <div className="rounded-2xl border border-line2 bg-surface p-5">
-        <b className="text-[15px]">
-          {bowlIsEmpty ? "The bowl is empty just now" : "Not on sale just now"}
-        </b>
+        <b className="text-[15px]">Not on sale just now</b>
         <p className="mt-1.5 text-sm text-muted">
-          {bowlIsEmpty
-            ? `There aren't enough pieces left to fill a scoop of ${pluralise(tier.piece_count, "piece")}. ` +
-              "It comes back as soon as the bowl is topped up. Nothing is charged and nothing is held for you in the meantime — the shop does not take orders it cannot fill."
-            : "This scoop isn't available to buy at the moment. Have a look at the rest of the range in the meantime."}
+          This scoop isn&rsquo;t available to buy at the moment. Have a look at
+          the rest of the range in the meantime.
         </p>
       </div>
     );
@@ -214,16 +198,13 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
         </Button>
       </div>
 
-      {/* Only rendered at whichever cap actually bound, so nothing moves until
-          one is reached. The pool wording says what the limit IS rather than
-          how many are on a shelf — the shop has one uncapped "only N ready to
-          ship" claim already and this is not going to be the second. */}
+      {/* Rendered only once the cap actually binds, so nothing moves until it
+          is reached. One cap, one sentence — and it is about what one parcel
+          can carry, never about what is on a shelf. */}
       {atMax ? (
         <p id={capNoteId} role="status" className="mt-3 text-xs text-muted">
-          {poolIsTheLimit
-            ? `${pluralise(maxQuantity, "scoop")} is all this bowl can fill at the moment.`
-            : `${BASKET_LIMITS.maxLineQuantity} is the most we can send of one item in a single order. ` +
-              "Need more? Get in touch and we'll sort it out."}
+          {BASKET_LIMITS.maxLineQuantity} is the most we can send of one item in
+          a single order. Need more? Get in touch and we&rsquo;ll sort it out.
         </p>
       ) : null}
 

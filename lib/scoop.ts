@@ -15,17 +15,30 @@
  * sale. A scoop is sold first and decided afterwards: at the moment money
  * changes hands nobody knows what is in it. Two consequences live in this file.
  *
- * 1. AVAILABILITY IS A QUESTION ABOUT REAL STOCK, and it is the one place the
- *    shop's deliberate overselling rule must not apply. `decrement_stock`
- *    returns a shortfall instead of refusing a sale (0005_sale_integrity.sql)
- *    because everything else is printed to order — `stock_on_hand` is a buffer
- *    of pieces already printed, not the only ones that exist, so refusing would
- *    turn a two-day print into a lost order. A scoop breaks that premise: its
- *    whole promise is "these exist now, and five of them are going in a bag",
- *    and you cannot print a surprise on Tuesday to satisfy Monday's order
- *    without deciding for the customer what they got. So a tier stops being
- *    OFFERED when its pool cannot fill it. Nothing here refuses a decrement;
- *    this is a listing decision, asked at read time.
+ * 1. STOCK IS NOT A GATE, AND A SCOOP IS NO EXCEPTION. `decrement_stock`
+ *    deliberately returns a shortfall instead of refusing a sale
+ *    (0005_sale_integrity.sql) because THIS SHOP PRINTS TO ORDER:
+ *    `stock_on_hand` is a buffer of pieces already printed, not the only ones
+ *    that exist, so refusing a sale over it would turn a two-day print into a
+ *    lost order. A scoop follows the same rule for the same reason — she scoops
+ *    from the bowl, and if the bowl is short she prints the rest before packing.
+ *
+ *    THIS FILE USED TO SAY THE OPPOSITE, and it was wrong. The old reasoning
+ *    was that "a scoop's promise is *these exist now*", so a tier had to stop
+ *    being offered when its pool could not fill it. The owner's correction:
+ *    *"you know we can just print it after we scoop right...? do not
+ *    overthink it."* The gate solved a problem she does not have and could only
+ *    ever do harm — it silently took a paid product off her shop because a
+ *    shelf count, which is a buffer and not a promise, dipped. If you are
+ *    reading this because you are about to reintroduce a stock check to
+ *    `sellable`: don't. `scoopsAvailable` below still exists, but it is
+ *    INFORMATION FOR THE STUDIO (a low bowl is a signal to print), never a
+ *    listing decision.
+ *
+ *    What survives is about TRUTHFULNESS, not stock: a tier cannot be activated
+ *    without a price, a packed weight and a pool at least as big as its piece
+ *    count (0007_lucky_scoop.sql). "Five drawn from these twelve" needs twelve
+ *    rows in the pool. It does not need twelve on the shelf this morning.
  *
  * 2. COST IS KNOWN AT PACK TIME, summed from the pieces that actually went in,
  *    and it is unknown — not cheap — the moment one of those pieces has never
@@ -45,8 +58,9 @@ export type ScoopPoolPiece = {
   productId: string;
   /**
    * Units printed and on the shelf right now — `products.stock_on_hand`.
-   * A scoop draws from what exists, so this is the number that decides
-   * availability, not a print queue.
+   *
+   * Read only to work out how many scoops the bowl could fill WITHOUT printing
+   * anything first. That figure is shown in the studio; it decides nothing.
    */
   stockOnHand: number;
   /**
@@ -78,15 +92,27 @@ export type ScoopTierRules = {
 /* ---------------------------------------------------------- availability */
 
 /**
- * The pieces a scoop could actually be drawn from: in the pool, not retired,
- * and with at least one on the shelf.
+ * The pieces a scoop could be drawn from WITHOUT PRINTING ANYTHING FIRST: in
+ * the pool, not retired, and with at least one on the shelf.
+ *
+ * "Without printing first" is the whole qualification. A retired product is
+ * genuinely undrawable — the studio switched it off — but a product with none
+ * on the shelf is simply one she prints before packing. This is a measure of
+ * how comfortable the bowl is, not of what the tier may promise.
  */
 export function drawablePieces(pool: ScoopPoolPiece[]): ScoopPoolPiece[] {
   return pool.filter((piece) => piece.active && piece.stockOnHand > 0);
 }
 
 /**
- * How many whole scoops this pool could fill right now.
+ * How many whole scoops this pool could fill right now, off the shelf, with no
+ * printing.
+ *
+ * INFORMATION, NOT A GATE. Nothing may refuse a sale because this is 0 — see
+ * point 1 at the top of this file. What it is for is the studio: a bowl that
+ * can fill one more scoop is a bowl to top up, which is a print job, which is
+ * what the Inventory screen is for. Sold as a listing rule it would take a
+ * paid product off the shop over a shelf count.
  *
  * THE RULE, and why it counts distinct products rather than units. A scoop of
  * `pieceCount` pieces is treated as `pieceCount` DIFFERENT products. Whether a
@@ -132,74 +158,82 @@ export function scoopsAvailable(
 }
 
 export type ScoopAvailability = {
-  /** Rows in the pool, whatever their stock. */
+  /** Rows in the pool, whatever their stock. This is the tier's description. */
   poolSize: number;
-  /** Distinct pool products that are active and have at least one on the shelf. */
+  /**
+   * Distinct pool products that are switched on and have at least one on the
+   * shelf. Studio information: how much of the bowl needs no print first.
+   */
   drawable: number;
-  /** Whole scoops the pool could fill right now. See `scoopsAvailable`. */
+  /**
+   * Whole scoops the pool could fill off the shelf right now, printing nothing.
+   * See `scoopsAvailable` — a number to act on, never a number that gates.
+   */
   scoopsAvailable: number;
-  /** True when this tier may be offered to a customer right now. */
+  /**
+   * True when this tier is FOR SALE AT ALL: switched on, and priced.
+   *
+   * DELIBERATELY BLIND TO STOCK. It once was not, and that was the defect —
+   * see point 1 at the top of this file. Both facts here are about whether the
+   * owner has decided to sell the thing, not about how full the bowl is.
+   */
   sellable: boolean;
   /**
    * Why not, in words, newest concern last. Empty when `sellable`.
    *
-   * Written for the studio to read on a tier row. The shopfront does not need
-   * them — it simply does not list an unsellable tier — but a tier that has
-   * gone quiet is exactly the thing the owner has to be able to explain.
+   * Written for the studio to read on a tier row. Never shown to a customer:
+   * "no price" is a peek into the shop's own admin.
    */
   blockers: string[];
 };
 
 /**
- * Everything a screen needs to say about whether a tier can be sold.
+ * Everything a screen needs to say about a tier: whether it is on sale, and how
+ * comfortable the bowl looks. THE TWO ARE INDEPENDENT and this is the file that
+ * has to keep them so.
  *
- * Note what `sellable` includes beyond stock: a tier that is inactive, unpriced
- * or unweighed is not sellable either, and each is reported separately. The
- * database already refuses to ACTIVATE such a tier (0007), and RLS already
- * refuses to publish one, but this function is what the studio uses to say why
- * before either of those has a chance to.
+ * `sellable` asks only what the owner has decided — is it switched on, is it
+ * priced. Those are the questions RLS (0007_lucky_scoop.sql) and the checkout
+ * route both ask, and they are about whether the thing is for sale at all.
+ *
+ * `drawable` and `scoopsAvailable` ride alongside as facts about the shelf.
+ * They are for the studio to act on. Nothing may turn either of them into a
+ * refusal: the shop prints to order, so a short bowl is a print job, not a
+ * closed shop.
+ *
+ * NOT A PACKED-WEIGHT CHECK. A tier with no packed weight cannot be ACTIVATED
+ * (0007, and `activationBlockers` below says so before the database has to),
+ * so an active tier already has one. And if a null ever did reach postage,
+ * `toScoopShippingLine` falls to `DEFAULT_DIMENSIONS` — the bulkiest row in the
+ * table — so an unmeasured scoop quotes as an expensive parcel rather than a
+ * cheap one. Nothing there justifies refusing a sale.
  */
 export function tierAvailability(
   tier: ScoopTierRules,
   pool: ScoopPoolPiece[],
 ): ScoopAvailability {
-  const drawable = drawablePieces(pool).length;
-  const fillable = scoopsAvailable(pool, tier.pieceCount);
-
   const blockers: string[] = [];
   if (!tier.active) blockers.push("not active");
   if (tier.priceCents === null) blockers.push("no price");
-  if (tier.packedWeightGrams === null) blockers.push("no packed weight");
-  if (fillable < 1) {
-    blockers.push(
-      `pool can fill 0 scoops — ${drawable} of the ${tier.pieceCount} pieces it promises are in stock`,
-    );
-  }
 
   return {
     poolSize: pool.length,
-    drawable,
-    scoopsAvailable: fillable,
+    drawable: drawablePieces(pool).length,
+    scoopsAvailable: scoopsAvailable(pool, tier.pieceCount),
     sellable: blockers.length === 0,
     blockers,
   };
-}
-
-/** The shopfront's question, and only that. */
-export function isTierSellable(
-  tier: ScoopTierRules,
-  pool: ScoopPoolPiece[],
-): boolean {
-  return tierAvailability(tier, pool).sellable;
 }
 
 /**
  * Why the database would refuse to activate this tier, in words — the same
  * three rules 0007_lucky_scoop.sql enforces, asked before the studio tries.
  *
- * Deliberately about the POOL'S SIZE and not its stock: activation is a
- * decision about a tier that has to survive a quiet Tuesday, and a tier is not
- * un-activated by selling out. Stock is `tierAvailability` above.
+ * Deliberately about the POOL'S SIZE and not its stock, and this is the line
+ * between what was removed and what was kept. A pool of twelve rows is what
+ * makes "five drawn from these twelve" a true description, and it stays true on
+ * a morning when nine of the twelve need printing. Stock never appears here —
+ * nor, since the sellability gate was removed, anywhere that can refuse a sale.
  */
 export function activationBlockers(
   tier: Pick<ScoopTierRules, "pieceCount" | "priceCents" | "packedWeightGrams">,

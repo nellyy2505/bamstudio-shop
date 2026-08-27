@@ -80,8 +80,18 @@ function reorderLines(items: OrderItemRow[]): Omit<CartLine, "key">[] {
      * for a scoop — the tier may since have been retired, re-priced or given a
      * different pool, and the one thing that certainly cannot be repeated is
      * the draw. Another scoop is bought from the tier page, where the price and
-     * the pool are the current ones and `availability.sellable` is asked before
-     * anything reaches a basket.
+     * the pool shown are the current ones.
+     *
+     * That last sentence used to end "…and `availability.sellable` is asked
+     * before anything reaches a basket", which is no longer true in either
+     * half. The buy control on `/scoop/[slug]` is now always mounted: the gate
+     * it carried folded in whether the pool could fill a scoop off the shelf,
+     * and the owner removed that because the shop prints to order and a short
+     * bowl is a print job rather than a closed listing. What is left of
+     * `sellable` — switched on and priced — is enforced by RLS and again by
+     * `/api/checkout`, not on the way into a basket. None of that changes the
+     * decision here; it is the reason for it that had to stop citing a gate
+     * that no longer exists.
      */
     if (!product || product.is_personalised) return [];
 

@@ -145,12 +145,25 @@ export default async function HomePage() {
   const featured = collections.find((c) => c.is_popular) ?? collections[0];
 
   /*
-   * The Lucky Scoop is advertised here ONLY when there is a bowl somebody could
-   * actually buy today.
+   * The Lucky Scoop is advertised here ONLY when there is a tier on sale.
    *
-   * `sellable` is the whole gate (lib/scoop.ts): a tier that is unpriced,
-   * unweighed or whose pool cannot currently fill it is not something to send a
-   * shopper to from the home page. Nothing is seeded, so this is empty on every
+   * `sellable` is the whole gate (lib/scoop.ts) and it now asks two things
+   * only: is the tier switched on, and is it priced. A tier nobody has priced
+   * is not something to send a shopper to from the home page.
+   *
+   * IT IS BLIND TO STOCK, deliberately. This comment used to exclude a tier
+   * "whose pool cannot currently fill it" as well. That gate existed and the
+   * owner removed it: **the shop prints to order**, so a short bowl is a print
+   * job she does before packing, never a reason to stop offering a paid
+   * product. A scoop follows the same rule as everything else in the catalogue.
+   * If you are about to filter this strip on `scoopsAvailable` because a
+   * comment somewhere still describes the old behaviour — don't; that number is
+   * studio information and lib/scoop.ts records the correction at length.
+   * ("Unweighed" has gone from the list for a different reason: a packed weight
+   * is required to ACTIVATE a tier, 0007_lucky_scoop.sql, so it sits upstream
+   * of `sellable` rather than inside it.)
+   *
+   * Nothing is seeded, so this is empty on every
    * environment right now and the section below simply does not render — which
    * is the honest answer, not a placeholder. `/scoop` itself stays a real page
    * either way; it is just not promoted from here until it has something to

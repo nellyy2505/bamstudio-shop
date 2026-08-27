@@ -2,9 +2,16 @@
  * A fake `@/lib/queries` for the checkout half of scripts/check-webhook.mjs.
  *
  * Only what `app/api/checkout/route.ts` imports. The catalogue and the tier
- * list are set per scenario, so "this tier stopped being sellable between
+ * list are set per scenario, so "the owner switched this tier off between
  * add-to-cart and checkout" is a two-line change to a fixture rather than a
  * database to arrange.
+ *
+ * That example used to be phrased as "this tier stopped being sellable", from
+ * when `sellable` also folded in whether the pool could fill a scoop off the
+ * shelf. It reads the same and no longer means the same: `sellable` is now
+ * switched-on-and-priced and nothing more, so a fixture that empties the bowl
+ * is NOT a refusal — scenario 8c in check-webhook.mjs exists to hold that line,
+ * because the shop prints to order (lib/scoop.ts).
  */
 
 export const catalogue = { products: new Map(), tiers: new Map() };

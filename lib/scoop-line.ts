@@ -182,8 +182,15 @@ export function scoopLineMetadata(tier: ScoopSellable): Record<string, string> {
  * rounds toward the shop paying — and it means a scoop and a charm are weighed
  * by one expression rather than two.
  *
- * A tier with no packed weight cannot be activated (0007) and is not sellable
- * (`lib/scoop.ts`), so checkout has already refused it before this is reached.
+ * A tier with no packed weight cannot be ACTIVATED (0007), and an inactive tier
+ * is not sellable, so checkout has already refused it before this is reached.
+ * Note the direction: the weight check is a condition of activation, upstream of
+ * `sellable`, and NOT one of the questions `sellable` itself asks — it asks two,
+ * switched on and priced, and nothing else since the stock gate was removed
+ * (`lib/scoop.ts`). This line used to claim an unweighed tier was directly "not
+ * sellable"; a reader taking that literally would go looking for a weight test
+ * in `tierAvailability` and not find one.
+ *
  * Passing the null through rather than substituting a number is still the right
  * shape: `resolveItemDimensions` falls to `DEFAULT_DIMENSIONS`, which is the
  * heaviest, bulkiest entry in the table on purpose. An unmeasured thing quotes

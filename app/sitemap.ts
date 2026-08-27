@@ -133,20 +133,32 @@ async function activeProductSlugs(): Promise<string[]> {
 }
 
 /**
- * `/scoop` and the tier pages — **only while a bowl can actually be bought.**
+ * `/scoop` and the tier pages — **only while a tier is on sale.**
  *
  * `/scoop` is deliberately NOT in `STATIC_PATHS`. Unlike `/shop` or `/faq` it
  * is not always a page worth submitting: with nothing seeded it renders "the
  * scoops aren't open yet", and a sitemap entry is a claim that a URL is worth
  * indexing, not that it responds 200. The same test the home page uses to
  * decide whether to advertise the feature decides whether to submit it here —
- * `availability.sellable`, which is false for a tier that is unpriced,
- * unweighed, or whose pool cannot currently fill it (lib/scoop.ts).
+ * `availability.sellable`, which asks two things and only two: has the owner
+ * switched the tier on, and has she priced it (lib/scoop.ts).
  *
- * A tier that has gone temporarily unsellable therefore leaves the sitemap and
- * comes back when the bowl refills. That is the same treatment `getProducts()`
- * gives a retired product: the sitemap must not advertise a URL the shopfront
- * would answer with "not available".
+ * IT ASKS NOTHING ABOUT STOCK, and this comment used to say it did. It claimed
+ * a tier left the sitemap when its pool "cannot currently fill it" and came
+ * back "when the bowl refills". There genuinely was such a gate; the owner
+ * removed it, because **this shop prints to order** — if the bowl is short she
+ * prints the rest before packing — so a scoop is listed on exactly the same
+ * terms as every other product and a shelf count retires neither. Anyone
+ * tempted to reinstate a stock test, here or in `lib/scoop.ts`: a URL dropping
+ * out of the sitemap because a morning's count dipped is the defect, not the
+ * feature.
+ *
+ * What remains is still a real filter rather than a formality. RLS already
+ * withholds an inactive or unpriced tier (0007_lucky_scoop.sql), so this is the
+ * same question asked a second time and a RETIRED tier does leave the sitemap —
+ * the treatment `getProducts()` gives a retired product, and the reason the
+ * sitemap cannot advertise a URL the shopfront would answer with "not
+ * available".
  *
  * Empty on failure, for the reason `activeProductSlugs()` is: a thinner sitemap
  * beats a 5xx on /sitemap.xml.

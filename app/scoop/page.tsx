@@ -50,15 +50,15 @@ const STEPS = [
 /**
  * One bowl on the landing page.
  *
- * An unsellable tier is SHOWN AND LABELLED rather than hidden. `getScoopTiers`
- * returns published tiers whether or not the pool can currently fill them, and
- * says why: a bowl that says "empty right now" is a better page than a bowl
- * that vanishes. What it must never do is offer the purchase — a tier whose
- * pool cannot fill it is one checkout would refuse, and the alternative to
- * saying so here is taking the money and finding out later.
+ * EVERY PUBLISHED TIER IS OFFERED. This card used to check
+ * `availability.sellable` — which then included whether the pool could fill a
+ * scoop off the shelf — and downgrade a low bowl to "not being drawn right
+ * now". That is gone. The shop prints to order: a bowl that is short when she
+ * comes to pack is topped up first, so a shelf count is no reason to stop
+ * offering a tier (`lib/scoop.ts`). RLS has already refused a draft or unpriced
+ * tier, so everything reaching this card is for sale.
  */
 function TierCard({ tier }: { tier: ScoopTierListing }) {
-  const { availability } = tier;
   const priced = tier.price_cents !== null;
 
   return (
@@ -67,9 +67,7 @@ function TierCard({ tier }: { tier: ScoopTierListing }) {
         <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-cream">
           <ScoopArt size={44} />
         </span>
-        <Pill tone={availability.sellable ? "accent" : "neutral"}>
-          {themeLabel(tier.theme)}
-        </Pill>
+        <Pill tone="accent">{themeLabel(tier.theme)}</Pill>
       </div>
 
       <div>
@@ -102,21 +100,9 @@ function TierCard({ tier }: { tier: ScoopTierListing }) {
         )}
       </div>
 
-      {availability.sellable ? (
-        <ButtonLink href={`/scoop/${tier.slug}`} full>
-          See what&apos;s in it
-        </ButtonLink>
-      ) : (
-        <>
-          <p className="text-[13px] font-extrabold text-muted">
-            <Icon name="clock" size={14} className="inline" /> Not being drawn
-            right now
-          </p>
-          <ButtonLink href={`/scoop/${tier.slug}`} variant="soft" full>
-            See the pool
-          </ButtonLink>
-        </>
-      )}
+      <ButtonLink href={`/scoop/${tier.slug}`} full>
+        See what&apos;s in it
+      </ButtonLink>
     </article>
   );
 }

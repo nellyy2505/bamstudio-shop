@@ -360,9 +360,17 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
            * which kind it is. The slug and the quantity are ALL that is sent —
            * no price, no piece count, no weight. Checkout recomputes every one
            * of those from the tier row, exactly as it recomputes a product's
-           * price, and refuses the tier outright if it is not sellable right
-           * now. What the browser is holding is a fortnight-old copy of a
-           * shop-editable row; it is a display value, never an input to a bill.
+           * price, and refuses the tier outright if the owner has since
+           * switched it off or unpriced it — which is the whole of what
+           * `availability.sellable` asks (lib/scoop.ts). What the browser is
+           * holding is a fortnight-old copy of a shop-editable row; it is a
+           * display value, never an input to a bill.
+           *
+           * "Not sellable right now" was the old phrasing and invited the
+           * reading it once had: `sellable` used to fall false when the pool
+           * could not fill a scoop off the shelf. It does not, and a basket is
+           * never refused over a shelf count — the shop prints to order, so a
+           * short bowl is topped up before packing.
            */
           scoop_lines: lines
             .filter(isScoopLine)

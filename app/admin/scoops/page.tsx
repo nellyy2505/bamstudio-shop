@@ -14,26 +14,39 @@ export const metadata = { title: "Lucky Scoop · Studio" };
  * WHAT THIS SCREEN IS FOR. A scoop is the one product in this shop that is sold
  * before anybody knows what is in it, so everything that makes it honest has to
  * be decided here rather than at the moment of sale: what it costs, how many
- * pieces it promises, what may be drawn into it, and whether the bowl can
- * actually fill it today. Every one of those is a row, never a literal in code.
+ * pieces it promises, and what may be drawn into it. Every one of those is a
+ * row, never a literal in code.
  *
  * NO PAGER, for the reason the measuring screen has none: there will be a
  * handful of tiers, not a catalogue, and a pager over four rows is a pager that
  * hides one of them.
  *
- * AVAILABILITY IS NOT RE-DERIVED HERE. `lib/scoop.ts` owns the rule — at least
- * `piece_count` distinct pool products with something on the shelf — and
- * `listScoopTiers` has already asked it. A second copy of that arithmetic on a
- * screen is how the studio and the shopfront start disagreeing about which
- * tiers are for sale.
+ * "CAN FILL" IS A PRINT SIGNAL, NOT A GATE, and that is the one thing to keep
+ * straight on this screen. It used to be both: a tier whose pool could not fill
+ * a scoop off the shelf stopped being offered to customers at all. That was
+ * wrong — the shop prints to order, so a short bowl is topped up before packing
+ * (`lib/scoop.ts` records the correction). The number is still here because it
+ * is worth acting on: a bowl down to its last scoop or two is a print job. It
+ * decides nothing.
+ *
+ * NOTHING IS RE-DERIVED HERE. `lib/scoop.ts` owns both the fill arithmetic and
+ * the question of whether a tier is on sale, and `listScoopTiers` has already
+ * asked it. A second copy on a screen is how the studio and the shopfront start
+ * disagreeing.
  */
 export default async function ScoopsPage() {
   await requireStaff("catalogue");
 
   const tiers = await listScoopTiers();
 
-  const sellable = tiers.filter((tier) => tier.availability.sellable).length;
+  const onSale = tiers.filter((tier) => tier.availability.sellable).length;
   const unpriced = tiers.filter((tier) => tier.priceCents === null).length;
+  // A bowl that cannot fill one scoop off the shelf. NOT a sales problem — the
+  // tier keeps selling and she prints before packing — but it is the row to
+  // look at first, so it is counted where she will see it.
+  const needPrinting = tiers.filter(
+    (tier) => tier.availability.sellable && tier.availability.scoopsAvailable === 0,
+  ).length;
 
   return (
     <div>
@@ -48,18 +61,24 @@ export default async function ScoopsPage() {
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <Stat label="TIERS" value={String(tiers.length)} note="drafts included" />
         <Stat
           label="FOR SALE NOW"
-          value={String(sellable)}
-          note="switched on, priced, weighed, and the bowl can fill them"
+          value={String(onSale)}
+          note="switched on and priced — the shop is offering these"
         />
         <Stat
           label="NOT PRICED"
           value={String(unpriced)}
           note="a tier with no price cannot be switched on"
           tone={unpriced > 0 ? "warn" : undefined}
+        />
+        <Stat
+          label="NEED A PRINT"
+          value={String(needPrinting)}
+          note="still selling — but the bowl can't fill one without printing first"
+          tone={needPrinting > 0 ? "warn" : undefined}
         />
       </div>
 
@@ -95,9 +114,10 @@ export default async function ScoopsPage() {
       </Panel>
 
       <p className="mt-4 text-[13px] text-muted">
-        A tier is offered to customers only while its pool can fill it. That is the one place this
-        shop stops selling what is not on the shelf: everything else here is printed to order, but
-        a scoop promises pieces that exist now.
+        A tier is offered to customers whenever it is switched on and priced. “Can fill” is what the
+        bowl holds right now without printing anything — a number to print against, not a reason to
+        stop selling. Everything here is printed to order, a scoop included: if the bowl is short
+        when you come to pack, print the rest and scoop.
       </p>
     </div>
   );
@@ -151,10 +171,22 @@ function TierRow({ tier }: { tier: ScoopTierRow }) {
       </td>
 
       <td className="px-5 py-3.5">
+        {/*
+          Two independent facts, and they are shown as two things because that
+          is what they are. Whether the shop is offering the tier, and how much
+          the bowl holds. A tier can be selling briskly with an empty bowl —
+          that is not a fault, it is a print job.
+        */}
         {tier.availability.sellable ? (
-          <span className="font-semibold text-good">
-            Can fill {pluralise(tier.availability.scoopsAvailable, "scoop")}
-          </span>
+          tier.availability.scoopsAvailable > 0 ? (
+            <span className="font-semibold text-good">
+              Can fill {pluralise(tier.availability.scoopsAvailable, "scoop")}
+            </span>
+          ) : (
+            <span className="text-[13.5px] text-warn">
+              Selling — print before the next one is packed
+            </span>
+          )
         ) : (
           // Her words, from lib/scoop.ts, not a constraint name and not a bare
           // "unavailable". A tier that has gone quiet is exactly the thing she

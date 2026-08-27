@@ -20,7 +20,7 @@ import {
   SHIPPING,
   transitDays,
 } from "@/lib/config";
-import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { clientKey, rateLimitDurable } from "@/lib/rate-limit";
 import { toShippingLines } from "@/lib/shipping/lines";
 // The studio's own costing, reused rather than re-implemented: one definition
 // of what a piece costs, whether the sale came from the website or from a
@@ -355,7 +355,17 @@ async function savePendingOrder(input: {
 export async function POST(request: Request) {
   // This route writes order rows with the service-role key, so an unthrottled
   // loop could fill the table. Real shoppers check out a handful of times.
-  const limit = rateLimit(clientKey(request, "checkout"), 10, 60_000);
+  //
+  // `rateLimitDurable`, not `rateLimit`: a deploy or a restart used to hand the
+  // loop a clean allowance, and this is the endpoint where that costs rows in
+  // the orders table rather than a wasted query. `await` is the whole
+  // difference and dropping it is not a lint error here — the config carries no
+  // type-aware `no-misused-promises`, so `limit.ok` would read `undefined`,
+  // `!limit.ok` would be true, and every checkout in the shop would answer 429.
+  // The store call is bounded at 500ms with a circuit breaker and falls back to
+  // the in-process bucket, so a bad minute at Upstash cannot stop the shop
+  // taking money (lib/rate-limit.ts).
+  const limit = await rateLimitDurable(clientKey(request, "checkout"), 10, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many checkout attempts. Please wait a moment." },
@@ -670,30 +680,27 @@ export async function POST(request: Request) {
     }
 
     /*
-     * THE SELLABILITY GATE, and it has to be here rather than only on the
-     * shopfront.
+     * IS IT FOR SALE AT ALL — switched on, and priced. Nothing else.
      *
-     * RLS hides a draft; it knows nothing about whether the bowl is empty,
-     * because that is a fact about `products.stock_on_hand` across the tier's
-     * pool and it changes with every sale and every print. The tier page's
-     * judgement was made when that page was rendered, which may have been ten
-     * minutes and three other customers ago. This POST is the last moment
-     * before money moves, so it is the only place the question can be asked
-     * with an answer worth having.
+     * THERE WAS A STOCK GATE HERE AND IT WAS WRONG. It refused the sale when
+     * the tier's pool could not fill a scoop off the shelf, on the reasoning
+     * that a scoop promises pieces that exist now. It does not: THE SHOP PRINTS
+     * TO ORDER. She scoops from the bowl, and if the bowl is short she prints
+     * the rest before packing — exactly what `decrement_stock` assumes for
+     * every other line on this order when it returns a shortfall and keeps
+     * selling (0005_sale_integrity.sql). The gate's only possible effect was to
+     * take a paid product off the shop because a shelf count dipped. Do not put
+     * it back; `lib/scoop.ts` records the correction in full.
      *
-     * A scoop is the ONE product in this shop where an empty shelf must stop a
-     * sale. Everything else is printed to order, so 0005_sale_integrity.sql
-     * deliberately lets an oversell through and prints the backlog — a two-day
-     * print is not a lost order. You cannot print a surprise on Tuesday to
-     * satisfy Monday's order without deciding for the customer what they got,
-     * and the pool exists precisely to stop the shop deciding that. So this
-     * refuses, and it refuses BEFORE the Stripe session is created: the
-     * alternative is a charged customer and a bowl with nothing in it, which
-     * needs a person, a refund and an apology.
+     * What remains is the same pair of questions the product branch above asks:
+     * does this exist (`!tier`, handled just above), and is it on sale. RLS is
+     * the first gate and has already refused a draft or unpriced tier to the
+     * anon key; this is the second, so that the answer does not depend on one
+     * policy staying exactly as it is.
      *
-     * `blockers` are written for the studio ("no packed weight"), so they are
-     * logged and not shown. The customer gets a sentence about the thing they
-     * were trying to buy.
+     * `blockers` are written for the studio ("not active"), so they are logged
+     * and not shown. The customer gets a sentence about the thing they were
+     * trying to buy — and no "sold out", which is now never the reason.
      */
     if (!tier.availability.sellable) {
       console.warn(
@@ -703,8 +710,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            `“${tier.name}” has just sold out — there aren't enough pieces in ` +
-            "the bowl to fill another one. Nothing has been charged.",
+            `“${tier.name}” isn't on sale just now. Nothing has been charged.`,
         },
         { status: 409 },
       );

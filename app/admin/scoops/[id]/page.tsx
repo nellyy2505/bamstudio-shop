@@ -55,16 +55,20 @@ export default async function EditScoopTierPage({
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        {/* CAN FILL and DRAWABLE are print signals, not gates. Neither stops
+            the tier selling — the shop prints to order, so a short bowl is
+            topped up before packing (lib/scoop.ts). They are here to say what
+            to put on the printer, never what to switch off. */}
         <Stat
           label="CAN FILL"
           value={String(tier.availability.scoopsAvailable)}
-          note="whole scoops from what is on the shelf right now"
+          note="whole scoops off the shelf, printing nothing — it sells either way"
           tone={tier.availability.scoopsAvailable === 0 ? "warn" : undefined}
         />
         <Stat
           label="DRAWABLE"
           value={`${tier.availability.drawable} of ${tier.availability.poolSize}`}
-          note="pool products that are switched on and have at least one on the shelf"
+          note="pool products switched on with at least one on the shelf — the rest need a print"
         />
         <Stat
           label="MEASURED"

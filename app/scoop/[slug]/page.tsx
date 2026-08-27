@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import ScoopBuy from "@/components/scoop/ScoopBuy";
 import { ScoopArt } from "@/components/scoop/ScoopArt";
 import { ProductGrid } from "@/components/product/ProductCard";
-import { Alert, Breadcrumbs, ButtonLink, Icon, Pill } from "@/components/ui";
+import { Breadcrumbs, ButtonLink, Icon, Pill } from "@/components/ui";
 import { SHOP } from "@/lib/config";
 import { hasSocialAccount, socialLinks } from "@/lib/contact";
 import { money, pluralise } from "@/lib/format";
@@ -70,31 +70,24 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
   const tier = await getScoopTierBySlug(slug);
   if (!tier) notFound();
 
-  const { availability } = tier;
-  const sellable = availability.sellable;
+  /*
+   * THE POOL IS ONE LIST. It used to be split into "on the shelf" and "printed
+   * out right now", with the second group captioned as pieces that could not be
+   * drawn until they were printed again. That was never true of this shop: it
+   * PRINTS TO ORDER, so a piece with none on the shelf is one she prints before
+   * packing, and a scoop is no different (`lib/scoop.ts`). The split told a
+   * customer a piece was off the table when it was not, and made the tier's
+   * description — which is exactly this list — move around from day to day.
+   */
 
   /*
-   * The pool, split by what is actually on the shelf.
-   *
-   * A scoop is drawn from pieces that already exist — that is the one place the
-   * shop's overselling rule does not apply (lib/scoop.ts) — so listing a
-   * printed-out piece alongside the drawable ones would describe a bag it
-   * cannot currently produce. Both groups are still shown: the pool is the
-   * description of the product, and quietly dropping a row from it on a day it
-   * is out of stock would make the description move around.
+   * Structured data only for a priced bowl, and only ever with the price the
+   * page itself prints. `InStock` is the honest answer for a made-to-order
+   * shop: an order placed today is filled, whether the pieces come off the
+   * shelf or off the printer first. An unpriced tier emits nothing rather than
+   * an offer with a price nobody can pay.
    */
-  const onShelf = tier.pool.filter((product) => product.stock_on_hand > 0);
-  const printedOut = tier.pool.filter((product) => product.stock_on_hand <= 0);
-
-  /*
-   * Structured data only for a bowl that can actually be bought, and only ever
-   * with the price the page itself prints. `sellable` is false unless the tier
-   * is priced, so `price_cents` is non-null in this branch; `InStock` is exactly
-   * what `availability.scoopsAvailable >= 1` means — the pool can fill at least
-   * one scoop right now, from pieces already printed. An unsellable tier emits
-   * nothing rather than an `OutOfStock` offer with a price nobody can pay.
-   */
-  const jsonLdHtml = sellable
+  const jsonLdHtml = tier.price_cents !== null
     ? JSON.stringify({
         "@context": "https://schema.org",
         "@type": "Product",
@@ -166,41 +159,21 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
           ) : null}
 
           <p className="mt-1.5 mb-5 text-[13px] font-extrabold text-muted">
-            {/* Drawn from stock, not printed to order — so this page says
-                nothing about print lead time, which does not apply to it, and
-                nothing about a dispatch date, which nothing here measures. */}
-            <Icon name="box" size={14} className="inline" /> Drawn from pieces
-            that are already printed and on the shelf
+            {/* Drawn by hand from the pool below. No claim either way about
+                which pieces were already printed — like everything else here,
+                what is short is printed before the order goes out. */}
+            <Icon name="box" size={14} className="inline" /> Drawn by hand from
+            the {pluralise(tier.pool.length, "design")} below
           </p>
 
-          {sellable ? (
-            /* The buy control is another agent's (`components/scoop/ScoopBuy`)
-               and takes the whole listing, availability included. It is only
-               mounted for a tier that can actually be filled: offering a
-               purchase that checkout would refuse is the failure this page
-               exists to avoid. */
-            <ScoopBuy tier={tier} />
-          ) : (
-            <Alert tone="info">
-              {availability.drawable < tier.piece_count ? (
-                <>
-                  This bowl is not being drawn at the moment: it draws{" "}
-                  {pluralise(tier.piece_count, "piece")}, and only{" "}
-                  {availability.drawable} of the{" "}
-                  {pluralise(tier.pool.length, "design")} below{" "}
-                  {availability.drawable === 1 ? "is" : "are"} on the shelf
-                  today. Everything it draws from is still listed, and you can
-                  buy any of it on its own.
-                </>
-              ) : (
-                <>
-                  This bowl is not on sale at the moment. Everything it draws
-                  from is still listed below, and you can buy any of it on its
-                  own.
-                </>
-              )}
-            </Alert>
-          )}
+          {/* ALWAYS MOUNTED. This used to be gated on `availability.sellable`,
+              which then folded in whether the pool could fill a scoop off the
+              shelf, so a low bowl replaced the buy control with a "not being
+              drawn" notice. The shop prints to order and a scoop is no
+              exception (`lib/scoop.ts`), so there is nothing here to gate on.
+              `ScoopBuy` handles the one remaining case — a tier with no price,
+              which RLS never publishes anyway — on its own. */}
+          <ScoopBuy tier={tier} />
 
           {/*
             What a customer needs to know before paying, in the order they need
@@ -278,36 +251,11 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
         <p className="mt-2 mb-6 max-w-2xl text-[14.5px] text-muted">
           This is the whole pool — all{" "}
           {pluralise(tier.pool.length, "design")}, not a selection of them. Your{" "}
-          {tier.piece_count} pieces come out of this list and nowhere else.{" "}
-          {printedOut.length > 0 ? (
-            <>
-              Right now {availability.drawable} of them{" "}
-              {availability.drawable === 1 ? "is" : "are"} on the shelf, and a
-              scoop is only ever drawn from what is actually there.
-            </>
-          ) : (
-            <>All of them are on the shelf today.</>
-          )}
+          {tier.piece_count} pieces come out of this list and nowhere else.
         </p>
 
-        {onShelf.length > 0 ? (
-          <ProductGrid products={onShelf} quickAdd={false} />
-        ) : (
-          <p className="text-[14.5px] text-muted">
-            Nothing from this bowl is on the shelf at the moment.
-          </p>
-        )}
-
-        {printedOut.length > 0 ? (
-          <div className="mt-10">
-            <h3 className="text-lg">In the pool, printed out right now</h3>
-            <p className="mt-1.5 mb-5 max-w-2xl text-[13.5px] text-muted">
-              Still part of this bowl, but there are none on the shelf, so they
-              cannot be drawn into a scoop until they are printed again. You can
-              still order them on their own — those are printed to order.
-            </p>
-            <ProductGrid products={printedOut} quickAdd={false} />
-          </div>
+        {tier.pool.length > 0 ? (
+          <ProductGrid products={tier.pool} quickAdd={false} />
         ) : null}
       </section>
 

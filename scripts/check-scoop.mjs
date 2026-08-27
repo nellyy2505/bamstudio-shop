@@ -94,9 +94,11 @@ eq(
   1,
 );
 
-// Four products with plenty of stock cannot fill a five-piece scoop at all,
-// however deep the shelf is. This is the rule the shop's overselling decision
-// does NOT cover: printing more is not an option inside a bowl.
+// Four products with plenty of stock cannot fill a five-piece scoop from the
+// shelf alone, however deep the shelf is — a duplicate-free scoop of five needs
+// five distinct products with something in. This is arithmetic about the bowl,
+// NOT a sales rule: the tier keeps selling and the fifth piece gets printed
+// before the bag is packed. See lib/scoop.ts.
 eq(
   "four deep products still cannot fill a five-piece scoop",
   m.scoopsAvailable([1, 2, 3, 4].map((n) => piece(`p${n}`, 100)), 5),
@@ -146,37 +148,55 @@ eq("a piece count of zero fills nothing",
   m.scoopsAvailable([piece("a", 5)], 0), 0);
 
 // ---------------------------------------------------------------------------
-// tierAvailability — and the four reasons a tier is not sellable
+// tierAvailability — on sale, and how full the bowl is, kept apart
 // ---------------------------------------------------------------------------
 const fullPool = [1, 2, 3, 4, 5].map((n) => piece(`p${n}`, 2));
 
 eq(
-  "a priced, weighed, stocked tier is sellable",
+  "a priced, switched-on tier is on sale",
   m.tierAvailability(tier(), fullPool),
   { poolSize: 5, drawable: 5, scoopsAvailable: 2, sellable: true, blockers: [] },
 );
 
-eq("an unpriced tier is not sellable",
+// The two things that mean "not for sale at all", and they are both decisions
+// the owner made about the row rather than facts about a shelf.
+eq("an unpriced tier is not on sale",
   m.tierAvailability(tier({ priceCents: null }), fullPool).blockers, ["no price"]);
-eq("an unweighed tier is not sellable",
-  m.tierAvailability(tier({ packedWeightGrams: null }), fullPool).blockers,
-  ["no packed weight"]);
-eq("an inactive tier is not sellable",
+eq("an inactive tier is not on sale",
   m.tierAvailability(tier({ active: false }), fullPool).blockers, ["not active"]);
 
-// The one this file exists for: everything about the tier is right, and the
-// bowl cannot fill it. A product row in this state would keep selling
-// (decrement_stock returns a shortfall and the studio prints the backlog); a
-// scoop must not.
-const soldOut = m.tierAvailability(tier(), [
+// A packed weight is an ACTIVATION requirement (0007, and activationBlockers
+// below), not a sale gate: the database will not let an active tier lack one,
+// and if a null ever reached postage, toScoopShippingLine falls to
+// DEFAULT_DIMENSIONS and quotes it as the bulkiest parcel in the table. Nothing
+// there justifies refusing a customer.
+eq("an unweighed tier is still on sale",
+  m.tierAvailability(tier({ packedWeightGrams: null }), fullPool).sellable, true);
+
+// ---------------------------------------------------------------------------
+// THE ASSERTIONS THAT REPLACED THE SELLABILITY GATE.
+//
+// There was a rule here that a tier stopped being sellable when its pool could
+// not fill a scoop off the shelf. It was wrong and it is gone: THE SHOP PRINTS
+// TO ORDER — decrement_stock returns a shortfall and keeps selling
+// (0005_sale_integrity.sql) precisely because a piece that runs out is printed
+// again, and a scoop is no different. She scoops from the bowl, and prints the
+// rest before packing.
+//
+// These three are what stop it being put back.
+// ---------------------------------------------------------------------------
+const emptyBowl = m.tierAvailability(tier(), [
   piece("a", 1), piece("b", 1), piece("c", 1), piece("d", 0), piece("e", 0),
 ]);
-eq("a sold-out bowl stops the tier selling", soldOut.sellable, false);
-eq("...and says how short it is", soldOut.blockers, [
-  "pool can fill 0 scoops — 3 of the 5 pieces it promises are in stock",
-]);
-eq("isTierSellable agrees", m.isTierSellable(tier(), fullPool), true);
-eq("isTierSellable agrees when it cannot fill", m.isTierSellable(tier(), []), false);
+eq("an empty bowl does NOT stop the tier selling", emptyBowl.sellable, true);
+eq("...and raises no blocker at all", emptyBowl.blockers, []);
+eq("...but still reports what the bowl holds, for the studio to print against",
+  [emptyBowl.drawable, emptyBowl.scoopsAvailable], [3, 0]);
+// A tier with no pool rows at all is still on sale. It could not have been
+// ACTIVATED in that state (see activationBlockers below), so this is really the
+// statement that stock and pool size are asked in two different places.
+eq("an empty pool is not a sales question either",
+  m.tierAvailability(tier(), []).sellable, true);
 
 // ---------------------------------------------------------------------------
 // activationBlockers — the same three rules 0007 enforces, asked in advance

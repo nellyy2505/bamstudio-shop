@@ -334,8 +334,15 @@ export default async function FaqPage() {
   /*
    * One read, one decision: is there a bowl to answer questions about? The
    * `sellable` gate the home page and the sitemap use is deliberately NOT
-   * applied — a bowl that is published but temporarily empty is still something
-   * a reader can see on the shop and ask about.
+   * applied — a published tier is something a reader can see on the shop and
+   * ask about, and a help centre answers the questions people can ask, not the
+   * ones they can act on.
+   *
+   * The old wording justified that by "published but temporarily empty", which
+   * described a stock gate inside `sellable` that no longer exists. The shop
+   * prints to order, a short bowl is a print job, and emptiness has not decided
+   * anything about a tier since (lib/scoop.ts). The distinction the line above
+   * actually rests on is narrower: a tier can be published and still unpriced.
    */
   const scoopsPublished = (await getScoopTiers()).length > 0;
 

@@ -454,16 +454,18 @@ export async function getOrderConfirmationSummary(
 /* -------------------------------------------------------------- lucky scoop */
 
 /**
- * A tier as the shopfront needs it: the row, its pool, and whether the pool can
- * actually fill it today.
+ * A tier as the shopfront needs it: the row, its pool, and how full the bowl
+ * happens to be.
  *
- * `availability.sellable` IS THE GATE, and both the page and the checkout have
- * to apply it. RLS already hides a tier that is inactive or unpriced, so
- * everything that comes back here is published — but "published" and "sellable"
- * are different questions, because a bowl empties. The tiers are returned
- * either way rather than filtered here: a tier that says "sold out — back
- * soon" is a better page than a tier that vanishes, and the caller is in a
- * better position to decide which it wants than this function is.
+ * `availability.sellable` asks ONE thing — is this tier switched on and priced,
+ * i.e. for sale at all. It is deliberately blind to stock. It used to gate on
+ * the pool's stock as well, and that was wrong: the shop prints to order, so a
+ * short bowl is a print job before packing, not a closed listing. See
+ * `lib/scoop.ts` for the correction in full, and do not reintroduce it here.
+ *
+ * `availability.drawable` and `.scoopsAvailable` ride along as facts about the
+ * shelf. The studio acts on them. Nothing on the shopfront may hide, disable or
+ * cap anything with them.
  */
 export type ScoopTierListing = ScoopTierWithPool & {
   availability: ScoopAvailability;
@@ -562,20 +564,20 @@ export async function getScoopTiers(): Promise<ScoopTierListing[]> {
  * `loadProductsBySlug` above, and here for the same reason.
  *
  * Checkout and the cart's postage quote both need the SERVER's copy of a
- * basket's tiers: the price in one case, the packed weight in the other, and
- * `availability.sellable` in both. A second copy of this read would be a second
- * answer to "may this tier be sold right now", and a basket that quotes on one
- * set of rows and is charged against another is exactly the drift that having
- * one entry point exists to stop.
+ * basket's tiers: the price in one case, the packed weight in the other, and in
+ * both the question of whether the tier is on sale at all. A second copy of
+ * this read would be a second answer to that question, and a basket that quotes
+ * on one set of rows and is charged against another is exactly the drift that
+ * having one entry point exists to stop.
  *
  * THE ANON CLIENT IS DELIBERATE, not an oversight in a route that also holds
  * the service-role key. Reading through RLS is what makes the policy in
  * 0007_lucky_scoop.sql the first gate: a tier that is inactive or unpriced
  * simply is not in the result, so a slug typed into a checkout body cannot
  * reach a draft. The service-role key would bypass exactly the check that
- * matters. RLS is only the FIRST gate, though — it knows nothing about whether
- * the bowl is empty, which is why every caller must also test
- * `availability.sellable`.
+ * matters. Checkout tests `availability.sellable` as well, so that the answer
+ * does not rest on one policy staying exactly as it is — but it is the SAME
+ * question asked twice, not a second, stock-flavoured one.
  *
  * Empty when Supabase is unconfigured, matching `getScoopTiers` and for the
  * same reason: there is no bundled fallback tier, because a fallback tier would
