@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LoginForm } from "./LoginForm";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { safeNext } from "@/lib/safe-next";
+import { DEFAULT_NEXT, safeNext } from "@/lib/safe-next";
 
 /**
  * Gates every claim on this page about what an account does for you.
@@ -43,7 +43,13 @@ export default async function LoginPage({
   searchParams: SearchParams;
 }) {
   const params = await searchParams;
-  const next = safeNext(one(params.next));
+  // The fallback is stated rather than inherited: it is this page's answer for
+  // a customer who wandered in on their own, not a shared constant the shop is
+  // obliged to use. See the note on SIGNUP_FALLBACK in app/signup/page.tsx.
+  const next = safeNext(one(params.next), DEFAULT_NEXT);
+  // Whether somebody was sent here from somewhere that wants them back — which
+  // decides whether the link across to sign-up has to carry `next` too.
+  const carried = next !== DEFAULT_NEXT;
   // Map the callback's error code to our own copy — never render text that
   // arrived in the URL.
   const AUTH_ERRORS: Record<string, string> = {
@@ -69,13 +75,20 @@ export default async function LoginPage({
         </div>
 
         {/* "Create an account" is the same promise one page along, so it is
-            gated too rather than left pointing at a form that cannot run. */}
+            gated too rather than left pointing at a form that cannot run.
+
+            It also carries `next`. Someone invited to the studio who has no
+            account yet arrives on /login?next=/admin/join?token=… from
+            `proxy.ts` and leaves through this link; without the parameter the
+            invitation is dropped on the doorstep and they have to go back to
+            their messages and open it again. The value has already been through
+            `safeNext()` above and is not re-derived here. */}
         <p className="mt-6 text-center text-sm text-muted">
           {CAN_SIGN_IN ? (
             <>
               New to Bam Studio?{" "}
               <Link
-                href="/signup"
+                href={carried ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}
                 className="font-bold text-accent underline underline-offset-2 hover:text-accent-dark"
               >
                 Create an account

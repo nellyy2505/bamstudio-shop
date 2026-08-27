@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SignupForm } from "./SignupForm";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { DEFAULT_NEXT, safeNext } from "@/lib/safe-next";
 
 /**
  * Gates every claim on this page about what an account does for you.
@@ -30,7 +31,56 @@ export const metadata: Metadata = {
     : "Bam Studio accounts aren't open yet, so there's nothing to create just now.",
 };
 
-export default function SignupPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+/** Next 16 hands searchParams over as a Promise, and repeats may be arrays. */
+function one(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/**
+ * Where somebody who arrived here under their own steam — no `next` — is sent
+ * once the account exists.
+ *
+ * Passed to `safeNext()` explicitly rather than leaning on its built-in
+ * default. The two values happen to agree today, but the point is that this
+ * page decides its own answer: `DEFAULT_NEXT` is the *customer's* destination,
+ * and this page also serves people arriving from an invitation, for whom
+ * /account/orders is simply the wrong room. Their answer travels in `next`, and
+ * the fallback must never quietly overrule it. Changing the shared default to
+ * suit invitees would break every other consumer, so the caller states its
+ * preference here instead.
+ */
+const SIGNUP_FALLBACK = DEFAULT_NEXT;
+
+/**
+ * Defect this closes: /admin/join?token=… is the route that turns a staff
+ * invitation into studio access, and it needs an account. `proxy.ts` sends a
+ * signed-out visitor to /login?next=/admin/join?token=…, and sign-in honours
+ * that — but somebody invited who has no account yet clicks through to sign up,
+ * and this page ignored `next` entirely while `SignupForm` hardcoded
+ * /account/orders. They finished signing up in the shop's account area, with
+ * the invitation still sitting unopened in their messages, and had to go and
+ * find the link a second time.
+ *
+ * `next` is now read here, validated once by `safeNext()` — never re-derived
+ * further down — and handed to the form, which carries it through sign-up, the
+ * confirmation email and /auth/callback. It also travels on the link across to
+ * /login, because a round trip that survives the form and dies on a "Sign in"
+ * link is still broken.
+ */
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const params = await searchParams;
+  const next = safeNext(one(params.next), SIGNUP_FALLBACK);
+  // True only when the visitor was sent here from somewhere that wants them
+  // back. Everyone else gets plain links, rather than the shop's own default
+  // spelled out as a parameter on every URL.
+  const carried = next !== SIGNUP_FALLBACK;
+
   return (
     <div className="wrap flex justify-center py-12 md:py-16">
       <div className="w-full max-w-[460px]">
@@ -41,7 +91,7 @@ export default function SignupPage() {
               ? "Save baskets, track orders, reorder favourites."
               : "Accounts aren't open yet, so there's nothing to set up just now. Pop back once we've switched them on."}
           </p>
-          <SignupForm />
+          <SignupForm next={next} carried={carried} />
         </div>
 
         {/* "Already have an account?" asserts that accounts exist, so it is
@@ -51,7 +101,7 @@ export default function SignupPage() {
             <>
               Already have an account?{" "}
               <Link
-                href="/login"
+                href={carried ? `/login?next=${encodeURIComponent(next)}` : "/login"}
                 className="font-bold text-accent underline underline-offset-2 hover:text-accent-dark"
               >
                 Sign in

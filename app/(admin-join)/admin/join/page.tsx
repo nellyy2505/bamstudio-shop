@@ -105,13 +105,19 @@ function renderState(state: JoinState, token: string, backHere: string): ReactNo
             <ButtonLink href={`/login?next=${encodeURIComponent(backHere)}`}>
               Sign in and come back
             </ButtonLink>
-            <ButtonLink href="/signup" variant="soft">
+            {/* Carries `next` for the same reason the sign-in button does. Sign-up
+                used to hardcode where it sent people, so somebody invited who had
+                no account yet made one and landed on their own orders page, with
+                the invitation still sitting unopened in their messages. It honours
+                `next` now, all of it through safeNext(). */}
+            <ButtonLink href={`/signup?next=${encodeURIComponent(backHere)}`} variant="soft">
               Create an account
             </ButtonLink>
           </Ending>
           <Alert tone="info">
-            Keep this link. Making an account does not bring you back here on its own — open
-            the invitation again once you are signed in, and it will pick up where you left off.
+            Keep this link anyway. Signing in or making an account should bring you straight
+            back here — but if it leaves you somewhere else, open the invitation again and it
+            will pick up where you left off.
           </Alert>
         </>
       );

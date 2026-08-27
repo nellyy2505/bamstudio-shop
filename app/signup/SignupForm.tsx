@@ -53,8 +53,6 @@ function isOffline(error: { name?: string; status?: number }): boolean {
   return error.name === "AuthRetryableFetchError" || error.status === 0;
 }
 
-const AFTER_SIGNUP = "/account/orders";
-
 function GoogleMark() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" focusable="false">
@@ -129,7 +127,35 @@ function strengthOf(password: string): number {
   return score;
 }
 
-export function SignupForm() {
+/**
+ * `next` arrives already validated.
+ *
+ * Defect this closes: this form used to hold its own `AFTER_SIGNUP =
+ * "/account/orders"` and ignore `next` completely, so an invited person who
+ * signed up from /signup?next=/admin/join?token=… landed in the shop's account
+ * area with the invitation unopened. It is a prop now, resolved once by
+ * `safeNext()` in page.tsx.
+ *
+ * It is deliberately NOT re-checked here. `safe-next.ts` returns the reparsed
+ * path precisely so no consumer can arrive at a different destination from the
+ * one that was validated, and a second validator in a client component is the
+ * second answer that file exists to prevent. This mirrors `LoginForm`, which
+ * takes `next` the same way.
+ */
+export function SignupForm({
+  next,
+  carried,
+}: {
+  next: string;
+  /**
+   * True when `next` came from the URL rather than being the page's own
+   * fallback — the difference between "we'll put you back where you were" and
+   * "we'll take you to your orders". Only ever used to choose honest wording
+   * and to decide whether a link needs the parameter; the destination itself is
+   * `next` either way.
+   */
+  carried: boolean;
+}) {
   const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -166,7 +192,7 @@ export function SignupForm() {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(AFTER_SIGNUP)}`,
+          redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         },
       });
       if (oauthError) {
@@ -218,7 +244,16 @@ export function SignupForm() {
             last_name: lastName,
             marketing_opt_in: marketing,
           },
-          emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(AFTER_SIGNUP)}`,
+          // This is the only place `next` can be put where it survives the
+          // person leaving the browser: Supabase copies `emailRedirectTo` into
+          // the confirmation link's `redirect_to`, so the parameter travels in
+          // the email itself rather than in any state we hold locally. The
+          // whole callback URL — query string included — has to be on the
+          // project's Redirect URLs list, exactly as the Google button above
+          // already requires. If it is not, Supabase drops it and falls back to
+          // the project's Site URL; the confirmation screen below says what to
+          // do when that happens instead of pretending it cannot.
+          emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         },
       });
 
@@ -253,7 +288,9 @@ export function SignupForm() {
         return;
       }
 
-      router.push(AFTER_SIGNUP);
+      // Confirmation is off, so there is a session already and no round trip
+      // through the inbox at all — straight to where they were headed.
+      router.push(next);
       router.refresh();
       leaving = true;
     } catch {
@@ -278,16 +315,36 @@ export function SignupForm() {
         </span>
         <div>
           <h2 className="text-xl">Check your email to confirm</h2>
+          {/* Where they are going is described, never printed. `next` is a
+              path out of the URL, and the sign-in page's rule holds here too:
+              text that arrived in a query string does not get rendered, or a
+              crafted link turns this card into a message from us. */}
           <p className="mt-1.5 text-sm text-muted">
             We&apos;ve sent a confirmation link to <b>{email}</b>. Open it and
-            you&apos;ll be signed straight in.
+            you&apos;ll be signed straight in
+            {carried ? ", then brought back to where you left off" : ""}.
           </p>
+          {/* Said plainly rather than hidden: the destination rides in the
+              confirmation link, so it depends on Supabase honouring the
+              redirect it was given. If it does not, this person is signed in
+              and standing in the wrong room with no idea why. Telling them to
+              reopen the original link is the one instruction that fixes it,
+              and it costs nothing when the link works. */}
+          {carried ? (
+            <p className="mt-2 text-sm text-muted">
+              If it signs you in but leaves you somewhere else, open the link
+              that sent you here again — it will pick up from there.
+            </p>
+          ) : null}
         </div>
         <Alert tone="info">
           Nothing yet? Give it a minute, then check your spam folder.
         </Alert>
+        {/* Carries `next` as well: somebody who realises here that they already
+            have an account must not lose their destination on the way to
+            sign in. */}
         <Link
-          href="/login"
+          href={carried ? `/login?next=${encodeURIComponent(next)}` : "/login"}
           className="text-sm font-bold text-accent underline underline-offset-2 hover:text-accent-dark"
         >
           Back to sign in

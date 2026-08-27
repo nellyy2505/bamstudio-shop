@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { safeNext } from "@/lib/safe-next";
+import { DEFAULT_NEXT, safeNext } from "@/lib/safe-next";
 import { siteUrl } from "@/lib/stripe";
 
 export const runtime = "nodejs";
@@ -47,7 +47,16 @@ export async function GET(request: Request) {
   // Path and query off request.url are fine — only its ORIGIN is wrong here.
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const next = safeNext(url.searchParams.get("next"));
+  // Sign-in, sign-up and the confirmation email all put `next` on this URL, so
+  // by the time we are here it is the only record of where the person was
+  // headed — there is no state on our side to fall back on. The customer
+  // default is stated rather than inherited, and it is genuinely a guess: if
+  // Supabase declined the redirect it was handed (the callback URL, query
+  // string and all, has to be on the project's Redirect URLs list) then `next`
+  // never arrived and an invited person lands on their orders instead of their
+  // invitation. That is why /signup's confirmation screen tells them to reopen
+  // the original link rather than leaving them to work it out.
+  const next = safeNext(url.searchParams.get("next"), DEFAULT_NEXT);
 
   const providerError =
     url.searchParams.get("error") ?? url.searchParams.get("error_description");
