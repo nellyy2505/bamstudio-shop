@@ -58,7 +58,24 @@ export type ProductFilters = {
   attachment?: string;
   min?: number;
   max?: number;
-  sort?: "popular" | "new" | "price-asc" | "price-desc" | "rating";
+  /**
+   * `"rating"` was a member here, and both sorts below ordered by the `rating`
+   * column. Every product in the catalogue is `rating: 0` — the seed emits it
+   * and nothing can raise it, because there is no review path — so "Highest
+   * rated" ranked the shop by a column with a single value and presented
+   * whatever order Postgres returned as a quality ranking, in a shop that
+   * suppresses ratings on every other surface. It is gone from the type, from
+   * both switches, and from the Sort by menu.
+   *
+   * It can still ARRIVE: app/shop/page.tsx casts `?sort=` straight out of the
+   * URL, so a bookmark or a shared link carrying `?sort=rating` outlives this
+   * change. That is handled rather than rejected — an unrecognised value falls
+   * through to the `default` branch in both sorts below and the shopper gets
+   * Most popular, which is also what the Sort by menu shows for a value it
+   * does not know. Keep both switches defaulting; do not make an unknown sort
+   * an error, and do not reintroduce this member without a real rating.
+   */
+  sort?: "popular" | "new" | "price-asc" | "price-desc";
   page?: number;
   perPage?: number;
 };
@@ -82,9 +99,8 @@ function applyFallbackFilters(filters: ProductFilters) {
     case "price-desc":
       rows.sort((a, b) => b.price - a.price);
       break;
-    case "rating":
-      rows.sort((a, b) => b.rating - a.rating);
-      break;
+    // No `case "rating"`: see ProductFilters["sort"] above. An unknown value
+    // (including a bookmarked ?sort=rating) lands in `default`.
     case "new":
       rows.sort((a, b) => Number(b.is_new) - Number(a.is_new));
       break;
@@ -144,9 +160,8 @@ export async function getProducts(
     case "price-desc":
       query = query.order("price", { ascending: false });
       break;
-    case "rating":
-      query = query.order("rating", { ascending: false });
-      break;
+    // No `case "rating"`: see ProductFilters["sort"] above. An unknown value
+    // (including a bookmarked ?sort=rating) lands in `default`.
     case "new":
       query = query.order("is_new", { ascending: false }).order("created_at", {
         ascending: false,

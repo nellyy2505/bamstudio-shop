@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ProductArt } from "@/components/ProductArt";
 import { Keycap, KeycapWord } from "@/components/builder/Keycap";
-import { Alert, Button, Icon, Pill, cx } from "@/components/ui";
+import { Button, Icon, Pill, cx } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
 import {
   BUILDER_ATTACHMENTS,
@@ -13,7 +13,6 @@ import {
   BUILDER_NO_CHARM_DISCOUNT,
   BUILDER_PRICING,
   PRINT_LEAD_TIME,
-  SLOW_LETTERS,
 } from "@/lib/config";
 import { money } from "@/lib/format";
 import type { ArtKey, Collection, Product, Tint } from "@/lib/types";
@@ -63,8 +62,6 @@ export function BuilderClient({
     if (!bundle) return 0;
     return bundle - (withCharm ? 0 : BUILDER_NO_CHARM_DISCOUNT);
   }, [letters.length, withCharm]);
-
-  const hasSlowLetter = letters.some((l) => SLOW_LETTERS.includes(l));
 
   function pushLetter(letter: string) {
     if (full) return;
@@ -183,9 +180,20 @@ export function BuilderClient({
                 1–{BUILDER_MAX_LETTERS} letters · {letters.length} used
               </span>
             </div>
+            {/* This read "Popular letters are always in stock; rare ones may
+                add a day." Both halves were untrue. Nothing anywhere measures
+                per-letter stock — every product row is `stock_on_hand: 0` and
+                there is no letter inventory in the schema at all — and nothing
+                adds a day to anything: PRINT_LEAD_TIME is one constant, no
+                other surface quotes a longer window for a rare letter, and
+                checkout's Stripe delivery estimate never adjusts it. The
+                replacement states what the builder actually knows: these are
+                printed to order, so the shop's own lead time applies whichever
+                letters are chosen. */}
             <p className="mb-4 text-[13.5px] text-muted">
-              Tap letters to add them. Popular letters are always in stock; rare
-              ones may add a day.
+              Tap letters to add them. Every letter is printed for your order,
+              so the print time is {PRINT_LEAD_TIME.label} whichever ones you
+              choose.
             </p>
 
             <div className="mb-3.5 flex min-h-[56px] flex-wrap items-center gap-2 rounded-2xl bg-cream p-3">
@@ -252,10 +260,14 @@ export function BuilderClient({
               ))}
             </div>
 
-            <p className="mt-3 flex items-center justify-center gap-2 text-[12.5px] text-faint">
-              <Icon name="clock" size={14} />
-              {SLOW_LETTERS.join(" · ")} are printed to order (+1 day)
-            </p>
+            {/* Removed: "{SLOW_LETTERS} are printed to order (+1 day)". The
+                "+1 day" was not backed by anything — see the note above the
+                letter tray. It also implied the other letters are NOT printed
+                to order, which is the stock claim again by implication: every
+                letter on this keyboard is printed for the order. Removing that
+                copy left `SLOW_LETTERS` with no reader, and it has since been
+                deleted from lib/config.ts — a note where it stood records why a
+                named list of "slow" letters is not worth keeping. */}
 
             {full ? (
               <p className="mt-3 text-center text-[13px] font-bold text-accent-dark">
@@ -417,13 +429,12 @@ export function BuilderClient({
             </div>
           </div>
 
-          {hasSlowLetter ? (
-            <div className="mb-4">
-              <Alert tone="info">
-                Your name uses a rare letter — add a day to the print time.
-              </Alert>
-            </div>
-          ) : null}
+          {/* Removed: an info alert reading "Your name uses a rare letter —
+              add a day to the print time." Nothing adds that day. The order
+              carries PRINT_LEAD_TIME like every other, the Stripe delivery
+              estimate is built from the same constant, and telling a customer
+              their order will be slower than it is, is as untrue as telling
+              them it will be faster. `hasSlowLetter` went with it. */}
 
           <Button full onClick={addToBasket} disabled={letters.length === 0}>
             {added ? (

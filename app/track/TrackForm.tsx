@@ -11,7 +11,7 @@ import {
   transitRangeLabel,
 } from "@/lib/config";
 import { canReachStudio } from "@/lib/contact";
-import { deliveryWindow, formatDate, money } from "@/lib/format";
+import { deliveryWindow, formatDate, money, pluralise } from "@/lib/format";
 import { ORDER_STATUS_FLOW } from "@/lib/types";
 import type { OrderStatus, PublicTrackedOrder } from "@/lib/types";
 
@@ -52,9 +52,22 @@ const STEP_COPY: Record<OrderStatus, { label: string; body: string }> = {
     label: "Packed",
     body: "Trimmed, checked by hand and bagged with its backing card.",
   },
+  /*
+   * This used to read "Handed to Australia Post. Tracking is live once they
+   * scan it in." — an unconditional promise of a tracking number, printed to
+   * every shipped order. It is not true for every parcel: `quoteBasket()`
+   * returns `tracked: false` for a Large Letter, `transitLabel()` takes
+   * tracking as a required argument precisely so nothing hardcodes the word,
+   * and the studio's dispatch panel has an explicit "posted without tracking"
+   * answer. /track stands in for a confirmation email the shop may not be able
+   * to send, so this was the worst place in the shop to promise a number that
+   * may never exist. The step now states only what is true of every dispatch;
+   * the number — or its absence — is rendered from the order's own
+   * `tracking_number` below.
+   */
   shipped: {
     label: "Shipped",
-    body: "Handed to Australia Post. Tracking is live once they scan it in.",
+    body: "Handed to Australia Post.",
   },
   delivered: {
     label: "Delivered",
@@ -66,11 +79,49 @@ const STEP_COPY: Record<OrderStatus, { label: string; body: string }> = {
   },
 };
 
-type Status = "idle" | "searching" | "found" | "missing" | "error";
+/**
+ * A sale typed in at a market is written straight to `delivered` with
+ * `shipping_method` of `in_person` (`recordSale` in app/admin/actions.ts), and
+ * it can be looked up here whenever a real email was taken at the stall. Two
+ * steps then describe something that never happened — nothing was handed to
+ * Australia Post and no carrier marked anything delivered — so they are read
+ * off the method rather than assumed, exactly as the studio's own dispatch
+ * panel does it.
+ */
+function isInPerson(order: TrackedOrder): boolean {
+  return order.shipping_method === "in_person";
+}
+
+function stepBody(step: OrderStatus, order: TrackedOrder): string {
+  if (isInPerson(order)) {
+    if (step === "shipped") return "Handed over in person — nothing was posted.";
+    if (step === "delivered") return "Handed over in person.";
+  }
+  return STEP_COPY[step].body;
+}
+
+/**
+ * `missing` is a genuine miss. `throttled` and `invalid` are not: the route
+ * answers 429 after ten attempts per IP per minute and 400 on input it cannot
+ * parse, and both used to land in the not-found card, which asserts "it is
+ * almost always a typo in the order number" and invites the customer to retype
+ * into a limiter that will keep refusing. Australian mobile carriers NAT
+ * heavily, so a customer's first ever attempt can be throttled by strangers
+ * sharing their address. Each response now says what is actually true.
+ */
+type Status =
+  | "idle"
+  | "searching"
+  | "found"
+  | "missing"
+  | "throttled"
+  | "invalid"
+  | "error";
 
 export function TrackForm() {
   const [status, setStatus] = useState<Status>("idle");
   const [order, setOrder] = useState<TrackedOrder | null>(null);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,6 +129,7 @@ export function TrackForm() {
 
     setStatus("searching");
     setOrder(null);
+    setRetryAfter(null);
 
     try {
       const res = await fetch("/api/track", {
@@ -91,9 +143,24 @@ export function TrackForm() {
 
       const body = await res.json().catch(() => null);
 
-      if (body?.found && body.order) {
+      if (res.ok && body?.found && body.order) {
         setOrder(body.order as TrackedOrder);
         setStatus("found");
+        return;
+      }
+
+      // Branch on the status, not on `found`. Every response carries
+      // `found: false`, including the two the route returns before it looks
+      // anything up, so reading that field alone reported throttling and
+      // unparseable input as "No order matched those details".
+      if (res.status === 429) {
+        const header = Number(res.headers.get("Retry-After"));
+        setRetryAfter(Number.isFinite(header) && header > 0 ? header : null);
+        setStatus("throttled");
+        return;
+      }
+      if (res.status === 400) {
+        setStatus("invalid");
         return;
       }
       setStatus("missing");
@@ -163,6 +230,8 @@ export function TrackForm() {
       </div>
 
       {status === "missing" ? <NotFoundCard /> : null}
+      {status === "throttled" ? <ThrottledCard seconds={retryAfter} /> : null}
+      {status === "invalid" ? <InvalidCard /> : null}
       {status === "found" && order ? <OrderResult order={order} /> : null}
     </div>
   );
@@ -197,6 +266,66 @@ function NotFoundCard() {
   );
 }
 
+/**
+ * 429. Nothing was looked up, so nothing may be said about the order — least
+ * of all that it could not be found. The limit is ten attempts per IP per
+ * minute and Australian mobile carriers put many customers behind one address,
+ * so a first attempt really can be refused because of strangers; saying so is
+ * kinder than implying the customer got their own order number wrong.
+ */
+function ThrottledCard({ seconds }: { seconds: number | null }) {
+  return (
+    <div className="card flex flex-col items-start p-7 sm:p-8">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-cream">
+        <Icon name="clock" size={24} />
+      </span>
+      <h2 className="mt-4 text-xl">Too many lookups just now</h2>
+      <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">
+        We did not check your order — this page limits how often it will look
+        one up, and that limit counts everyone sharing your internet connection,
+        which on a mobile network can be a lot of people. Nothing is wrong with
+        your order or the details you typed.
+      </p>
+      <p className="mt-3 max-w-[56ch] text-[14.5px] text-muted">
+        {seconds
+          ? `Wait about ${pluralise(seconds, "second")} and try the same details again.`
+          : "Wait about a minute and try the same details again."}
+      </p>
+      {canReachStudio ? (
+        <Link
+          href="/contact"
+          className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-accent underline underline-offset-2 hover:text-accent-dark"
+        >
+          Or contact the studio
+          <Icon name="arrow" size={14} />
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * 400. The route rejected the body before any lookup — an order number under
+ * three characters or over forty, or something that is not an email address.
+ * Again: no search happened, so "no order matched" would be a claim about a
+ * search that was never run.
+ */
+function InvalidCard() {
+  return (
+    <div className="card flex flex-col items-start p-7 sm:p-8">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-cream">
+        <Icon name="help" size={24} />
+      </span>
+      <h2 className="mt-4 text-xl">We could not read those details</h2>
+      <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">
+        Nothing was looked up. The order number should look like BS-1042-9F3A,
+        and the email address needs to be the full address you ordered with.
+        Check both and try again.
+      </p>
+    </div>
+  );
+}
+
 function OrderResult({ order }: { order: TrackedOrder }) {
   const flow = ORDER_STATUS_FLOW;
   const cancelled = order.status === "cancelled";
@@ -209,6 +338,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
       ? flow.length
       : flow.indexOf(order.status);
 
+  const inPerson = isInPerson(order);
   const method = SHIPPING.methods.find((m) => m.id === order.shipping_method);
   // Unknown methods fall back to standard inside the helper.
   const [transitMin, transitMax] = transitDays(order.shipping_method);
@@ -223,7 +353,12 @@ function OrderResult({ order }: { order: TrackedOrder }) {
           <h2 className="text-xl">Order {order.order_number}</h2>
           <p className="mt-1 text-[13.5px] text-muted">
             Placed {formatDate(order.created_at)} · {money(order.total)} ·{" "}
-            {method?.label ?? order.shipping_method} post
+            {/* An in-person sale has no postage method, and printing
+                "in_person post" both leaked a database value and described a
+                parcel that never existed. */}
+            {inPerson
+              ? "handed over in person"
+              : `${method?.label ?? order.shipping_method} post`}
           </p>
         </div>
         <Pill tone={cancelled ? "warn" : delivered ? "good" : "accent"}>
@@ -291,12 +426,29 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                     {current ? " — happening now" : ""}
                   </p>
                   <p className="mt-0.5 max-w-[52ch] text-[13.5px] text-muted">
-                    {STEP_COPY[step].body}
+                    {stepBody(step, order)}
                   </p>
-                  {step === "shipped" && reached && order.tracking_number ? (
-                    <p className="mt-1.5 text-[13.5px] font-extrabold">
-                      Tracking: {order.tracking_number}
-                    </p>
+                  {/* The tracking line is worded off this order's own
+                      `tracking_number`, which the API allow-lists and which is
+                      the only signal there is: `markShipped` is the sole writer
+                      of the column and refuses a tracked dispatch with an empty
+                      box, so a posted order with no number was posted without
+                      one. The copy still speaks about the record rather than
+                      the parcel, because a hand edit in the Supabase table
+                      editor can break that invariant and nothing here would
+                      know. */}
+                  {step === "shipped" && reached && !inPerson ? (
+                    order.tracking_number ? (
+                      <p className="mt-1.5 text-[13.5px] font-extrabold">
+                        Tracking: {order.tracking_number}
+                      </p>
+                    ) : (
+                      <p className="mt-1.5 max-w-[52ch] text-[13.5px] text-muted">
+                        No tracking number was recorded for this parcel — some
+                        orders go by untracked letter post, so there is nothing
+                        to follow.
+                      </p>
+                    )
                   ) : null}
                 </div>
               </li>
@@ -305,7 +457,11 @@ function OrderResult({ order }: { order: TrackedOrder }) {
         </ol>
       )}
 
-      {!cancelled ? (
+      {/* Nothing was posted for an in-person sale, so neither half of this box
+          is true of one: there is no carrier transit to add to the print time
+          and no post office to ask about a parcel that was handed over at a
+          stall. */}
+      {!cancelled && !inPerson ? (
         <div className="mt-2 flex items-start gap-2.5 rounded-xl bg-cream px-4 py-3 text-[13.5px] text-muted">
           <Icon name="truck" size={18} className="mt-px shrink-0" />
           <span>
@@ -329,7 +485,9 @@ function OrderResult({ order }: { order: TrackedOrder }) {
 
       {items.length > 0 ? (
         <div className="mt-6 border-t border-line pt-6">
-          <h3 className="mb-4 text-[15px]">In this parcel</h3>
+          <h3 className="mb-4 text-[15px]">
+            {inPerson ? "What you bought" : "In this parcel"}
+          </h3>
           <ul className="flex flex-col gap-3.5">
             {items.map((item, i) => (
               <li

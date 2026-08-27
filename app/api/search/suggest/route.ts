@@ -66,6 +66,14 @@ export async function GET(request: Request) {
     const products = await searchProducts(term);
     return NextResponse.json(
       {
+        // `rating` and `review_count` are published so the client can decide
+        // whether there is anything to show, NOT so it can print them: every
+        // product in the catalogue is rating 0 / review_count 0 and there is
+        // no review-submission path, so a suggestion that renders either one
+        // unconditionally states a fact the shop does not have. SearchBar did
+        // exactly that ("$9.00 · 0 reviews") until it was gated on
+        // `review_count > 0`, the same way ProductCard and the product page
+        // already gate theirs. Any new consumer of this route gates too.
         products: products.slice(0, 5).map((p) => ({
           slug: p.slug,
           short_name: p.short_name,

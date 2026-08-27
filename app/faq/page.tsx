@@ -86,22 +86,34 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
         <p>
           Everything is printed to order on one printer, so allow{" "}
           <strong className="text-ink">{PRINT_LEAD_TIME.label}</strong> for
-          printing, checking and packing before your parcel is dispatched. The
-          tracking number appears on{" "}
+          printing, checking and packing before your parcel is dispatched. You
+          can follow it on{" "}
           <Link
             href="/track"
             className="font-bold text-accent underline underline-offset-2"
           >
             your order
           </Link>{" "}
-          as soon as it is posted — order number and the email you ordered with
-          is all you need.{" "}
+          from the moment it is posted — order number and the email you ordered
+          with is all you need.{" "}
+          {/* This used to say "the tracking number appears on your order as
+              soon as it is posted", flat, with no condition on it. Not every
+              parcel has one: quoteBasket() returns `tracked: false` for a Large
+              Letter, and the studio's dispatch panel has an explicit "posted
+              without tracking — there is no number to follow" answer that
+              writes SQL NULL. /track now words that step off the order's own
+              tracking_number, and this page must not promise what that page
+              cannot deliver. */}
+          Where a parcel goes with a tracking number, it appears there as soon
+          as it is posted; smaller orders can go as untracked letter post, which
+          has no number to follow, and the page says so rather than leaving you
+          waiting for one.{" "}
           {/* Gated on the secrets the webhook checks. We never email a dispatch
               or tracking notice in any configuration, so that denial is flat;
               the confirmation email is where the order number comes from when
               one is sent, which is worth saying because /track needs it. */}
           {SENDS_CONFIRMATION
-            ? "We email you an order confirmation with that number when you pay, but we do not email dispatch or tracking notices — the tracking number appears here instead."
+            ? "We email you an order confirmation with that number when you pay, but we do not email dispatch or tracking notices — anything there is to follow shows up on your order here instead."
             : "We do not email order confirmations, dispatch notices or tracking numbers, so this page is where to look."}
         </p>
         <p>

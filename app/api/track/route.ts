@@ -124,6 +124,14 @@ function toPublicOrder(row: unknown): PublicTrackedOrder | null {
     status: text(order.status) as OrderStatus,
     total: number(order.total),
     shipping_method: text(order.shipping_method),
+    // Both of these are load-bearing for what /track is allowed to SAY, not
+    // just for what it shows. `tracking_number` being null is the only signal
+    // the page has that a parcel went untracked — `markShipped` refuses a
+    // tracked dispatch with an empty box, so the null is an answer somebody
+    // gave — and `shipping_method` of `in_person` is the only signal that
+    // nothing was posted at all. Dropping either from this allow-list does not
+    // hide a field; it makes the page word a dispatch it cannot see, which is
+    // how it came to promise every shipped order a tracking number.
     tracking_number: nullableText(order.tracking_number),
     created_at: text(order.created_at),
     shipping_address: toPublicAddress(order.shipping_address),

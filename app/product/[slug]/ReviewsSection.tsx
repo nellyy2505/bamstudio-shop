@@ -68,9 +68,17 @@ export function ReviewsSection({
                 </div>
               </div>
               {reviews.length > 0 ? <Histogram reviews={reviews} /> : null}
+              {/* "We publish them unedited, good and bad" described an
+                  editorial process that does not exist: there is no review
+                  submission path, no moderation queue and nothing that
+                  publishes anything, and the review insert policy was
+                  withdrawn from the schema entirely. What is left is a
+                  statement about where a review may come from, which is a
+                  commitment the shop can keep — and it matches the empty state
+                  below. If a review process is ever built, describe the one
+                  that exists then. */}
               <p className="text-[13px] text-muted">
-                Reviews come from shoppers who bought this piece. We publish
-                them unedited, good and bad.
+                Reviews come from shoppers who bought this piece.
               </p>
             </>
           ) : (
@@ -85,9 +93,18 @@ export function ReviewsSection({
           {reviews.length === 0 ? (
             <div className="card px-6 py-12 text-center">
               <p className="font-bold">No reviews yet</p>
+              {/* This said "If you order it, we'll ask what you think once it
+                  lands." Nothing asks. There is no review request anywhere in
+                  the codebase, no review-submission page or route, and no
+                  insert policy behind one — so this promised a message that
+                  cannot be sent, to a customer with no way to answer it even if
+                  it were. Unlike the neighbouring email claims it was not even
+                  gated on isEmailConfigured(), and gating it would not have
+                  saved it: the capability that is missing is the review path,
+                  not the mailbox. Replaced with the fact, which is all the
+                  empty state ever needed to say. */}
               <p className="mt-1.5 text-sm text-muted">
-                This one is new to the shop. If you order it, we&apos;ll ask what
-                you think once it lands.
+                This one is new to the shop, so nobody has had the chance yet.
               </p>
             </div>
           ) : (

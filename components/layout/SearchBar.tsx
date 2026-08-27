@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { Icon, Pill } from "@/components/ui";
 import { ProductImage } from "@/components/ProductArt";
-import { money } from "@/lib/format";
+import { money, pluralise } from "@/lib/format";
 import type { ArtKey, Tint } from "@/lib/types";
 
 type Suggestion = {
@@ -156,8 +156,21 @@ export function SearchBar({ initialQuery = "" }: { initialQuery?: string }) {
                     <span className="block truncate text-[14.5px] font-semibold">
                       {item.short_name}
                     </span>
+                    {/* This line used to read `{money(price)} · {review_count}
+                        reviews` unconditionally, so every suggestion in the
+                        header search — the main navigation on a phone — said
+                        "$9.00 · 0 reviews". No product has a review; the seed
+                        emits review_count 0 and there is no review-submission
+                        path at all, so that was a plausible-looking zero on
+                        every page of the shop. ProductCard and the product
+                        page both gate their review row on `review_count > 0`
+                        and print nothing otherwise; this now matches them, so
+                        the count only ever appears once a real one exists. */}
                     <span className="text-xs text-muted">
-                      {money(item.price)} · {item.review_count} reviews
+                      {money(item.price)}
+                      {item.review_count > 0
+                        ? ` · ${pluralise(item.review_count, "review")}`
+                        : ""}
                     </span>
                   </span>
                   <Icon name="arrow" size={16} className="shrink-0 text-faint" />
