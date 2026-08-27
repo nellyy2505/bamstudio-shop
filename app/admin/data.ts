@@ -6,7 +6,28 @@ import {
   type CostBreakdown,
   type CostSettings,
 } from "@/lib/costing";
+/*
+ * The cost basis lives in lib/, not here.
+ *
+ * `unitCostsAtSale()` is imported by /api/checkout and /api/webhooks/stripe as
+ * a sale is recorded, and two customer-facing routes must not depend on the
+ * staff area to know what a piece cost. It took the settings and accessory
+ * reads it is built on down with it, so there is one copy of each rather than
+ * two. They are re-exported below because the studio screens have always
+ * imported them from this module and nothing about where they live changes what
+ * they answer.
+ */
+import { getSettings, type Accessory } from "@/lib/cost-basis";
 import { SERVICE_CODES } from "@/lib/shipping/quote";
+import { isEmailConfigured } from "@/lib/email";
+
+export {
+  getAccessories,
+  getSettings,
+  unitCostsAtSale,
+  type Accessory,
+  type Settings,
+} from "@/lib/cost-basis";
 
 /**
  * Every read the staff area makes.
@@ -93,81 +114,6 @@ export const SOLD_STATUSES = [
   "delivered",
 ] as const;
 
-/* ------------------------------------------------------------- settings */
-
-export type Settings = CostSettings & {
-  printerModel: string | null;
-  defaultBufferStock: number;
-  mailerPerOrderCents: number;
-};
-
-/**
- * The costing constants.
- *
- * Postgres returns `numeric` as a *string* through PostgREST, to avoid the
- * precision loss of a float. Every one of these goes through Number() for that
- * reason — read `target_margin` straight and you get "0.700", and
- * `1 - "0.700" - 0.016` is NaN, which then propagates silently into every price
- * on the screen.
- */
-export async function getSettings(): Promise<Settings> {
-  assertServer("getSettings");
-
-  const admin = createAdminClient();
-  const { data } = await admin.from("shop_settings").select("*").maybeSingle();
-
-  const row = asRow(data ?? {});
-  const num = (key: string, fallback = 0) => {
-    const value = Number(row[key]);
-    return Number.isFinite(value) ? value : fallback;
-  };
-
-  return {
-    printerModel: (row.printer_model as string | null) ?? null,
-    printerPriceCents: num("printer_price_cents"),
-    printerLifeHours: num("printer_life_hours", 1),
-    powerDrawWatts: num("power_draw_watts"),
-    electricityPerKwhCents: num("electricity_per_kwh_cents"),
-    filamentPerKgCents: num("filament_per_kg_cents"),
-    targetMargin: num("target_margin"),
-    cardFeeRate: num("card_fee_rate"),
-    roundPriceToCents: num("round_price_to_cents", 1),
-    packagingPerUnitCents: num("packaging_per_unit_cents"),
-    defaultBufferStock: num("default_buffer_stock", 5),
-    mailerPerOrderCents: num("mailer_per_order_cents"),
-  };
-}
-
-/* ---------------------------------------------------------- accessories */
-
-export type Accessory = {
-  id: string;
-  name: string;
-  costCents: number;
-  costNote: string | null;
-  active: boolean;
-  sortOrder: number;
-};
-
-export async function getAccessories(): Promise<Accessory[]> {
-  assertServer("getAccessories");
-
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("accessories")
-    .select("id, name, cost_cents, cost_note, active, sort_order")
-    .order("sort_order", { ascending: true });
-
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    name: row.name as string,
-    costCents: Number(row.cost_cents ?? 0),
-    costNote: (row.cost_note as string | null) ?? null,
-    active: Boolean(row.active),
-    sortOrder: Number(row.sort_order ?? 0),
-  }));
-}
-
 /* -------------------------------------------------------------- colours */
 
 export type ColourRow = {
@@ -238,6 +184,16 @@ export type ProductRow = {
   filament: FilamentUse[];
   /** Total grams, or null when no colour has been recorded at all. */
   totalGrams: number | null;
+  /**
+   * Units sold that the ready-to-ship buffer did not have.
+   *
+   * A running total, never decremented automatically (0005_sale_integrity.sql).
+   * The shop prints to order, so an oversell is allowed and is not an error —
+   * it is somebody who has already paid, waiting for a piece that was not on
+   * the shelf. That makes it a print-this-first signal, which is why the
+   * inventory screen reads it.
+   */
+  oversoldUnits: number;
 };
 
 /** A product with everything the edit screen and the costing need. */
@@ -261,7 +217,7 @@ export type ProductDetail = ProductRow & {
 const PRODUCT_COLUMNS =
   "id, sku, slug, name, short_name, category, theme, price, active, " +
   "on_market_stall, stock_on_hand, buffer_stock, print_time_hours, " +
-  "accessory_id, photos, art, tint, " +
+  "accessory_id, photos, art, tint, oversold_units, " +
   "product_filament(grams, colours(id, name, hex))";
 
 type FilamentJoin = {
@@ -321,6 +277,9 @@ function mapProductRow(row: Record<string, unknown>): ProductRow {
     tint: (row.tint as string) ?? "cream",
     filament,
     totalGrams: filament.length === 0 ? null : filament.reduce((s, f) => s + f.grams, 0),
+    // `not null default 0` in the schema, so a 0 here is a real count and not
+    // a stand-in for an absent one.
+    oversoldUnits: Number(row.oversold_units ?? 0),
   };
 }
 
@@ -594,6 +553,9 @@ export type InventoryRow = {
   toPrint: number;
 };
 
+/** A product carrying an unprinted oversell, for a screen to name. */
+export type OversoldProduct = { id: string; name: string; units: number };
+
 export type FilamentNeed = {
   colourId: string;
   name: string;
@@ -614,6 +576,23 @@ export type Inventory = {
   totalBuyCostCents: number;
   /** Products with no filament recipe at all — invisible to the buy list. */
   unmeasured: number;
+  /**
+   * Units sold that the shelf did not have, across the whole catalogue.
+   *
+   * 0 is a real answer — nothing has been oversold — and must be rendered as
+   * "nothing to report", never as a figure.
+   */
+  oversoldUnits: number;
+  /**
+   * Oversold products the print queue does not list.
+   *
+   * `rows` only carries products with something to print, so a piece that was
+   * oversold and has since been printed and counted back up drops out of it
+   * while its counter is still standing. Nothing decrements `oversold_units`
+   * automatically (0005_sale_integrity.sql), so those would otherwise vanish
+   * from the one screen that is meant to show them.
+   */
+  oversoldOffQueue: OversoldProduct[];
 };
 
 /**
@@ -680,13 +659,38 @@ export async function getInventory(): Promise<Inventory> {
     };
   });
 
+  /*
+   * Oversold first, then by how much there is to print.
+   *
+   * This is the one ordering change the oversell counter earns. An oversold
+   * piece is not "more to print" — it is somebody who has already paid and is
+   * waiting for a piece that was not on the shelf when they bought it, so it
+   * outranks a product that is merely below its buffer however large the gap.
+   * Within each group the old rule stands, so the queue reads the same way it
+   * always did on a day when nothing has been oversold.
+   */
+  const queue = rows
+    .filter((r) => r.toPrint > 0)
+    .sort(
+      (a, b) =>
+        b.product.oversoldUnits - a.product.oversoldUnits ||
+        b.toPrint - a.toPrint,
+    );
+
+  const queued = new Set(queue.map((r) => r.product.id));
+
   return {
-    rows: rows.filter((r) => r.toPrint > 0).sort((a, b) => b.toPrint - a.toPrint),
+    rows: queue,
     filament,
     totalToPrint: rows.reduce((s, r) => s + r.toPrint, 0),
     totalRollsToBuy: filament.reduce((s, f) => s + f.rollsToBuy, 0),
     totalBuyCostCents: filament.reduce((s, f) => s + f.costToBuyCents, 0),
     unmeasured: products.filter((p) => p.totalGrams === null).length,
+    oversoldUnits: products.reduce((s, p) => s + p.oversoldUnits, 0),
+    oversoldOffQueue: products
+      .filter((p) => p.oversoldUnits > 0 && !queued.has(p.id))
+      .sort((a, b) => b.oversoldUnits - a.oversoldUnits)
+      .map((p) => ({ id: p.id, name: p.name, units: p.oversoldUnits })),
   };
 }
 
@@ -737,6 +741,21 @@ export type OrderDetail = OrderRow & {
    */
   soldAsTracked: boolean | null;
   lines: OrderLine[];
+  /**
+   * Open payment incidents recorded against this order — money the shop has
+   * taken and owes back.
+   *
+   * Today there is one kind: a payment that cleared for an order somebody had
+   * already cancelled (0005_sale_integrity.sql). It showed on the studio
+   * overview and nowhere else, so the order itself — the screen a person is
+   * looking at when they decide whether to print and post it — said nothing
+   * about the fact that it was paid for and must not be fulfilled.
+   *
+   * An array rather than one row: `payment_incidents` is keyed on the Stripe
+   * session, and one order can be paid for through more than one session.
+   * Empty is the ordinary case.
+   */
+  openIncidents: PaymentIncident[];
 };
 
 /**
@@ -857,17 +876,31 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
   assertServer("getOrder");
 
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("orders")
-    .select(
-      "id, order_number, email, status, channel, subtotal, shipping, total, " +
-        "created_at, shipping_method, tracking_number, quoted_service_code, " +
-        "gift_note, shipping_address, stripe_payment_intent, recorded_by, " +
-        "order_items(id, product_id, product_name, variant_label, unit_price, " +
-        "quantity, unit_cost_cents, colour, personalisation)",
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // Two reads, not an embed: `payment_incidents.order_id` is nullable and set
+  // null if the order is ever removed, so it is a fact about a *payment* that
+  // happens to point here — not a child of the order. Read alongside rather
+  // than nested, so a failure to read incidents cannot lose the order.
+  const [{ data, error }, incidents] = await Promise.all([
+    admin
+      .from("orders")
+      .select(
+        "id, order_number, email, status, channel, subtotal, shipping, total, " +
+          "created_at, shipping_method, tracking_number, quoted_service_code, " +
+          "gift_note, shipping_address, stripe_payment_intent, recorded_by, " +
+          "order_items(id, product_id, product_name, variant_label, unit_price, " +
+          "quantity, unit_cost_cents, colour, personalisation)",
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    admin
+      .from("payment_incidents")
+      .select(
+        "id, order_id, stripe_session_id, amount_cents, order_status, detail, noticed_at",
+      )
+      .eq("order_id", id)
+      .is("resolved_at", null)
+      .order("noticed_at", { ascending: false }),
+  ]);
 
   if (error || !data) return null;
 
@@ -885,6 +918,15 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
     shippingAddress: (row.shipping_address as Record<string, unknown> | null) ?? {},
     stripePaymentIntent: (row.stripe_payment_intent as string | null) ?? null,
     recordedBy: (row.recorded_by as string | null) ?? null,
+    openIncidents: (incidents.data ?? []).map((incident) => ({
+      id: incident.id as string,
+      orderId: (incident.order_id as string | null) ?? null,
+      stripeSessionId: incident.stripe_session_id as string,
+      amountCents: Number(incident.amount_cents ?? 0),
+      orderStatus: (incident.order_status as string | null) ?? null,
+      detail: (incident.detail as string | null) ?? null,
+      noticedAt: incident.noticed_at as string,
+    })),
     lines: items.map((raw) => { const item = asRow(raw); return {
       id: item.id as string,
       productId: (item.product_id as string | null) ?? null,
@@ -1148,6 +1190,106 @@ export type StudioSummary = {
   /** True when the shop has never taken an order — a real state, not an error. */
   noOrdersYet: boolean;
 };
+
+/** A payment that took money the shop cannot honour, still awaiting a refund. */
+export type PaymentIncident = {
+  id: string;
+  orderId: string | null;
+  stripeSessionId: string;
+  amountCents: number;
+  orderStatus: string | null;
+  detail: string | null;
+  noticedAt: string;
+};
+
+/**
+ * The three things on the overview that mean somebody has been charged, or
+ * somebody has been left waiting, and only a person can put it right.
+ *
+ * All three used to be invisible. A payment landing on a cancelled order was a
+ * `console.error` on a platform log nobody reads. A confirmation email that
+ * never went out left no trace anywhere. An oversell was clamped to zero and
+ * never mentioned. None of them can be fixed by code; all of them have to be
+ * seen.
+ */
+export type StudioAttention = {
+  /** Money the shop owes back. Manual refunds, but she finds out. */
+  refundsOwed: PaymentIncident[];
+  /**
+   * Whether this deployment can send email at all, read from the one predicate
+   * that decides it. On a shop with no mail provider the count below is
+   * meaningless — silence is expected, every page already says no order email
+   * is coming — so the overview says nothing rather than reporting every order
+   * as overdue.
+   */
+  emailConfigured: boolean;
+  /** Paid, numbered website orders with no confirmation email recorded. */
+  ordersAwaitingConfirmation: number;
+  /** Units sold that the ready-to-ship buffer did not have — print these first. */
+  oversoldUnits: number;
+  oversoldProducts: { id: string; name: string; units: number }[];
+};
+
+export async function getStudioAttention(): Promise<StudioAttention> {
+  assertServer("getStudioAttention");
+
+  const admin = createAdminClient();
+  // Read once, here, from lib/email's own predicate. Mirroring "can this shop
+  // send" into a column or a second boolean is how the claim and the capability
+  // drift apart.
+  const emailConfigured = isEmailConfigured();
+
+  const [incidents, awaiting, oversold] = await Promise.all([
+    admin
+      .from("payment_incidents")
+      .select(
+        "id, order_id, stripe_session_id, amount_cents, order_status, detail, noticed_at",
+      )
+      .is("resolved_at", null)
+      .order("noticed_at", { ascending: false })
+      .limit(20),
+    emailConfigured
+      ? admin
+          .from("orders")
+          .select("id", { count: "exact", head: true })
+          // Website orders only: a sale typed in at a market never had a
+          // confirmation email to send, so counting those would report a
+          // backlog that does not exist.
+          .eq("channel", "website")
+          .not("order_number", "is", null)
+          .is("confirmation_email_sent_at", null)
+          .not("status", "in", '("pending","cancelled")')
+      : Promise.resolve({ count: 0 }),
+    admin
+      .from("products")
+      .select("id, name, oversold_units")
+      .gt("oversold_units", 0)
+      .order("oversold_units", { ascending: false })
+      .limit(10),
+  ]);
+
+  const oversoldProducts = (oversold.data ?? []).map((row) => ({
+    id: row.id as string,
+    name: row.name as string,
+    units: Number(row.oversold_units ?? 0),
+  }));
+
+  return {
+    refundsOwed: (incidents.data ?? []).map((row) => ({
+      id: row.id as string,
+      orderId: (row.order_id as string | null) ?? null,
+      stripeSessionId: row.stripe_session_id as string,
+      amountCents: Number(row.amount_cents ?? 0),
+      orderStatus: (row.order_status as string | null) ?? null,
+      detail: (row.detail as string | null) ?? null,
+      noticedAt: row.noticed_at as string,
+    })),
+    emailConfigured,
+    ordersAwaitingConfirmation: awaiting.count ?? 0,
+    oversoldUnits: oversoldProducts.reduce((sum, p) => sum + p.units, 0),
+    oversoldProducts,
+  };
+}
 
 export async function getStudioSummary(): Promise<StudioSummary> {
   assertServer("getStudioSummary");

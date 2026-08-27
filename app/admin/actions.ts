@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireStaff, type Capability } from "@/lib/auth/staff";
-import { MEASURE_COLOUR_SLOTS } from "./data";
+import { MEASURE_COLOUR_SLOTS, unitCostsAtSale } from "./data";
 import { siteUrl } from "@/lib/stripe";
 import {
   hashToken,
@@ -521,9 +521,33 @@ export async function removePhoto(_prev: FormState, form: FormData): Promise<For
 
     if (!product) return fail("That product no longer exists.");
 
-    const photos = (Array.isArray(product.photos) ? product.photos : []).filter(
-      (p: { path?: string }) => p?.path !== path,
-    );
+    const existing = (Array.isArray(product.photos) ? product.photos : []) as {
+      path?: string;
+    }[];
+
+    // THE DEFECT THIS CLOSES (defect 6).
+    //
+    // `path` is a form field. It used to be passed straight to
+    // `storage.remove()` on the SERVICE-ROLE client, which bypasses RLS and
+    // every storage policy — and the only thing the surrounding code checked
+    // was this product's own JSON array, which it merely filtered. So a POST to
+    // this action's id with any other object's path deleted that object: every
+    // photograph in the bucket was one request away from anyone holding a
+    // `catalogue` capability, and staff invitations grant it. This is precisely
+    // what lib/supabase/server.ts's own warning about the service-role client
+    // forbids — "never in anything a request body can steer".
+    //
+    // The product's stored photo list is the authority. Not a prefix check on
+    // the path: `uploadPhotos` happens to write `<product id>/<random>.<ext>`,
+    // but that is a naming convention, and a rule derived from a convention is
+    // a rule that stops holding the day the convention changes. A path this
+    // product does not list is not this product's photo, whatever it looks
+    // like.
+    if (!existing.some((p) => p?.path === path)) {
+      return fail("That photo is not on this product.");
+    }
+
+    const photos = existing.filter((p) => p?.path !== path);
 
     // The row first, then the object. If the storage delete fails the photo is
     // already gone from the page, which is what was asked for; an orphaned file
@@ -1108,7 +1132,11 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
 
     const { data: product } = await admin
       .from("products")
-      .select("id, name, price, art, tint, stock_on_hand, print_time_hours, accessory_id")
+      // Only what the order line needs. The costing inputs (print time,
+      // accessory, filament) and the stock count are no longer read here:
+      // `unitCostsAtSale` loads the first three, and the stock movement happens
+      // inside `decrement_stock` rather than as a read-modify-write up here.
+      .select("id, name, price, art, tint")
       .eq("id", productId)
       .maybeSingle();
 
@@ -1123,7 +1151,13 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
     // shows it. Null when the product has never been measured — an honest gap
     // that the reports then say out loud, rather than a zero that silently
     // becomes 100% margin.
-    const unitCostCents = await costAtSale(admin, product);
+    //
+    // `unitCostsAtSale` is now the one implementation, shared with the website
+    // paths (app/api/checkout and the Stripe webhook), which until this round
+    // stamped no cost at all. A hand-rolled copy used to live here; two
+    // definitions of what a piece costs is how a market sale and a web sale
+    // start reporting different margins for the same object.
+    const unitCostCents = (await unitCostsAtSale([product.id])).get(product.id) ?? null;
 
     const subtotal = unitPrice * quantity;
 
@@ -1157,60 +1191,125 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
       unit_cost_cents: unitCostCents,
     });
 
-    if (lineError) return fail(friendly(lineError.message));
+    // THE DEFECT THIS CLOSES (defect 4): this used to return here and leave the
+    // order row behind. That orphan is `status: 'delivered'` with a real total
+    // and no lines, and getReports() sums exactly those statuses — so a failed
+    // line insert added revenue the shop never took, against nothing sold, for
+    // ever. The webhook's staged path (savePendingOrder in
+    // app/api/checkout/route.ts) already deletes on this failure and says why;
+    // this is the same rule, and the order is ours, unnumbered, and one
+    // statement old, so removing it is safe.
+    if (lineError) {
+      const { error: cleanupError } = await admin
+        .from("orders")
+        .delete()
+        .eq("id", order.id);
+      if (cleanupError) {
+        // Worth its own sentence: the sale was not recorded AND a row with a
+        // total and no lines is still sitting in the table skewing reports.
+        console.error(
+          `[admin] Could not remove the empty order ${order.id} after its ` +
+            "line failed; it will count as revenue until it is deleted:",
+          cleanupError.message,
+        );
+        return fail(
+          "That sale could not be recorded, and an empty order was left behind. " +
+            `Delete order ${order.id} before trusting the reports.`,
+        );
+      }
+      return fail(friendly(lineError.message));
+    }
 
     // Give it an order number the way a website order gets one, so a sale at a
     // market can be looked up by the same reference everything else uses.
-    const { data: numbered } = await admin.rpc("next_order_number");
-    if (numbered) await admin.from("orders").update({ order_number: numbered }).eq("id", order.id);
+    //
+    // The error used to be discarded, so a failed allocation was
+    // indistinguishable from a successful one and the sale simply had no
+    // reference. The sale itself is real and recorded either way — deleting it
+    // over a missing number would throw away the thing that actually happened —
+    // so this reports the gap instead of hiding it or undoing the sale.
+    const { data: numbered, error: numberError } = await admin.rpc("next_order_number");
+    let numberNote = "";
+    if (numberError || !numbered) {
+      console.error("[admin] Could not allocate an order number:", numberError?.message);
+      numberNote = " It has no order number yet — allocate one before it is posted.";
+    } else {
+      const { error: writeError } = await admin
+        .from("orders")
+        .update({ order_number: numbered })
+        .eq("id", order.id);
+      if (writeError) {
+        console.error("[admin] Could not store the order number:", writeError.message);
+        numberNote = " It has no order number yet — allocate one before it is posted.";
+      }
+    }
 
-    await admin
-      .from("products")
-      .update({ stock_on_hand: Math.max(0, Number(product.stock_on_hand ?? 0) - quantity) })
-      .eq("id", product.id);
+    // THE DEFECT THIS CLOSES (defect 3): this used to read `stock_on_hand` at
+    // the top of the action and write back `Math.max(0, read - quantity)`,
+    // which silently discards any webhook decrement that lands in between —
+    // the classic read-modify-write. The subtraction now happens inside
+    // `decrement_stock`, under a row lock, in one statement, and it answers
+    // with how many units the buffer did not have. The shop prints to order, so
+    // an oversell is reported rather than refused.
+    const { data: shortfall, error: stockError } = await admin.rpc("decrement_stock", {
+      p_product_id: product.id,
+      p_quantity: quantity,
+    });
+    let stockNote = "";
+    if (stockError) {
+      console.error("[admin] Could not move stock for a counter sale:", stockError.message);
+      stockNote = " The stock count did not move — check it on the inventory page.";
+    } else if (Number(shortfall ?? 0) > 0) {
+      stockNote = ` That was ${Number(shortfall)} more than the buffer had — print it first.`;
+    }
 
     revalidatePath("/admin/orders");
     revalidatePath("/admin/reports");
     revalidatePath("/admin/inventory");
     revalidatePath("/admin");
 
-    return ok(`Recorded ${quantity} × ${product.name}.`);
+    return ok(`Recorded ${quantity} × ${product.name}.${numberNote}${stockNote}`);
   });
 }
 
-/** Unit cost at this moment, for stamping onto a line. Null if unmeasurable. */
-async function costAtSale(
-  admin: ReturnType<typeof createAdminClient>,
-  product: { id: string; print_time_hours: unknown; accessory_id: unknown },
-): Promise<number | null> {
-  const [{ data: settingsRow }, { data: filament }, { data: accessory }] = await Promise.all([
-    admin.from("shop_settings").select("*").maybeSingle(),
-    admin.from("product_filament").select("grams").eq("product_id", product.id),
-    product.accessory_id
-      ? admin.from("accessories").select("cost_cents").eq("id", product.accessory_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
+/**
+ * Mark a refund owed as issued.
+ *
+ * The webhook records a `payment_incidents` row when a cancelled order is paid
+ * anyway; the studio overview shows every unresolved one. Refunding is done by
+ * hand in Stripe — this only records that it has been, so the overview stops
+ * asking. Nothing here can move money.
+ */
+export async function resolveRefundIncident(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  return guard("orders", async () => {
+    const staff = await requireStaff("orders");
+    const id = text(form, "id");
+    if (!id) return fail("No incident given.");
 
-  if (!settingsRow) return null;
-  if (product.print_time_hours === null || product.print_time_hours === undefined) return null;
-  if (!filament || filament.length === 0) return null;
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("payment_incidents")
+      .update({
+        resolved_at: new Date().toISOString(),
+        resolved_by: staff.userId,
+        resolution_note: text(form, "note") || "Refunded by hand in Stripe.",
+      })
+      .eq("id", id)
+      // Scoped to the open state so a second submission cannot rewrite when it
+      // was settled, and so `.select()` below can tell "done" from "already
+      // done" rather than reporting both as success.
+      .is("resolved_at", null)
+      .select("id");
 
-  const s = settingsRow as Record<string, unknown>;
-  const n = (key: string) => Number(s[key] ?? 0);
+    if (error) return fail(friendly(error.message));
+    if (!data || data.length === 0) return ok("That one was already marked refunded.");
 
-  const grams = filament.reduce((sum, r) => sum + Number(r.grams ?? 0), 0);
-  const perHour =
-    n("printer_price_cents") / Math.max(1, n("printer_life_hours")) +
-    (n("power_draw_watts") / 1000) * n("electricity_per_kwh_cents");
-
-  const total =
-    (grams * n("filament_per_kg_cents")) / 1000 +
-    Number(product.print_time_hours) * perHour +
-    Number((accessory as { cost_cents?: number } | null)?.cost_cents ?? 0) +
-    n("packaging_per_unit_cents");
-
-  // The column is integer cents. Rounding happens once, here, at the boundary.
-  return Math.round(total);
+    revalidatePath("/admin");
+    return ok("Marked as refunded.");
+  });
 }
 
 /* --------------------------------------------------------- studio access */

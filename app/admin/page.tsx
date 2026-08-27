@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { can, requireStaff } from "@/lib/auth/staff";
-import { getOpenOrders, getStudioSummary } from "./data";
-import { NoRows } from "./ui";
-import { ButtonLink, Icon, Pill } from "@/components/ui";
-import { money } from "@/lib/format";
+import {
+  getOpenOrders,
+  getStudioAttention,
+  getStudioSummary,
+  type StudioAttention,
+} from "./data";
+import { NoRows, Panel } from "./ui";
+import { AdminForm, SubmitButton } from "./AdminForm";
+import { resolveRefundIncident } from "./actions";
+import { Alert, ButtonLink, Icon, Pill } from "@/components/ui";
+import { money, pluralise } from "@/lib/format";
 
 /**
  * The studio overview.
@@ -28,9 +35,10 @@ export default async function AdminOverviewPage() {
     return <OrderQueue orders={orders} heading="Orders waiting on you" />;
   }
 
-  const [summary, orders] = await Promise.all([
+  const [summary, orders, attention] = await Promise.all([
     getStudioSummary(),
     getOpenOrders(),
+    getStudioAttention(),
   ]);
 
   return (
@@ -47,6 +55,8 @@ export default async function AdminOverviewPage() {
           Add a product
         </ButtonLink>
       </div>
+
+      <NeedsAPerson attention={attention} />
 
       <OrderQueue orders={orders} heading="Orders waiting on you" />
 
@@ -91,6 +101,112 @@ export default async function AdminOverviewPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The three things that mean somebody has been charged, or somebody has been
+ * left waiting, and only a person can put it right.
+ *
+ * Every one of them used to happen in silence.
+ *
+ *  - A payment landing on an order that had already been cancelled was a
+ *    `console.error` in the webhook saying "refund this one by hand" and a 200
+ *    to Stripe. The customer was charged, received nothing, and the only record
+ *    was a line in a log nobody reads. The refund is still issued by hand in
+ *    Stripe — that is a decision with a customer at the other end of it — but
+ *    it is now a row here until she says it is done.
+ *  - An order confirmation that never sent left no trace at all, and /track
+ *    needs the order number that email carries.
+ *  - An oversell was clamped to zero and never mentioned, so the count was
+ *    quietly one short for ever.
+ *
+ * Nothing is drawn when there is nothing to say: this section is absent on an
+ * ordinary day rather than being a row of reassuring zeroes.
+ */
+function NeedsAPerson({ attention }: { attention: StudioAttention }) {
+  // Only meaningful on a shop that can send mail at all. `getStudioAttention`
+  // reads lib/email's own predicate for that and reports 0 otherwise, so a shop
+  // with no provider is not told it has a backlog of emails it was never going
+  // to send.
+  const awaitingMail = attention.ordersAwaitingConfirmation;
+  const nothingToSay =
+    attention.refundsOwed.length === 0 &&
+    awaitingMail === 0 &&
+    attention.oversoldUnits === 0;
+
+  if (nothingToSay) return null;
+
+  return (
+    <section className="flex flex-col gap-4">
+      {attention.refundsOwed.length > 0 ? (
+        <Panel
+          title="Refunds owed"
+          note={`${pluralise(
+            attention.refundsOwed.length,
+            "payment",
+          )} took money for an order that had already been cancelled. Nothing was printed, posted or emailed. Refund each one by hand in Stripe, then mark it here.`}
+          padded={false}
+        >
+          <ul className="divide-y divide-line">
+            {attention.refundsOwed.map((incident) => (
+              <li
+                key={incident.id}
+                className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5"
+              >
+                <span className="font-bold tabular-nums text-danger">
+                  {money(incident.amountCents)}
+                </span>
+                <span className="text-[13px] text-muted">
+                  {new Date(incident.noticedAt).toLocaleDateString("en-AU")}
+                  {" · "}
+                  <span className="font-mono">{incident.stripeSessionId}</span>
+                </span>
+                {incident.orderId ? (
+                  <Link
+                    href={`/admin/orders/${incident.orderId}`}
+                    className="text-[13px] font-bold text-accent hover:text-accent-dark"
+                  >
+                    Open the order →
+                  </Link>
+                ) : null}
+                <AdminForm action={resolveRefundIncident} className="ml-auto">
+                  <input type="hidden" name="id" value={incident.id} />
+                  <SubmitButton variant="soft" size="sm" pendingLabel="Marking…">
+                    I have refunded this
+                  </SubmitButton>
+                </AdminForm>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
+
+      {awaitingMail > 0 ? (
+        <Alert>
+          {pluralise(awaitingMail, "paid order")} {awaitingMail === 1 ? "has" : "have"}{" "}
+          no confirmation email recorded against{" "}
+          {awaitingMail === 1 ? "it" : "them"}. The webhook tries again on every
+          delivery Stripe makes, so this usually clears itself — if it does not,
+          those customers have no order number and cannot use /track.
+        </Alert>
+      ) : null}
+
+      {attention.oversoldUnits > 0 ? (
+        <Alert>
+          <b>
+            {pluralise(attention.oversoldUnits, "piece")} sold beyond what was on
+            the shelf.
+          </b>{" "}
+          That is allowed — everything is printed to order — but these are the
+          ones to print first:{" "}
+          {attention.oversoldProducts
+            .map((product) => `${product.name} (${product.units})`)
+            .join(", ")}
+          .
+        </Alert>
+      ) : null}
+    </section>
   );
 }
 

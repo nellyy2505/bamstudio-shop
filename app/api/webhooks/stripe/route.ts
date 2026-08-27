@@ -4,6 +4,14 @@ import { getStripe, siteUrl } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/server";
 import { isEmailConfigured, maskEmail, sendEmail } from "@/lib/email";
 import { PRINT_LEAD_TIME, SHIPPING, SHOP } from "@/lib/config";
+// The studio's own costing, reused rather than re-implemented: one definition
+// of what a piece costs, whether the sale came from the website or from a
+// market stall. It lives in lib/ and not in app/admin/data.ts, which is where
+// this route used to import it from: a customer-facing endpoint should not put
+// the staff area on its import graph to find out what a piece cost. Nor can it
+// live in app/admin/actions.ts — every export from a "use server" file becomes
+// a callable HTTP endpoint.
+import { unitCostsAtSale } from "@/lib/cost-basis";
 import { money } from "@/lib/format";
 
 export const runtime = "nodejs";
@@ -124,17 +132,11 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
     if (staged.status !== "pending") {
       if (isTerminal(staged.status)) {
         // Cancelled by hand between checkout and this (late) delivery.
-        // Repairing it would number it, move stock and — since numbering is
-        // what queues the mail — confirm to a customer whose order the shop
-        // has already pulled. Return rather than throw: no retry can ever make
-        // a cancelled order eligible, so a 500 buys nothing but an unbounded
-        // redelivery loop. Logged as an error because the money did arrive and
-        // the refund is a manual job.
-        console.error(
-          `Order ${staged.id} is ${staged.status}; payment for session ` +
-            `${session.id} arrived anyway. Not repairing, not numbering, not ` +
-            "moving stock, not confirming by email — refund this one by hand.",
-        );
+        // Repairing it would number it, move stock and confirm to a customer
+        // whose order the shop has already pulled. None of that may happen —
+        // but the money did arrive, so the refund it owes is written down
+        // where a person will see it before we return.
+        await recordPaidWhileCancelled(supabase, session, staged.id, staged.status);
         return;
       }
       // Already confirmed but carrying no items: a previous delivery inserted
@@ -181,11 +183,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
         // Same as the repair branch above: a cancelled order is not an
         // unfinished one, and finishing it would contradict a decision a
         // person already made. See `isTerminal`.
-        console.error(
-          `Order ${staged.id} is ${staged.status}; payment for session ` +
-            `${session.id} arrived anyway. Not numbering, not moving stock, ` +
-            "not confirming by email — refund this one by hand.",
-        );
+        await recordPaidWhileCancelled(supabase, session, staged.id, staged.status);
         return;
       }
       // Already confirmed — but a previous delivery may have died between the
@@ -278,6 +276,74 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
 
   await fillItemsFromStripe(supabase, order.id, session);
   await finishConfirmation(supabase, order.id);
+}
+
+/**
+ * Writes down a payment that took money the shop cannot honour.
+ *
+ * THE DEFECT THIS CLOSES (supabase/migrations/0005_sale_integrity.sql §3).
+ *
+ * A cancelled order that is paid anyway is a silent charge. The two branches
+ * above are right to refuse to number it, move its stock or email its customer
+ * — a person pulled that order — but the entire response used to be a
+ * `console.error` saying "refund this one by hand" followed by a 200 to Stripe.
+ * The customer is charged, receives nothing, and the only record is a log line
+ * on a platform nobody reads. The refund stays manual, because refunding is a
+ * decision with a customer at the other end of it; what changes is that it
+ * becomes a row on the studio overview instead of a line in a log.
+ *
+ * `stripe_session_id` is unique on the table and the insert ignores duplicates,
+ * so Stripe's redeliveries record one incident rather than one per delivery.
+ *
+ * A failure to record DOES throw, and that is a deliberate reversal of the old
+ * comment here ("return rather than throw: no retry can ever make a cancelled
+ * order eligible"). That was true while there was nothing a retry could
+ * accomplish. There is now: recording the debt. Once the row exists every
+ * later delivery inserts nothing and returns 200, so the retry loop is bounded
+ * by success rather than by Stripe giving up.
+ */
+async function recordPaidWhileCancelled(
+  supabase: ReturnType<typeof createAdminClient>,
+  session: Stripe.Checkout.Session,
+  orderId: string,
+  status: string | null,
+) {
+  const paymentIntent =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : (session.payment_intent?.id ?? null);
+
+  const { error } = await supabase.from("payment_incidents").upsert(
+    {
+      order_id: orderId,
+      stripe_session_id: session.id,
+      stripe_payment_intent: paymentIntent,
+      // What the customer was actually charged — the sum that has to go back.
+      amount_cents: session.amount_total ?? 0,
+      kind: "paid_while_cancelled",
+      order_status: status,
+      detail:
+        `Payment for session ${session.id} arrived after the order was ` +
+        `${status}. Not numbered, no stock moved, no confirmation sent. ` +
+        "Refund this one by hand in Stripe.",
+    },
+    { onConflict: "stripe_session_id", ignoreDuplicates: true },
+  );
+
+  if (error) {
+    console.error(
+      `Could not record the refund owed on order ${orderId}:`,
+      error.message,
+    );
+    throw new Error("payment incident record failed");
+  }
+
+  // Still logged, because a log line is free and the studio overview is not
+  // somewhere anyone is looking at 3am.
+  console.error(
+    `Order ${orderId} is ${status}; payment for session ${session.id} arrived ` +
+      "anyway. Recorded as a refund owed — issue it by hand in Stripe.",
+  );
 }
 
 /**
@@ -627,6 +693,24 @@ async function fillItemsFromStripe(
     if (!byName.has(row.short_name)) byName.set(row.short_name, row);
   }
 
+  // THE DEFECT THIS CLOSES (defect 2): `unit_cost_cents` was written in
+  // exactly one place — the market-stall form in app/admin/actions.ts — so
+  // every website sale landed with a null making cost and /admin/reports had
+  // nothing to subtract for the online channel. The cost is stamped here, at
+  // the moment the sale is recorded, and never derived at read time: the
+  // column exists to say what the piece cost WHEN IT SOLD, and re-deriving it
+  // later would silently rewrite every historical margin the next time
+  // filament or electricity changed price (0003_admin.sql says exactly that
+  // above the column).
+  //
+  // Null for a product nobody has measured, and null for a line whose product
+  // row could not be found. Nulls stay null: reports already count the lines
+  // carrying no cost and say the profit understates what was spent, which is
+  // true, where a zero would be a 100% margin that is not.
+  const costs = await unitCostsAtSale(
+    [...new Set(productRows.map((row) => row.id))],
+  );
+
   const { error } = await supabase.from("order_items").insert(
     lineItems.data.map((item) => {
       const name = productNameOf(item) ?? "Item";
@@ -658,6 +742,7 @@ async function fillItemsFromStripe(
         colour: recovered.colour,
         attachment_id: recovered.attachment_id,
         personalisation: recovered.personalisation,
+        unit_cost_cents: product ? (costs.get(product.id) ?? null) : null,
       };
     }),
   );
@@ -679,7 +764,30 @@ async function finishConfirmation(
   supabase: ReturnType<typeof createAdminClient>,
   orderId: string,
 ) {
-  await assignOrderNumber(supabase, orderId);
+  const orderNumber = await assignOrderNumber(supabase, orderId);
+
+  // THE DEFECT THIS CLOSES (supabase/migrations/0005_sale_integrity.sql §1).
+  //
+  // The confirmation used to be queued from inside `assignOrderNumber`, in the
+  // branch only the delivery that *allocated* the number can reach. That made
+  // it a one-shot: the order has a number ever after, so every later delivery
+  // returned early and the mail was never re-queued. A machine restart, a
+  // Resend 429 or `after()` being cut short therefore left a charged customer
+  // with a confirmed order and no email — and /track needs the order number
+  // that email carries.
+  //
+  // Now the retry is driven by a fact in the database rather than by who won a
+  // race: `assignOrderNumber` hands back the order number whenever the order
+  // has one and `confirmation_email_sent_at` is still null, so any Stripe
+  // delivery can pick up a send that was lost. `sendOrderConfirmation` stamps
+  // the column only once the provider has accepted the message.
+  //
+  // The trade is deliberate and this way round: two deliveries racing here can
+  // both send, so the worst case is a duplicate confirmation. A duplicate is a
+  // mild annoyance; a missing one is a customer who cannot look up what they
+  // paid for.
+  if (orderNumber) queueOrderConfirmation(supabase, orderId, orderNumber);
+
   await decrementStock(supabase, orderId);
 }
 
@@ -687,11 +795,16 @@ async function finishConfirmation(
  * Gives a confirmed order its customer-facing number, once and only once.
  * Scoped to rows that don't have one yet, so a retry cannot renumber an order
  * the customer has already been emailed about.
+ *
+ * Returns the order number when this order still needs its confirmation email,
+ * and null when it does not — because one has already been recorded as sent, or
+ * because a concurrent delivery is the one that will send it. The caller does
+ * the queueing; see `finishConfirmation`.
  */
 async function assignOrderNumber(
   supabase: ReturnType<typeof createAdminClient>,
   orderId: string,
-) {
+): Promise<string | null> {
   // Read before allocating. `nextOrderNumber` used to be awaited inside the
   // update payload, so the sequence was consumed on EVERY call — including the
   // duplicate deliveries whose `is null` compare-and-set matches no rows. That
@@ -699,7 +812,7 @@ async function assignOrderNumber(
   // gap-free numbering the design comment on nextOrderNumber exists to protect.
   const { data: current, error: readError } = await supabase
     .from("orders")
-    .select("order_number")
+    .select("order_number, confirmation_email_sent_at")
     .eq("id", orderId)
     .maybeSingle();
 
@@ -713,7 +826,13 @@ async function assignOrderNumber(
     console.error(`Order ${orderId} disappeared before numbering.`);
     throw new Error("order missing before numbering");
   }
-  if (current.order_number) return;
+  // Already numbered — by an earlier delivery, or by the one that raced us.
+  // That is not a reason to stop: the mail is the part that can be lost, and
+  // the stamp is what says whether it was. Null there means nothing has ever
+  // gone out for this order, so this delivery is entitled to send it.
+  if (current.order_number) {
+    return current.confirmation_email_sent_at ? null : current.order_number;
+  }
 
   const orderNumber = await nextOrderNumber(supabase);
 
@@ -739,27 +858,24 @@ async function assignOrderNumber(
     console.warn(
       `Order ${orderId} was numbered concurrently; ${orderNumber} discarded.`,
     );
-    return;
+    // The delivery that won the race owns the confirmation for the number it
+    // actually wrote. Ours was never stored, so emailing it would quote a
+    // number that is not on the order.
+    return null;
   }
 
-  // Reaching here is the proof that THIS delivery did the work, and it is the
-  // whole at-most-once story for the confirmation email. `order_number` goes
-  // null → non-null under a compare-and-set and never goes back, so of the
-  // first delivery, Stripe's retries and the duplicate
-  // `async_payment_succeeded`, exactly one can ever see rows here: every other
-  // one either returns at the `current.order_number` check above or loses this
-  // race and takes the branch above. The order is confirmed and numbered by
-  // now and its items are already written on every path that gets here, so
-  // there is something true to say. Queue the mail from here and nowhere else.
+  // Reaching here is the proof that THIS delivery allocated the number. The
+  // order is confirmed and numbered by now and its items are already written
+  // on every path that gets here, so there is something true to say.
   //
   // What has NOT happened yet is the stock movement. `finishConfirmation`
-  // calls this function BEFORE `decrementStock`, so the mail is queued while
-  // the stock claim is still unspent — and `after()` runs its task whatever
-  // status the handler goes on to return. If `decrementStock` then throws,
-  // the customer gets their confirmation AND Stripe gets a 500 and redelivers;
-  // the retry returns at the `current.order_number` check above, so nothing is
-  // ever re-sent. Net effect: exactly one email about an order whose stock
-  // never moved.
+  // calls this function BEFORE `decrementStock` and queues the mail in
+  // between, so the mail is queued while the stock claim is still unspent —
+  // and `after()` runs its task whatever status the handler goes on to return.
+  // If `decrementStock` then throws, the customer gets their confirmation AND
+  // Stripe gets a 500 and redelivers; the retry finds the order numbered and
+  // its mail already stamped, so nothing is re-sent. Net effect: exactly one
+  // email about an order whose stock never moved.
   //
   // That is the intended trade, and this is the ordering to keep. Everything
   // the mail asserts — confirmed, here is your number, here is what you bought,
@@ -770,7 +886,7 @@ async function assignOrderNumber(
   // numbered order because an inventory RPC failed, which is much the worse of
   // the two failures. What is left over is a named 500 in the log (see
   // `decrementStock`) and a stock count to correct by hand.
-  queueOrderConfirmation(supabase, orderId, orderNumber);
+  return orderNumber;
 }
 
 /* ------------------------------------------------------------------ email */
@@ -785,6 +901,7 @@ type ConfirmationItem = {
 
 type ConfirmationOrder = {
   email: string | null;
+  confirmation_email_sent_at?: string | null;
   subtotal: number | null;
   shipping: number | null;
   total: number | null;
@@ -945,6 +1062,7 @@ async function sendOrderConfirmation(
     .from("orders")
     .select(
       "email, subtotal, shipping, total, shipping_method, " +
+        "confirmation_email_sent_at, " +
         "order_items(product_name, variant_label, quantity, unit_price, personalisation)",
     )
     .eq("id", orderId)
@@ -959,6 +1077,15 @@ async function sendOrderConfirmation(
   }
 
   const order = data as ConfirmationOrder | null;
+
+  // The retry path re-queues the mail for any numbered order with no stamp, so
+  // two deliveries can both reach this point. Re-reading the stamp here — after
+  // the queue gate, immediately before the send — narrows that window to the
+  // few milliseconds between this read and the provider call. It is not a lock
+  // and is not pretending to be one; the ordering trade is spelled out in
+  // `finishConfirmation`.
+  if (order?.confirmation_email_sent_at) return;
+
   if (!order || !hasCustomerEmail(order.email)) {
     // Either the column is empty, or it holds NO_CUSTOMER_EMAIL — what the
     // Stripe-rebuild insert writes when Stripe gave us no address at all. That
@@ -997,6 +1124,29 @@ async function sendOrderConfirmation(
     console.info(
       `Order ${orderNumber} confirmed to ${maskEmail(order.email)}.`,
     );
+
+    // Stamped only now, and only on success. This is the whole recovery story:
+    // until this write lands the order still reads as unconfirmed by email, so
+    // the next Stripe delivery re-queues the send rather than assuming it
+    // happened. Scoped to a null stamp so a concurrent delivery's timestamp is
+    // not overwritten with a later one.
+    const { error: stampError } = await supabase
+      .from("orders")
+      .update({ confirmation_email_sent_at: new Date().toISOString() })
+      .eq("id", orderId)
+      .is("confirmation_email_sent_at", null);
+
+    // Not thrown: this task is detached from the response and the mail has
+    // already gone. An unrecorded success means a later delivery may send a
+    // second copy — the safe direction, and the direction this whole change
+    // chooses on purpose.
+    if (stampError) {
+      console.error(
+        `Order ${orderNumber} was confirmed by email but the send could not ` +
+          "be recorded; a Stripe redelivery may send it again:",
+        stampError.message,
+      );
+    }
     return;
   }
   console.error(
@@ -1165,7 +1315,7 @@ async function decrementStock(
   let applied = 0;
   for (const item of items ?? []) {
     if (!item.product_id || item.personalisation) continue;
-    const { error } = await supabase.rpc("decrement_stock", {
+    const { data: shortfall, error } = await supabase.rpc("decrement_stock", {
       p_product_id: item.product_id,
       p_quantity: item.quantity ?? 1,
     });
@@ -1185,6 +1335,27 @@ async function decrementStock(
       throw new Error("stock decrement failed");
     }
     applied += 1;
+
+    // THE DEFECT THIS CLOSES (supabase/migrations/0005_sale_integrity.sql §2).
+    //
+    // `decrement_stock` used to return void and clamp at zero, so selling the
+    // last one twice succeeded twice and said nothing at all. It now returns
+    // the shortfall — how many units were sold that the buffer did not have —
+    // and accumulates it on `products.oversold_units` for the inventory screen.
+    //
+    // This is NOT an error and does not fail the delivery: the shop prints to
+    // order, so an oversell is a print-this-first signal, not a sale that
+    // should have been refused. See the migration for why checkout does not
+    // stop it. Logged with the order so the piece can be traced to the sale
+    // that got ahead of the shelf.
+    const oversold = Number(shortfall ?? 0);
+    if (oversold > 0) {
+      console.warn(
+        `Order ${orderId} oversold product ${item.product_id} by ${oversold} ` +
+          "unit(s) — the buffer was short. Print these first; the count is on " +
+          "products.oversold_units.",
+      );
+    }
   }
 }
 

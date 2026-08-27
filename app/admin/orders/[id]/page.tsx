@@ -6,7 +6,12 @@ import { AdminForm, SubmitButton } from "../../AdminForm";
 import { setOrderStatus } from "../../actions";
 import { CHANNEL_LABEL, PageHead, Panel, StatusPill, Unknown } from "../../ui";
 import { DispatchPanel } from "./DispatchPanel";
-import { getOrder, type OrderDetail, type OrderLine } from "../../data";
+import {
+  getOrder,
+  type OrderDetail,
+  type OrderLine,
+  type PaymentIncident,
+} from "../../data";
 
 /**
  * One order, and the two things a person does to it: move it along, and post
@@ -100,6 +105,8 @@ export default async function OrderDetailPage({
           actions={<StatusPill status={order.status} />}
         />
       </div>
+
+      <RefundOwed incidents={order.openIncidents} />
 
       <Panel
         title="What was ordered"
@@ -246,6 +253,86 @@ export default async function OrderDetailPage({
 
         <DispatchPanel order={order} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Money taken on this order that the shop owes back.
+ *
+ * THE DEFECT THIS CLOSES. `payment_incidents` (0005_sale_integrity.sql) records
+ * a payment that cleared for an order somebody had already cancelled: the
+ * customer was charged, the webhook correctly refused to number it, move its
+ * stock or email them, and the refund is a manual job. It was surfaced on
+ * /admin and nowhere else — so the order it happened to, which is the screen a
+ * person is on when they decide whether to print and post something, gave no
+ * hint that money was owed on it. Two people, or one person on a Tuesday,
+ * could work this order without ever passing the overview.
+ *
+ * WHO SEES IT — the Packing question, decided.
+ *
+ * Packing holds `orders` and nothing else, precisely so that the person helping
+ * post parcels never sees a cost or a margin. This panel is shown to them, and
+ * the reasoning is that a refund owed is not a cost:
+ *
+ *  1. Every figure here is one Packing can already see on this page. The amount
+ *     is what the customer was charged — the same number the "Paid" line prints
+ *     two panels down. Nothing about what the piece cost to make appears; the
+ *     COST EACH column above stays gated on `showCosts`, which is the line that
+ *     actually protects the margin.
+ *  2. It is a packing instruction before it is a finance one. The single thing
+ *     this row means operationally is DO NOT POST THIS ORDER. Hiding it from
+ *     the one role whose whole job is posting parcels would be hiding it from
+ *     the person most likely to act on it wrongly — and a parcel that goes out
+ *     on a refunded order costs the studio the postage, the filament and the
+ *     piece.
+ *  3. The shop already made this call: `resolveRefundIncident` in actions.ts is
+ *     guarded by `orders`, the capability Packing holds. Rendering the fact to
+ *     a narrower audience than the action that settles it would be inconsistent
+ *     for no gain.
+ *
+ * What is deliberately NOT here is the "I have refunded this" control. It lives
+ * on the studio overview, which is where the refund is actually reconciled, and
+ * a second copy of it here would revalidate the wrong path and leave a button
+ * that looks like it did nothing.
+ *
+ * The wording assumes the one `kind` the table's CHECK constraint allows today,
+ * `paid_while_cancelled`. Adding a second kind means reading that column and
+ * branching here — a sentence saying "nothing was printed, posted or emailed"
+ * is only true of this one.
+ */
+function RefundOwed({ incidents }: { incidents: PaymentIncident[] }) {
+  // Nothing to say on an ordinary order, and nothing drawn — no reassuring
+  // "no refunds owed" panel, which is a claim about a table this page would
+  // then have to keep true.
+  if (incidents.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {incidents.map((incident) => (
+        <Alert key={incident.id} tone="error">
+          <b>
+            {money(incident.amountCents)} was taken for this order and has not
+            been refunded.
+          </b>{" "}
+          {/* `noticed_at` is when the webhook recorded it, not when the card
+              cleared, and the two can differ by a retry — so it is worded as
+              "noticed". `order_status` is the status the order was in at the
+              moment the payment landed, which is the fact that makes this an
+              incident; it is stated only when the column holds one. */}
+          {incident.orderStatus
+            ? `The payment landed when this order was already ${incident.orderStatus}`
+            : "The payment landed on an order the shop could not honour"}
+          , noticed {formatDate(incident.noticedAt)}, so it was never numbered,
+          no stock moved and no confirmation went out.{" "}
+          <b>Do not print or post it.</b> The refund is issued by hand in Stripe
+          and marked off on the studio overview.
+          {incident.detail ? <> {incident.detail}</> : null}
+          <span className="mt-1 block font-mono text-[12.5px] break-all">
+            {incident.stripeSessionId}
+          </span>
+        </Alert>
+      ))}
     </div>
   );
 }

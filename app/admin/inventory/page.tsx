@@ -33,6 +33,18 @@ export default async function InventoryPage() {
   const needed = inventory.filament.filter((f) => f.gramsNeeded > 0 || f.rollsToBuy > 0);
 
   /*
+   * Whether the print queue below has an oversell in it.
+   *
+   * `oversold_units` is a running total of units sold that the ready-to-ship
+   * buffer did not have (0005_sale_integrity.sql). The shop prints to order, so
+   * that is allowed and is not an error — but it is somebody who has already
+   * paid, waiting on a piece that was not on the shelf, which makes it the
+   * strongest print-this-first signal there is. It was surfaced on /admin and
+   * nowhere else; this is the screen where it changes what she does next.
+   */
+  const oversoldInQueue = inventory.rows.some((r) => r.product.oversoldUnits > 0);
+
+  /*
    * Nothing recorded and nothing needed are two different claims.
    *
    * The buy list is built from filament recipes, so a product with no grams on
@@ -120,7 +132,18 @@ export default async function InventoryPage() {
       <div className="flex flex-col gap-6">
         <Panel
           title="The print queue"
-          note="Sold but not yet posted, plus your buffer, less what is on the shelf."
+          note={
+            /*
+             * The sentence about ordering is here only when a row in this table
+             * actually carries an oversell — not merely when the catalogue has
+             * one somewhere, which can be true while every oversold piece has
+             * already been printed and left the queue. A standing explanation
+             * of a column reading "—" on every row is a warning about nothing.
+             */
+            oversoldInQueue
+              ? "Sold but not yet posted, plus your buffer, less what is on the shelf. Oversold pieces come first: somebody has already paid for those."
+              : "Sold but not yet posted, plus your buffer, less what is on the shelf."
+          }
           padded={false}
         >
           {inventory.rows.length === 0 ? (
@@ -129,13 +152,18 @@ export default async function InventoryPage() {
             </NoRows>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-[14px]">
+              <table className="w-full min-w-[800px] border-collapse text-[14px]">
                 <thead>
                   <tr className="border-b border-line text-left text-[12px] font-extrabold tracking-[0.04em] text-faint">
                     <th className="px-5 py-3">SKU</th>
                     <th className="px-3 py-3">Product</th>
                     <th className="px-3 py-3 text-right">On shelf</th>
                     <th className="px-3 py-3 text-right">Sold</th>
+                    {/* The count the shelf could not cover. Named "Oversold"
+                        rather than "Short" because it is a running total of
+                        demand that ran ahead of the shelf, not today's gap —
+                        "To print" is the gap. */}
+                    <th className="px-3 py-3 text-right">Oversold</th>
                     <th className="px-3 py-3 text-right">Buffer</th>
                     <th className="px-3 py-3 text-right">To print</th>
                     <th className="px-5 py-3">Count it</th>
@@ -157,6 +185,20 @@ export default async function InventoryPage() {
                       </td>
                       <td className="px-3 py-3 text-right tabular-nums">{row.product.stockOnHand}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{row.ordered}</td>
+                      {/* An em dash for nothing to report, the same as the "To
+                          buy" and "Cost" columns below. A 0 printed here would
+                          read as a measured fact — "we checked, none were
+                          oversold" — on a row where it is just the absence of
+                          an incident. */}
+                      <td className="px-3 py-3 text-right tabular-nums">
+                        {row.product.oversoldUnits > 0 ? (
+                          <span className="font-bold text-danger">
+                            {row.product.oversoldUnits}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="px-3 py-3 text-right tabular-nums">{row.product.bufferStock}</td>
                       <td className="px-3 py-3 text-right font-display text-[17px] font-semibold tabular-nums">
                         {row.toPrint}
@@ -185,6 +227,29 @@ export default async function InventoryPage() {
               </table>
             </div>
           )}
+
+          {/*
+            * Oversold pieces the queue above cannot show.
+            *
+            * `rows` only carries products with something to print, and
+            * `oversold_units` is a running total that nothing decrements — so a
+            * piece that was oversold, printed and counted back up leaves the
+            * queue with its counter still standing. Dropping it silently would
+            * make the one screen that is meant to surface an oversell the one
+            * screen it disappears from. Absent entirely when there are none.
+            */}
+          {inventory.oversoldOffQueue.length > 0 ? (
+            <div className="border-t border-line px-5 py-4 text-[13px] text-muted">
+              <b className="text-ink">Oversold, with nothing left to print:</b>{" "}
+              {inventory.oversoldOffQueue
+                .map((product) => `${product.name} (${product.units})`)
+                .join(", ")}
+              . The shelf covers these now. The count is a running total of
+              demand that ran ahead of the shelf and nothing clears it
+              automatically, so it stays until someone sets the stock on the
+              product itself.
+            </div>
+          ) : null}
         </Panel>
 
         <Panel

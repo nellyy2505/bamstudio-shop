@@ -8,6 +8,7 @@ import {
   loadProductsBySlug,
 } from "@/lib/queries";
 import {
+  BASKET_LIMITS,
   BUILDER_MAX_LETTERS,
   BUILDER_NO_CHARM_DISCOUNT,
   BUILDER_PRICING,
@@ -20,6 +21,14 @@ import {
 } from "@/lib/config";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { toShippingLines } from "@/lib/shipping/lines";
+// The studio's own costing, reused rather than re-implemented: one definition
+// of what a piece costs, whether the sale came from the website or from a
+// market stall. It lives in lib/ and not in app/admin/data.ts, which is where
+// this route used to import it from: a customer-facing endpoint should not put
+// the staff area on its import graph to find out what a piece cost. Nor can it
+// live in app/admin/actions.ts — every export from a "use server" file becomes
+// a callable HTTP endpoint.
+import { unitCostsAtSale } from "@/lib/cost-basis";
 import { quoteBasket } from "@/lib/shipping/quote";
 
 export const runtime = "nodejs";
@@ -29,7 +38,7 @@ const LineSchema = z.object({
   slug: z.string().min(1),
   colour: z.string().nullable().optional(),
   attachment_id: z.string().nullable().optional(),
-  quantity: z.number().int().min(1).max(20),
+  quantity: z.number().int().min(1).max(BASKET_LIMITS.maxLineQuantity),
   /** "text" mode personalisation — one printed line, e.g. a pet's name. */
   personalisation_text: z.string().max(PERSONALISATION_TEXT_MAX).optional(),
   custom: z
@@ -48,7 +57,12 @@ const LineSchema = z.object({
 });
 
 const BodySchema = z.object({
-  lines: z.array(LineSchema).min(1).max(40),
+  // Both caps come from lib/config.ts. They used to be literals here and in
+  // /api/shipping/quote, with a third transcription in the cart, and nothing
+  // held the three copies together — a basket the client would build and this
+  // schema would refuse comes back as a blanket "Invalid basket." naming no
+  // line. One definition, imported by every surface that has to respect it.
+  lines: z.array(LineSchema).min(1).max(BASKET_LIMITS.maxLines),
   email: z.string().email().optional(),
   shipping_method: z.enum(["standard", "express"]).default("standard"),
   gift_note: z.string().max(500).optional(),
@@ -159,6 +173,28 @@ async function savePendingOrder(input: {
     }
     orderId = order.id;
 
+    // THE DEFECT THIS CLOSES (defect 2): `unit_cost_cents` was written in
+    // exactly one place — the market-stall form in app/admin/actions.ts — so
+    // every website sale landed with a null making cost and /admin/reports had
+    // nothing to subtract for the online channel.
+    //
+    // Stamped here, as the basket is recorded, and never derived at read time:
+    // the column exists to say what the piece cost WHEN IT SOLD, and computing
+    // it later would rewrite every historical margin the next time filament or
+    // electricity changed price. Minutes separate this from the payment, and
+    // the alternative — waiting for the webhook — would leave the ordinary,
+    // staged path with no cost at all.
+    //
+    // Never blocks a sale. A cost that cannot be worked out is a null, which
+    // reports already handle honestly; a checkout that fails because the
+    // costing tables were unreadable would be a far worse trade.
+    let costs = new Map<string, number | null>();
+    try {
+      costs = await unitCostsAtSale(input.items.map((item) => item.product_id));
+    } catch (error) {
+      console.error("Could not cost the basket; lines keep a null cost:", error);
+    }
+
     const { error: itemsError } = await supabase.from("order_items").insert(
       input.items.map((item) => ({
         order_id: order.id,
@@ -172,6 +208,9 @@ async function savePendingOrder(input: {
         unit_price: item.unit_price,
         quantity: item.quantity,
         personalisation: item.personalisation,
+        // Null for a product nobody has measured — an honest gap the reports
+        // count and say out loud, rather than a zero that reads as 100% margin.
+        unit_cost_cents: costs.get(item.product_id) ?? null,
       })),
     );
 
