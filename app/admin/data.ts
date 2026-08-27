@@ -6,6 +6,7 @@ import {
   type CostBreakdown,
   type CostSettings,
 } from "@/lib/costing";
+import { SERVICE_CODES } from "@/lib/shipping/quote";
 
 /**
  * Every read the staff area makes.
@@ -323,6 +324,96 @@ function mapProductRow(row: Record<string, unknown>): ProductRow {
   };
 }
 
+/* --------------------------------------------------------- measuring up */
+
+/**
+ * How many colour slots the measuring screen offers on one row.
+ *
+ * The workbook's Products sheet has four fixed Colour/g pairs, so four is the
+ * most any real piece in this catalogue uses. `product_filament` deliberately
+ * has no such ceiling (see 0003_admin.sql) — rows, not columns — and a piece
+ * that outgrows four is still perfectly legal. The measuring screen simply
+ * refuses to edit one, and sends the person to the full product form instead,
+ * rather than quietly writing back the four it could see and dropping the rest.
+ *
+ * Here rather than in actions.ts because every export from a "use server" file
+ * has to be an async function; a number cannot be one.
+ */
+export const MEASURE_COLOUR_SLOTS = 4;
+
+/**
+ * Which costing inputs a product is still missing, in words.
+ *
+ * The same two strings, in the same order, as `unitCost()`'s `missing` in
+ * lib/costing.ts — that function decides whether a cost is `unknown`, and this
+ * one decides whether a product appears on the measuring screen. They are two
+ * readings of one fact and must move together. It is spelled out again here
+ * rather than derived from `unitCost()` because `unitCost()` needs a settings
+ * row it has no use for, and a screen should not have to load the costing
+ * constants to ask "has anybody measured this yet".
+ *
+ * Note what is NOT here: a zero. A print time of 0 or a recipe totalling 0 g
+ * would both read as measured, which is why `optionalNumber()` in actions.ts
+ * keeps blank as null all the way to the column and why a grams field with no
+ * colour beside it is refused rather than rounded down to nothing.
+ */
+export function missingCostInputs(
+  product: Pick<ProductRow, "printTimeHours" | "totalGrams">,
+): string[] {
+  const missing: string[] = [];
+  if (product.printTimeHours === null) missing.push("print time");
+  if (product.totalGrams === null) missing.push("filament weight");
+  return missing;
+}
+
+export type MeasureRow = {
+  product: ProductRow;
+  /** Empty when the product has both a print time and a filament recipe. */
+  missing: string[];
+};
+
+export type MeasureQueue = {
+  rows: MeasureRow[];
+  /** Every product in the catalogue, measured or not. */
+  total: number;
+  measured: number;
+  unmeasured: number;
+};
+
+/**
+ * The whole catalogue, ordered by SKU, marked with what each product is missing.
+ *
+ * Deliberately unpaged, and it is the one table in the studio that is. The job
+ * this feeds is "sit down and measure forty-four things", and a pager turns
+ * that into "measure twenty-five things, then notice there is a page two". The
+ * count is bounded by the catalogue — forty-four rows today — so the cost of
+ * reading all of it is a fraction of the cost of the person's evening. If the
+ * catalogue ever grows past a few hundred, use `Pagination` from components/ui
+ * like every other table here; do not grow a second pager.
+ */
+export async function getMeasureQueue(includeMeasured: boolean): Promise<MeasureQueue> {
+  assertServer("getMeasureQueue");
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("products")
+    .select(PRODUCT_COLUMNS)
+    .order("sku", { ascending: true });
+
+  const all: MeasureRow[] = (data ?? [])
+    .map((r) => mapProductRow(asRow(r)))
+    .map((product) => ({ product, missing: missingCostInputs(product) }));
+
+  const unmeasured = all.filter((r) => r.missing.length > 0);
+
+  return {
+    rows: includeMeasured ? all : unmeasured,
+    total: all.length,
+    measured: all.length - unmeasured.length,
+    unmeasured: unmeasured.length,
+  };
+}
+
 export type ProductListFilters = {
   /** Free text over name and SKU. */
   q?: string;
@@ -633,8 +724,52 @@ export type OrderDetail = OrderRow & {
   shippingAddress: Record<string, unknown>;
   stripePaymentIntent: string | null;
   recordedBy: string | null;
+  /**
+   * The Australia Post service the postage on this order was quoted for, e.g.
+   * `AUS_PARCEL_REGULAR`. Null for orders taken before postage was quoted, and
+   * for a sale typed in at a market — `0002_shipping.sql` says a null here
+   * means "flat-rate era", not "missing data".
+   */
+  quotedServiceCode: string | null;
+  /**
+   * Whether the customer was *sold* tracking: true for a parcel service, false
+   * for a Large Letter, **null when we cannot tell**. See `wasSoldTracked`.
+   */
+  soldAsTracked: boolean | null;
   lines: OrderLine[];
 };
+
+/**
+ * Was this order's postage sold as a tracked service?
+ *
+ * `lib/shipping/quote.ts` owns the real mapping (its private `TRACKED` table)
+ * and defaults an unrecognised code to `true`, which is the right way round
+ * when the answer is feeding a *price*. It is the wrong way round here: this
+ * answer decides what the dispatch screen tells the person packing to expect,
+ * and guessing "tracked" would have her hunting for a number that was never
+ * going to exist. So an unknown code is `null` — Unknown — and the screen says
+ * so instead of choosing for her.
+ *
+ * Keyed off the exported `SERVICE_CODES` rather than the literal strings, so a
+ * renamed code is a compile error here rather than a silent "unknown" on every
+ * order.
+ */
+export function wasSoldTracked(serviceCode: string | null): boolean | null {
+  switch (serviceCode) {
+    case SERVICE_CODES.parcelRegular:
+    case SERVICE_CODES.parcelExpress:
+      return true;
+    case SERVICE_CODES.letterLarge125:
+    case SERVICE_CODES.letterLarge250:
+    case SERVICE_CODES.letterLarge500:
+      // A regular Large Letter carries no tracking. Free standard post on a
+      // light basket goes this way, so "no number at all" is a real, correct
+      // outcome for a real order — not a gap someone forgot to fill in.
+      return false;
+    default:
+      return null;
+  }
+}
 
 const ORDER_COLUMNS =
   "id, order_number, email, status, channel, subtotal, shipping, total, " +
@@ -726,8 +861,8 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
     .from("orders")
     .select(
       "id, order_number, email, status, channel, subtotal, shipping, total, " +
-        "created_at, shipping_method, tracking_number, gift_note, " +
-        "shipping_address, stripe_payment_intent, recorded_by, " +
+        "created_at, shipping_method, tracking_number, quoted_service_code, " +
+        "gift_note, shipping_address, stripe_payment_intent, recorded_by, " +
         "order_items(id, product_id, product_name, variant_label, unit_price, " +
         "quantity, unit_cost_cents, colour, personalisation)",
     )
@@ -738,11 +873,14 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
 
   const row = asRow(data);
   const items = Array.isArray(row.order_items) ? row.order_items : [];
+  const quotedServiceCode = (row.quoted_service_code as string | null) ?? null;
 
   return {
     ...mapOrderRow({ ...row, order_items: items }),
     shippingMethod: (row.shipping_method as string) ?? "standard",
     trackingNumber: (row.tracking_number as string | null) ?? null,
+    quotedServiceCode,
+    soldAsTracked: wasSoldTracked(quotedServiceCode),
     giftNote: (row.gift_note as string | null) ?? null,
     shippingAddress: (row.shipping_address as Record<string, unknown> | null) ?? {},
     stripePaymentIntent: (row.stripe_payment_intent as string | null) ?? null,
@@ -998,7 +1136,14 @@ export type StudioSummary = {
   toPrint: number;
   rollsToBuy: number;
   ordersNeedingWork: number;
-  /** Products with no print time or no filament recipe — cost unknowable. */
+  /**
+   * Products with no filament recipe — invisible to the buy list.
+   *
+   * This is `Inventory.unmeasured`, which counts a missing recipe and nothing
+   * else, because that is the one that makes the buy list wrong. The comment
+   * here used to say "no print time or no filament recipe", which is the wider
+   * costing question `missingCostInputs()` answers and a different number.
+   */
   unmeasured: number;
   /** True when the shop has never taken an order — a real state, not an error. */
   noOrdersYet: boolean;

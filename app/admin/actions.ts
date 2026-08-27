@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireStaff, type Capability } from "@/lib/auth/staff";
+import { MEASURE_COLOUR_SLOTS } from "./data";
 import { siteUrl } from "@/lib/stripe";
 import {
   hashToken,
@@ -217,6 +218,187 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
     revalidatePath(`/product/${slug}`);
 
     return ok(id ? "Saved." : "Product created.");
+  });
+}
+
+/**
+ * Print time and filament grams for ONE product, from the measuring screen.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * WHY "catalogue" AND NOT "inventory".
+ *
+ * The screen this serves hangs off Inventory, and the obvious reading is that
+ * measuring is an inventory job. It is not. `setStock` and `setRolls` above
+ * record an observation about a shelf: wrong today, right tomorrow, and nothing
+ * downstream of them is a claim about money. This writes
+ * `products.print_time_hours` and `product_filament` — the two inputs every
+ * unit cost, margin and suggested price in the shop is derived from. They are
+ * the same two fields `saveProduct` writes, and `saveProduct` is "catalogue".
+ * One number typed here moves what the studio believes a piece earns.
+ *
+ * Today `owner` and `studio` both hold "inventory" and "catalogue", so the two
+ * choices are indistinguishable on the live roles — which is exactly why it has
+ * to be argued rather than measured. The role that does not exist yet is the
+ * one that decides it: a stocktake helper given "inventory" so she can count
+ * boxes should not thereby be able to reprice the catalogue. `packing` is
+ * irrelevant to the choice — it holds neither, and never sees a cost either
+ * way, which is the rule in lib/auth/staff.ts.
+ * ────────────────────────────────────────────────────────────────────────────
+ *
+ * Partial entry is a real, honest state. A print time with no grams saves the
+ * print time and says out loud that the piece is still unmeasured; it does not
+ * invent a zero for the half that was not typed, and the row stays on the
+ * screen saying so.
+ */
+export async function saveMeasurement(_prev: FormState, form: FormData): Promise<FormState> {
+  return guard("catalogue", async () => {
+    const id = text(form, "id");
+    if (!id) return fail("No product given.");
+
+    const printTime = optionalNumber(form, "print_time_hours");
+    if (printTime === undefined) {
+      return fail("Print time has to be a number of hours, or blank if you have not timed it.");
+    }
+
+    const colourIds = form.getAll("filament_colour").map(String);
+    const gramsList = form.getAll("filament_grams").map(String);
+
+    /*
+     * The screen always submits every slot, blank ones included — a control
+     * inside a closed <details> is still part of the form — so a payload with
+     * fewer is not this form. This matters because the recipe below is replaced
+     * wholesale: without this check a POST that simply omitted the filament
+     * fields would read as "this piece uses no colours" and wipe a recipe the
+     * screen never showed anybody. A server action is a public HTTP endpoint.
+     */
+    if (
+      colourIds.length !== MEASURE_COLOUR_SLOTS ||
+      gramsList.length !== MEASURE_COLOUR_SLOTS
+    ) {
+      return fail("That form was incomplete. Reload the page and try again.");
+    }
+
+    const recipe: { product_id: string; colour_id: string; grams: number }[] = [];
+    for (let i = 0; i < MEASURE_COLOUR_SLOTS; i += 1) {
+      const colourId = colourIds[i].trim();
+      const raw = gramsList[i].trim();
+
+      // An untouched slot. Not an error — most pieces are one colour.
+      if (!colourId && raw === "") continue;
+
+      if (!colourId) {
+        // The workbook's own check on Filament!B42 — "grams typed with no
+        // colour chosen. Should be 0" — as a refusal rather than a number that
+        // disappears. saveProduct drops this line silently, which is tolerable
+        // on a form with one product on it and not on a screen where somebody
+        // is typing forty-four of them in a row.
+        return fail("There are grams typed with no colour chosen. Pick the colour, or clear the grams.");
+      }
+      if (raw === "") {
+        return fail("Type the grams next to the colour. A colour with no grams buys no filament.");
+      }
+
+      const grams = Number(raw);
+      if (!Number.isFinite(grams) || grams <= 0) {
+        return fail(
+          "Grams has to be a number above zero. Leave the whole line blank if the piece does " +
+            "not use that colour — zero grams of a colour is not the same as not using it.",
+        );
+      }
+      if (recipe.some((r) => r.colour_id === colourId)) {
+        return fail("The same colour is on two lines. Add the grams together on one of them.");
+      }
+
+      recipe.push({ product_id: id, colour_id: colourId, grams });
+    }
+
+    const admin = createAdminClient();
+
+    /*
+     * Every colour is checked to exist BEFORE anything is written.
+     *
+     * The recipe is replaced by a delete followed by an insert, and PostgREST
+     * gives no transaction across the two. So a colour id that fails the
+     * foreign key would delete the old recipe and then fail to write the new
+     * one — a product measured last week comes back unmeasured because
+     * somebody's form carried a stale id. Failing here costs one query and
+     * leaves the row exactly as it was.
+     */
+    if (recipe.length > 0) {
+      const ids = recipe.map((r) => r.colour_id);
+      const { data: known, error: colourError } = await admin
+        .from("colours")
+        .select("id")
+        .in("id", ids);
+
+      if (colourError) return fail(friendly(colourError.message));
+      if ((known?.length ?? 0) !== ids.length) {
+        return fail("One of those colours no longer exists. Reload the page and try again.");
+      }
+    }
+
+    /*
+     * Refuse to touch a piece that already uses more colours than this screen
+     * has room for. `product_filament` has no four-colour ceiling; this form
+     * does, and replacing the recipe wholesale from four slots would silently
+     * delete the fifth. The full product form has no such limit.
+     */
+    const { data: existing, error: readError } = await admin
+      .from("product_filament")
+      .select("colour_id")
+      .eq("product_id", id);
+
+    if (readError) return fail(friendly(readError.message));
+    if ((existing?.length ?? 0) > MEASURE_COLOUR_SLOTS) {
+      return fail(
+        `This piece already uses more than ${MEASURE_COLOUR_SLOTS} colours, which is more than ` +
+          "this screen can show. Open it on the product page so none of them are lost.",
+      );
+    }
+
+    const { data: updated, error } = await admin
+      .from("products")
+      .update({ print_time_hours: printTime })
+      .eq("id", id)
+      .select("id");
+
+    if (error) return fail(friendly(error.message));
+    if (!updated || updated.length === 0) return fail("That product no longer exists.");
+
+    // Replaced wholesale rather than diffed, for the reason saveProduct gives:
+    // a colour taken off the recipe has to disappear from it, and a diff that
+    // only handles additions is how a product stays costed in a colour it no
+    // longer uses.
+    const { error: clearError } = await admin
+      .from("product_filament")
+      .delete()
+      .eq("product_id", id);
+    if (clearError) return fail(friendly(clearError.message));
+
+    if (recipe.length > 0) {
+      const { error: insertError } = await admin.from("product_filament").insert(recipe);
+      if (insertError) return fail(friendly(insertError.message));
+    }
+
+    // The cost, the queue and the buy list all read these two fields.
+    revalidatePath("/admin/inventory");
+    revalidatePath("/admin/inventory/measure");
+    revalidatePath("/admin/products");
+    revalidatePath(`/admin/products/${id}`);
+    // Nothing customer-facing changes: print time and grams are cost data and
+    // no shop page reads either, so /shop and /product/… are left alone.
+
+    // Say what is still missing rather than a flat "Saved." A half-measured
+    // product is a real state and the person needs to know she is not finished
+    // with this row — the same reading `missingCostInputs()` gives the screen.
+    const stillMissing: string[] = [];
+    if (printTime === null) stillMissing.push("no print time");
+    if (recipe.length === 0) stillMissing.push("no filament grams");
+
+    if (stillMissing.length > 0) {
+      return ok(`Saved, but still not measured: ${stillMissing.join(" and ")}.`);
+    }
+    return ok("Measured.");
   });
 }
 
@@ -515,49 +697,388 @@ export async function saveSettings(_prev: FormState, form: FormData): Promise<Fo
 
 /* ---------------------------------------------------------------- orders */
 
-const ORDER_STATUSES = [
-  "confirmed",
-  "printing",
-  "packed",
-  "shipped",
-  "delivered",
-  "cancelled",
-] as const;
+/**
+ * The statuses `setOrderStatus` will write.
+ *
+ * `shipped` is deliberately NOT here — see `markShipped` below. `pending` is
+ * not here either, so an order can never be pushed back into the unpaid state
+ * the Stripe webhook uses as its compare-and-set.
+ */
+const LADDER_STATUSES = ["confirmed", "printing", "packed", "delivered", "cancelled"] as const;
 
+/** What an order has to be for posting it to be a thing that can happen. */
+const POSTABLE_STATUSES = ["confirmed", "printing", "packed"] as const;
+
+/** Revalidate everything a status move is visible on. */
+function revalidateOrder(id: string): void {
+  revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${id}`);
+  revalidatePath("/admin");
+  // Open demand is confirmed/printing/packed, so leaving or re-entering that
+  // set changes what the inventory screen says still has to be printed.
+  revalidatePath("/admin/inventory");
+}
+
+/**
+ * Move an order along the everyday ladder: confirmed → printing → packed, plus
+ * delivered and cancelled.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * IT CANNOT SET `shipped`, AND THAT IS THE POINT.
+ *
+ * This used to be one form: a six-entry status dropdown and a free-text
+ * tracking box, saved by one button. Two defects came out of that shape.
+ *
+ *  1. Posting a parcel was one mis-picked line of a dropdown away, on the same
+ *     control used many times a day for the harmless moves. The single
+ *     transition that publishes a new fact to a customer was the cheapest one
+ *     to make by accident.
+ *  2. Blank tracking meant "leave whatever is there", so a number typed onto
+ *     the wrong order could never be taken off it, and a genuinely untracked
+ *     parcel could never be recorded once a number had been saved.
+ *
+ * Dispatch is now `markShipped`, which asks the tracking question outright and
+ * refuses to guess. This one keeps the ladder and nothing else. `shipped` is
+ * rejected here as well as being absent from the screen's dropdown, because a
+ * server action is a public endpoint and the dropdown is not a check.
+ *
+ * IT ALSO CANNOT PULL AN ORDER BACK OUT OF A RECORDED DISPATCH.
+ *
+ * `tracking_number` is not cleared by anything on this path, so a `shipped`
+ * order dragged back to `printing` here would leave a live article number
+ * sitting on a row that /track renders as still being made. Undoing a dispatch
+ * has to remove the number in the same write, which is `undoDispatch`. Any
+ * backwards move into the workshop is refused while a dispatch is on the row,
+ * and the message says which button to use instead.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
 export async function setOrderStatus(_prev: FormState, form: FormData): Promise<FormState> {
   return guard("orders", async () => {
     const id = text(form, "id");
     const status = text(form, "status");
 
     if (!id) return fail("No order given.");
-    if (!(ORDER_STATUSES as readonly string[]).includes(status)) {
+    if (!status) return fail("Choose which step this order is at.");
+    if (status === "shipped") {
+      return fail(
+        "Posting a parcel is done in “Post this parcel”, so the tracking " +
+          "number is recorded at the same moment. Nothing has been changed.",
+      );
+    }
+    if (!(LADDER_STATUSES as readonly string[]).includes(status)) {
       return fail("That is not a status an order can be in.");
     }
 
     const admin = createAdminClient();
-    const update: Record<string, unknown> = {
-      status,
-      updated_at: new Date().toISOString(),
-    };
 
-    const tracking = text(form, "tracking_number");
-    if (tracking) update.tracking_number = tracking;
-
-    // `pending` is not in the list above, so an order can never be pushed back
-    // into the unpaid state a webhook uses as its compare-and-set.
-    const { error } = await admin
+    const { data: existing } = await admin
       .from("orders")
-      .update(update)
+      .select("status, tracking_number")
       .eq("id", id)
-      .neq("status", "pending");
+      .maybeSingle();
+
+    if (!existing) return fail("That order no longer exists.");
+    const current = existing as { status: string; tracking_number: string | null };
+
+    // An unpaid checkout is not an order and its status is the webhook's
+    // compare-and-set. Nothing on this screen may touch it.
+    if (current.status === "pending") {
+      return fail(
+        "This is an unpaid checkout, not an order. Its status belongs to the " +
+          "payment, and nothing has been changed.",
+      );
+    }
+
+    if (
+      (POSTABLE_STATUSES as readonly string[]).includes(status) &&
+      (current.status === "shipped" || current.tracking_number)
+    ) {
+      return fail(
+        "This order is recorded as posted. Use “Undo this dispatch” to bring " +
+          "it back — that removes the tracking number too, which this would " +
+          "leave behind on an order the customer is told is still being made.",
+      );
+    }
+
+    /*
+     * Compare-and-set on the status we just read, so a form left open while
+     * somebody else moved the order writes nothing rather than overwriting
+     * their change with a stale one.
+     */
+    const { data, error } = await admin
+      .from("orders")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("status", current.status)
+      .select("id");
 
     if (error) return fail(friendly(error.message));
 
-    revalidatePath("/admin/orders");
-    revalidatePath(`/admin/orders/${id}`);
-    revalidatePath("/admin");
-    revalidatePath("/admin/inventory");
+    if (!data || data.length === 0) {
+      return fail(
+        "This order changed while the screen was open, so nothing has been " +
+          "saved. Reload and look again.",
+      );
+    }
+
+    revalidateOrder(id);
     return ok("Updated.");
+  });
+}
+
+/**
+ * How a tracking number typed by a person is normalised before it is stored.
+ *
+ * Trim, and collapse any run of whitespace to one space — MyPost Business
+ * displays article ids in groups and they get pasted that way. Nothing else is
+ * changed: the case is left as typed, because this string is shown to the
+ * customer verbatim on /track and is what they will paste into Australia
+ * Post's own site.
+ */
+function normaliseTracking(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ");
+}
+
+/**
+ * Does this look like an article id rather than a slip of the mouse?
+ *
+ * Deliberately loose. Australia Post article and consignment numbers vary in
+ * length and shape, and rejecting a real one is worse than storing an odd one
+ * — the customer only ever sees it as text. So this rejects the mistakes that
+ * are actually made: a pasted tracking *URL* (`:` and `/`), an email address
+ * (`@`), and a stray keystroke with no digits in it at all.
+ */
+function looksLikeTracking(value: string): boolean {
+  if (value.length < 6 || value.length > 40) return false;
+  if (!/^[A-Za-z0-9][A-Za-z0-9 -]*[A-Za-z0-9]$/.test(value)) return false;
+  return /[0-9]/.test(value);
+}
+
+/**
+ * Record a dispatch: the parcel has left, and this is how the customer can
+ * follow it.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * ONE ACTION, NOT TWO.
+ *
+ * "Advance the status" and "record the tracking number" are the same event and
+ * are saved by the same submit. Splitting them leaves a real window in which
+ * /track tells a customer their order has shipped and offers them nothing to
+ * follow — and if the second half is never done (an interruption, a phone
+ * call), the order rests forever in a state indistinguishable from a parcel
+ * that was genuinely posted without tracking. One write, or none.
+ *
+ * It is nevertheless a *different* action from `setOrderStatus`, for the
+ * reasons in that function's comment.
+ *
+ * THE TRACKING QUESTION IS NOT OPTIONAL AND HAS NO DEFAULT ANSWER.
+ *
+ * Free standard post really does go as an untracked Large Letter here, so
+ * "no number" is a correct outcome for a real parcel — but it is a different
+ * fact from "posted, number not written down", and neither may be inferred
+ * from an empty box. `tracking_mode` therefore has to arrive as an explicit
+ * `tracked` or `untracked`, and the two halves are cross-checked:
+ *
+ *   - `tracked` with an empty box is refused. A blank tracking number is not a
+ *     tracking number, and "" or a placeholder must never reach the column.
+ *   - `untracked` with something typed in the box is refused rather than
+ *     silently dropping what was typed, which is how a number gets lost.
+ *
+ * `untracked` writes SQL NULL — explicitly, so a number recorded in error is
+ * actually removed rather than left behind by an absent key.
+ * ────────────────────────────────────────────────────────────────────────────
+ *
+ * Capability is "orders", which Packing staff hold. Nothing here reads or
+ * writes a cost, a margin or a price.
+ */
+export async function markShipped(_prev: FormState, form: FormData): Promise<FormState> {
+  return guard("orders", async () => {
+    const id = text(form, "id");
+    if (!id) return fail("No order given.");
+
+    const mode = text(form, "tracking_mode");
+    const typed = normaliseTracking(text(form, "tracking_number"));
+
+    if (mode !== "tracked" && mode !== "untracked") {
+      return fail(
+        "Say whether this parcel went with tracking or without it. Nothing " +
+          "has been posted, because a blank answer is not an answer.",
+      );
+    }
+
+    if (mode === "tracked" && !typed) {
+      return fail(
+        "Choose “posted without tracking” if there is no number. An empty " +
+          "box is not a tracking number and nothing has been saved.",
+      );
+    }
+
+    if (mode === "untracked" && typed) {
+      return fail(
+        "You have typed a tracking number but chosen “posted without " +
+          "tracking”. Pick one — nothing has been saved, so the number is " +
+          "still in the box.",
+      );
+    }
+
+    if (mode === "tracked" && !looksLikeTracking(typed)) {
+      return fail(
+        "That does not look like an article number. Paste just the number " +
+          "from the label — not the whole tracking web address.",
+      );
+    }
+
+    const trackingNumber = mode === "tracked" ? typed : null;
+    const admin = createAdminClient();
+
+    /*
+     * Two parcels never share an article id, so the same number on two orders
+     * means one of them is the wrong order — the exact mistake this screen has
+     * to be hard to make. Refused rather than warned, and the other order is
+     * named so it can be found and put right.
+     */
+    if (trackingNumber) {
+      // `limit(1)`, not `maybeSingle()`: two rows already sharing a number is
+      // precisely the state this guard exists for, and maybeSingle() answers
+      // that with a PGRST116 *error* and a null row — which would read as "no
+      // clash" and wave the write straight through.
+      const { data: clashes } = await admin
+        .from("orders")
+        .select("id, order_number")
+        .eq("tracking_number", trackingNumber)
+        .neq("id", id)
+        .limit(1);
+
+      const clash = (clashes ?? [])[0] as { order_number: string | null } | undefined;
+      if (clash) {
+        return fail(
+          `That tracking number is already on ${clash.order_number ?? "another order"}. ` +
+            "One of the two is the wrong parcel, so nothing has been saved.",
+        );
+      }
+    }
+
+    /*
+     * Compare-and-set on the postable statuses. A cancelled order must not be
+     * posted, a delivered one has already arrived, and re-posting an order
+     * that is already `shipped` is a correction — which is allowed, and is why
+     * `shipped` is in this list too. A form left open on a screen while
+     * somebody else cancelled the order writes nothing at all.
+     */
+    const { data, error } = await admin
+      .from("orders")
+      .update({
+        status: "shipped",
+        tracking_number: trackingNumber,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .in("status", [...POSTABLE_STATUSES, "shipped"])
+      .select("order_number");
+
+    if (error) return fail(friendly(error.message));
+
+    if (!data || data.length === 0) {
+      return fail(
+        "This order is not in a state that can be posted — it has probably " +
+          "been cancelled or already marked delivered since this screen " +
+          "loaded. Nothing has been changed; reload and look again.",
+      );
+    }
+
+    /*
+     * ───────────────────────── THE DISPATCH EMAIL HOOK ─────────────────────
+     *
+     * This is where a "your parcel is on its way" email would be scheduled,
+     * with `after()` from "next/server", gated on `isEmailConfigured()` from
+     * lib/email.ts and sent through `sendEmail` — copy
+     * `queueOrderConfirmation` in app/api/webhooks/stripe/route.ts, which is
+     * the pattern and the only mail scheduler this project has. `after()` is
+     * supported in a Server Function, so it belongs right here.
+     *
+     * IT IS NOT WIRED, ON PURPOSE, AND THE REASON IS NOT LAZINESS.
+     *
+     * Six files currently state as fact that the shop never sends one, and
+     * sending it without changing all six falsifies them — two are legal
+     * documents, which is the round-10 defect exactly:
+     *
+     *   app/legal/terms/page.tsx          (~L179–180)  ← legal
+     *   app/legal/privacy/page.tsx        (~L279, 291) ← legal
+     *   app/api/webhooks/stripe/route.ts  (~L853, 920) — the confirmation
+     *                                     email itself says we send no
+     *                                     dispatch email
+     *   app/order/confirmed/page.tsx      (~L285, 356)
+     *   app/faq/page.tsx                  (~L99–105)
+     *   app/account/settings/EmailPreferences.tsx (~L191) — and this one is a
+     *                                     customer-facing promise that
+     *                                     tracking email is "never" sent
+     *
+     * So the mail and the six retractions have to ship in one change, by
+     * somebody who owns those files. Until they do, the panel on the order
+     * screen says plainly that no email goes out and points at /track — which
+     * is true today and needs no gate to stay true.
+     * ──────────────────────────────────────────────────────────────────────
+     */
+
+    revalidateOrder(id);
+
+    return ok(
+      trackingNumber
+        ? `Posted. The customer can follow ${trackingNumber} on /track and in their account.`
+        : "Posted, with no tracking. The customer's tracking page now says it is on its way.",
+    );
+  });
+}
+
+/**
+ * Undo a dispatch: the parcel did not go after all, or it went on the wrong
+ * order.
+ *
+ * Every status move on this screen is reversible through the ladder, and this
+ * is the one that is not — `setOrderStatus` cannot write `shipped`, so it
+ * cannot take an order out of it either. Marking the wrong order shipped is
+ * the mistake this whole screen is shaped around, so undoing it is one button
+ * and no typing.
+ *
+ * It returns the order to `packed`, which is where a parcel that is boxed but
+ * not posted actually is, and clears the tracking number to NULL. There is no
+ * audit table in this project, so the number is genuinely gone — the button
+ * says so, because the label is usually still on the bench.
+ */
+export async function undoDispatch(_prev: FormState, form: FormData): Promise<FormState> {
+  return guard("orders", async () => {
+    const id = text(form, "id");
+    if (!id) return fail("No order given.");
+
+    const admin = createAdminClient();
+
+    // Scoped to `shipped`: this must never be able to pull a delivered order
+    // backwards, and it must not resurrect a cancelled one.
+    const { data, error } = await admin
+      .from("orders")
+      .update({
+        status: "packed",
+        tracking_number: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("status", "shipped")
+      .select("id");
+
+    if (error) return fail(friendly(error.message));
+
+    if (!data || data.length === 0) {
+      return fail(
+        "This order is not marked as posted, so there is nothing to undo. " +
+          "Nothing has been changed.",
+      );
+    }
+
+    revalidateOrder(id);
+    return ok(
+      "Put back to packed, and the tracking number has been removed. The " +
+        "customer's tracking page no longer says it has been posted.",
+    );
   });
 }
 

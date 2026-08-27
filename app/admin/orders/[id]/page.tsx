@@ -5,10 +5,18 @@ import { Alert, Breadcrumbs, Field, Pill, inputClass } from "@/components/ui";
 import { AdminForm, SubmitButton } from "../../AdminForm";
 import { setOrderStatus } from "../../actions";
 import { CHANNEL_LABEL, PageHead, Panel, StatusPill, Unknown } from "../../ui";
+import { DispatchPanel } from "./DispatchPanel";
 import { getOrder, type OrderDetail, type OrderLine } from "../../data";
 
 /**
- * One order, and the one thing a person does to it: move it along.
+ * One order, and the two things a person does to it: move it along, and post
+ * it.
+ *
+ * Those are deliberately two panels with two buttons. "Move it along" is the
+ * everyday ladder and is cheap to undo; posting a parcel is a one-way event in
+ * the physical world, it is the only change a customer is shown as a new fact,
+ * and it is the only one carrying a second piece of information — the tracking
+ * number. See DispatchPanel.tsx and `markShipped` for the argument.
  *
  * The making cost of a line is only shown to a role that is allowed to see
  * costs. Packing is orders and nothing else — the person helping post parcels
@@ -16,11 +24,16 @@ import { getOrder, type OrderDetail, type OrderLine } from "../../data";
  * simply not rendered for them rather than being hidden with CSS.
  */
 
+/*
+ * `shipped` is not here. It is not a step somebody types into a dropdown, it is
+ * what "Post this parcel" below records — together with the tracking number, in
+ * one write. `setOrderStatus` rejects it as well, because a select element is
+ * markup and a server action is a public endpoint.
+ */
 const STATUS_STEPS = [
   { value: "confirmed", label: "Confirmed — paid, not started" },
   { value: "printing", label: "Printing" },
   { value: "packed", label: "Packed — ready to post" },
-  { value: "shipped", label: "Shipped" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ];
@@ -39,6 +52,27 @@ export default async function OrderDetailPage({
   const showCosts = can(staff.role, "reports");
   const units = order.lines.reduce((sum, line) => sum + line.quantity, 0);
   const reference = order.orderNumber ?? "This order";
+
+  /*
+   * A posted order can only go forwards from here. Dragging it back into the
+   * workshop would leave its tracking number on a row the customer is shown as
+   * still being printed, so that path is "Undo this dispatch" instead — which
+   * removes the number in the same write. `setOrderStatus` refuses the
+   * backwards move regardless of what this dropdown offers.
+   */
+  const steps =
+    order.status === "shipped"
+      ? STATUS_STEPS.filter((step) => step.value === "delivered" || step.value === "cancelled")
+      : STATUS_STEPS;
+
+  /*
+   * "" when the order's own status is not on the list — a posted order, whose
+   * step is recorded in the panel below. An empty default is safer than
+   * silently preselecting the first option, which is how a posted parcel would
+   * be knocked back to "confirmed" by somebody pressing the button without
+   * touching the dropdown.
+   */
+  const currentStep = steps.some((step) => step.value === order.status) ? order.status : "";
 
   return (
     <div className="flex flex-col gap-7">
@@ -144,36 +178,44 @@ export default async function OrderDetailPage({
                 <span className="text-muted">None recorded.</span>
               )}
             </Row>
-            <Row label="Tracking">
-              {order.trackingNumber ? (
-                <span className="font-mono text-[13px] break-all select-all">
-                  {order.trackingNumber}
-                </span>
-              ) : (
-                <span className="text-muted">Not posted yet.</span>
-              )}
-            </Row>
+            {/*
+              * Tracking used to be stated here as well, and read "Not posted
+              * yet." whenever the column was null — which is a false statement
+              * about a parcel that went as an untracked Large Letter, and is
+              * the sort of thing two panels on one screen end up disagreeing
+              * about. The dispatch panel below is now the only place on this
+              * page that says anything about tracking, because it is the only
+              * one that also knows the status the answer depends on.
+              */}
             {order.giftNote ? <Row label="Gift note">{order.giftNote}</Row> : null}
           </dl>
         </Panel>
       </div>
 
-      <Panel
-        title="Move it along"
-        note="Changing the status here is what the customer sees on the tracking page."
-      >
-        <AdminForm action={setOrderStatus}>
-          <input type="hidden" name="id" value={order.id} />
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel
+          title="Move it along"
+          note="Where the work is up to. This is what the customer sees on the tracking page."
+        >
+          <AdminForm action={setOrderStatus}>
+            <input type="hidden" name="id" value={order.id} />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Status" htmlFor="status">
+            <Field
+              label="Status"
+              htmlFor="status"
+              hint="Posting the parcel is the panel beside this one, so the tracking number is recorded at the same moment."
+            >
               <select
                 id="status"
                 name="status"
-                defaultValue={order.status}
+                defaultValue={currentStep}
+                required
                 className={inputClass}
               >
-                {STATUS_STEPS.map((step) => (
+                {currentStep === "" ? (
+                  <option value="">Choose a step…</option>
+                ) : null}
+                {steps.map((step) => (
                   <option key={step.value} value={step.value}>
                     {step.label}
                   </option>
@@ -181,37 +223,24 @@ export default async function OrderDetailPage({
               </select>
             </Field>
 
-            <Field
-              label="Tracking number"
-              htmlFor="tracking_number"
-              hint="From the Australia Post label. Leave it alone to keep the one already saved."
-            >
-              <input
-                id="tracking_number"
-                name="tracking_number"
-                type="text"
-                defaultValue={order.trackingNumber ?? ""}
-                placeholder="33ABC123456789"
-                className={inputClass}
-              />
-            </Field>
-          </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <SubmitButton pendingLabel="Updating…">Update this order</SubmitButton>
+              <span className="text-[13px] text-muted">
+                {reference} stays in the reports whatever you set here, unless it is cancelled.
+              </span>
+            </div>
+          </AdminForm>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <SubmitButton pendingLabel="Updating…">Update this order</SubmitButton>
-            <span className="text-[13px] text-muted">
-              {reference} stays in the reports whatever you set here, unless it is cancelled.
-            </span>
+          <div className="mt-4">
+            <Alert>
+              An order cannot be put back to unpaid. That state belongs to the checkout, and
+              writing to it by hand is how a paid order gets counted twice.
+            </Alert>
           </div>
-        </AdminForm>
+        </Panel>
 
-        <div className="mt-4">
-          <Alert>
-            An order cannot be put back to unpaid. That state belongs to the checkout, and
-            writing to it by hand is how a paid order gets counted twice.
-          </Alert>
-        </div>
-      </Panel>
+        <DispatchPanel order={order} />
+      </div>
     </div>
   );
 }

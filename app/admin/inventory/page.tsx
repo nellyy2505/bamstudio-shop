@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { requireStaff } from "@/lib/auth/staff";
+import { can, requireStaff } from "@/lib/auth/staff";
 import { getInventory } from "../data";
 import { NoRows, PageHead, Panel, Stat, Swatch } from "../ui";
 import { AdminForm, SubmitButton } from "../AdminForm";
 import { setRolls, setStock } from "../actions";
-import { Alert, inputClass } from "@/components/ui";
+import { Alert, ButtonLink, Icon, inputClass } from "@/components/ui";
 import { money } from "@/lib/format";
 
 export const metadata = { title: "Inventory · Studio" };
@@ -17,7 +17,17 @@ export const metadata = { title: "Inventory · Studio" };
  * list that sends you home short.
  */
 export default async function InventoryPage() {
-  await requireStaff("inventory");
+  const staff = await requireStaff("inventory");
+
+  /*
+   * The measuring screen writes product rows, so it asks for "catalogue" rather
+   * than "inventory" — the argument is on `saveMeasurement` in actions.ts. The
+   * two capabilities are held by exactly the same roles today, but a link that
+   * bounces a person straight back to /admin is worse than no link, so it is
+   * shown only to someone the screen will actually let in. Hiding a link is
+   * presentation; the page behind it calls requireStaff() for itself.
+   */
+  const canMeasure = can(staff.role, "catalogue");
 
   const inventory = await getInventory();
   const needed = inventory.filament.filter((f) => f.gramsNeeded > 0 || f.rollsToBuy > 0);
@@ -43,6 +53,18 @@ export default async function InventoryPage() {
       <PageHead
         title="Inventory"
         subtitle="What to print next, and what filament that will take."
+        actions={
+          canMeasure ? (
+            <ButtonLink
+              href="/admin/inventory/measure"
+              variant={inventory.unmeasured > 0 ? "primary" : "soft"}
+              size="md"
+            >
+              <Icon name="clock" size={18} />
+              Measure the catalogue
+            </ButtonLink>
+          ) : null
+        }
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
@@ -80,8 +102,17 @@ export default async function InventoryPage() {
         <div className="mb-6">
           <Alert tone="error">
             {inventory.unmeasured} product{inventory.unmeasured === 1 ? " has" : "s have"} no
-            filament recorded, so nothing they use appears in the buy list below. Add the grams on
-            each product and this page becomes trustworthy.
+            filament recorded, so nothing they use appears in the buy list below.{" "}
+            {canMeasure ? (
+              <>
+                <Link href="/admin/inventory/measure" className="underline">
+                  Measure them
+                </Link>{" "}
+                — a print time and the grams, one row each — and this page becomes trustworthy.
+              </>
+            ) : (
+              "Add the grams on each product and this page becomes trustworthy."
+            )}
           </Alert>
         </div>
       ) : null}
