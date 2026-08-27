@@ -10,6 +10,7 @@ import {
 import { NoRows, PageHead, Panel, Stat, Swatch } from "../../ui";
 import { AdminForm, SubmitButton } from "../../AdminForm";
 import { saveMeasurement } from "../../actions";
+import { ColourPalette, ExtraColours } from "./ExtraColours";
 import { Alert, ButtonLink, Icon, Pill, cx, inputClass } from "@/components/ui";
 
 export const metadata = { title: "Measure the catalogue · Studio" };
@@ -26,11 +27,26 @@ export const metadata = { title: "Measure the catalogue · Studio" };
  * one screen: a row per product, a print time, a colour, its grams, Save, next.
  *
  * WHY IT IS ALL SERVER-RENDERED. The row forms are the "Count it / Set" pattern
- * from the print queue next door — `AdminForm` is the only client component
- * involved and the fields inside it are passed in as children, so no cost, no
- * product and no colour list reaches the browser bundle. The extra colour slots
- * are a plain <details>, which needs no state and no JavaScript at all, and
- * whose inputs are submitted whether it is open or shut.
+ * from the print queue next door — the fields inside `AdminForm` are passed in
+ * as children, so no cost and no product reaches the browser bundle. The print
+ * time, the first colour and its grams — the fast path, hours → colour → grams
+ * → Enter — are plain server-rendered markup with nothing to hydrate.
+ *
+ * WHAT CHANGED, and the numbers that forced it. Measured on the deployed page,
+ * 44 products and 18 colours:
+ *
+ *     htmlBytes   1,207,013     1.2 MB of HTML for one screen
+ *     selects     176           four per row
+ *     options     3,344
+ *     forms       44
+ *     nodes       4,744
+ *
+ * Chrome's renderer timed out screenshotting it, and it scaled with the
+ * catalogue — 200 products would be roughly 5 MB. Every row was rendering four
+ * whole palettes, three of them inside a <details> that almost nobody opens
+ * because almost every piece is one colour. Colours two to four now start as
+ * hidden inputs and are built in the browser from one copy of the palette; see
+ * ExtraColours.tsx for what that has to preserve and why.
  *
  * WHY IT HANGS OFF INVENTORY BUT ASKS FOR "catalogue". Measuring is the thing
  * that makes the Inventory buy list true, which is where a person notices it is
@@ -56,6 +72,10 @@ export default async function MeasurePage({
 
   const params = await searchParams;
   const showAll = one(params.show) === "all";
+  // Which single row was asked to show its extra colour slots. This is the
+  // no-JavaScript half of that toggle: with React running the click never
+  // navigates, without it the server renders that one row open.
+  const openId = one(params.colours);
 
   const [queue, colours] = await Promise.all([getMeasureQueue(showAll), getColours()]);
 
@@ -158,13 +178,27 @@ export default async function MeasurePage({
               <span className="sr-only">Save</span>
             </div>
 
-            <ul className="divide-y divide-line">
-              {queue.rows.map((row) => (
-                <li key={row.product.id} className="px-5 py-4">
-                  <Row row={row} colours={colours} />
-                </li>
-              ))}
-            </ul>
+            {/* The palette crosses into the browser here, once for the whole
+                list, so a row that is opened can build its own selects without
+                eighteen colours being repeated down forty-four rows. */}
+            <ColourPalette
+              palette={colours.map((c) => ({ id: c.id, name: c.name, active: c.active }))}
+            >
+              <ul className="divide-y divide-line">
+                {queue.rows.map((row) => (
+                  // The id is the target of the row's own "more colours" link,
+                  // so the no-JS round trip comes back to the row you clicked.
+                  <li key={row.product.id} id={`row-${row.product.id}`} className="px-5 py-4">
+                    <Row
+                      row={row}
+                      colours={colours}
+                      base={showAll ? "/admin/inventory/measure?show=all" : "/admin/inventory/measure"}
+                      openId={openId}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </ColourPalette>
           </>
         )}
       </Panel>
@@ -190,13 +224,18 @@ export default async function MeasurePage({
  * forty-four rows nobody finishes.
  *
  * So: the FIRST colour and its grams are always on the row, in the tab order,
- * and colours two to four live in a <details> underneath that is shut unless
- * the piece already uses more than one. A single-colour piece is hours, colour,
- * grams, Enter — four keystrokes past the tab key and no clicks. A multi-colour
- * piece is one click more. Every slot is submitted either way, open or shut,
- * because a form control inside a closed <details> is still part of the form —
- * which is also what lets `saveMeasurement` insist on receiving all four and
+ * server-rendered, and colours two to four are shut underneath unless the piece
+ * already uses more than one. A single-colour piece is hours, colour, grams,
+ * Enter — four keystrokes past the tab key and no clicks. A multi-colour piece
+ * has its extra slots already open. Every slot is submitted either way, open or
+ * shut, which is what lets `saveMeasurement` insist on receiving all four and
  * refuse a payload that is missing them.
+ *
+ * What a shut row used to submit was three more <select>s inside a <details>;
+ * what it submits now is three pairs of hidden inputs holding the same values,
+ * because 3,344 <option> elements on one screen (see the numbers at the top of
+ * this file) is what a whole palette per slot per row costs. ExtraColours.tsx
+ * holds that end of it.
  *
  * The ceiling is four because the workbook's Products sheet had four fixed
  * Colour/g pairs and nothing in this catalogue exceeds it. `product_filament`
@@ -204,7 +243,19 @@ export default async function MeasurePage({
  * such a piece and sends the person to the full product form, rather than
  * writing back the four it can see and silently dropping the fifth.
  */
-function Row({ row, colours }: { row: MeasureRow; colours: ColourRow[] }) {
+function Row({
+  row,
+  colours,
+  base,
+  openId,
+}: {
+  row: MeasureRow;
+  colours: ColourRow[];
+  /** This page's own URL, carrying whatever filter is on, for the toggle link. */
+  base: string;
+  /** The one product id `?colours=` named, if any. */
+  openId: string;
+}) {
   const { product, missing } = row;
 
   // A colour that has been turned off still has to appear if this piece uses
@@ -261,7 +312,10 @@ function Row({ row, colours }: { row: MeasureRow; colours: ColourRow[] }) {
   }
 
   const slots = Array.from({ length: MEASURE_COLOUR_SLOTS }, (_, i) => product.filament[i] ?? null);
-  const extraOpen = product.filament.length > 1;
+  // A piece that already uses more than one colour shows them, always. Anything
+  // else opens on request — from the URL when JavaScript has not arrived yet.
+  const pinned = product.filament.length > 1;
+  const anchor = `#row-${product.id}`;
 
   return (
     <AdminForm action={saveMeasurement} className="!gap-2.5">
@@ -288,33 +342,31 @@ function Row({ row, colours }: { row: MeasureRow; colours: ColourRow[] }) {
         </SubmitButton>
       </div>
 
-      <details open={extraOpen}>
-        <summary className="w-fit cursor-pointer text-[13px] font-bold text-accent hover:text-accent-dark">
-          {extraOpen
-            ? `${product.filament.length} colours on this piece`
-            : `More than one colour? Add up to ${MEASURE_COLOUR_SLOTS - 1} more`}
-        </summary>
-        <div className="mt-3 flex flex-col gap-2.5">
-          {slots.slice(1).map((slot, i) => (
-            <div
-              key={i}
-              className="grid gap-2.5 sm:grid-cols-[minmax(150px,1fr)_92px] sm:items-center"
-            >
-              <ColourSlot slot={slot} usable={usable} product={product.name} index={i + 2} />
-            </div>
-          ))}
-        </div>
-      </details>
+      <ExtraColours
+        slots={slots.slice(1)}
+        product={product.name}
+        // Only the switched-off ones: everything still on is in the palette the
+        // list already handed over, and repeating it here per row is the thing
+        // this change exists to stop.
+        keep={usable.filter((c) => !c.active).map((c) => c.id)}
+        pinned={pinned}
+        startOpen={pinned || openId === product.id}
+        openHref={`${base}${base.includes("?") ? "&" : "?"}colours=${product.id}${anchor}`}
+        closeHref={`${base}${anchor}`}
+      />
     </AdminForm>
   );
 }
 
 /**
- * One colour-and-grams pair.
+ * The first colour-and-grams pair, and only the first.
  *
- * Rendered as a fragment rather than a wrapper so the caller decides the grid —
- * the first slot sits inside the row's own columns, the rest inside the
- * <details>. Both halves are always present in the payload, blank or not.
+ * Rendered as a fragment rather than a wrapper so the caller decides the grid:
+ * this pair sits directly inside the row's own columns. It is the one slot that
+ * has to be here, in the markup, in the tab order, with no waiting on a bundle
+ * — it is the whole fast path. Slots two to four are ExtraColours.tsx, in the
+ * browser, from one shared palette; that split is what took the page from
+ * 3,344 <option>s to a nineteenth of them.
  */
 function ColourSlot({
   slot,
