@@ -17,8 +17,10 @@ import {
 } from "@/lib/contact";
 import { isEmailConfigured } from "@/lib/email";
 import { money } from "@/lib/format";
+import { selfCanonical } from "../../seo";
 
 export const metadata: Metadata = {
+  ...selfCanonical("/legal/terms"),
   title: "Terms of service",
   description:
     "The terms you agree to when you order from Bam Studio: ordering, pricing, made-to-order lead times, personalisation, delivery, design ownership and your consumer rights.",

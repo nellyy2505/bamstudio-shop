@@ -6,12 +6,7 @@ import { FilterSidebar } from "./FilterSidebar";
 import { SortSelect } from "./SortSelect";
 import { getFacets, getProducts, type ProductFilters } from "@/lib/queries";
 import { pluralise } from "@/lib/format";
-
-export const metadata: Metadata = {
-  title: "Shop all",
-  description:
-    "Every Bam Studio clicker keychain, charm and desk piece — printed to order in Sydney.",
-};
+import { SITE_OPEN_GRAPH } from "../seo";
 
 const PER_PAGE = 12;
 
@@ -25,6 +20,70 @@ function toInt(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * The parameters that make this a VIEW of the catalogue rather than the
+ * catalogue. Every one of them narrows or reorders the same set of products,
+ * and every combination is a separate URL: `/shop?category=…`, `?theme=…`,
+ * `?attachment=…`, `?min=`, `?max=`, `?sort=`, and any pairing of them. The
+ * home page alone links seven of them (CATEGORY_TILES), so they are crawled.
+ *
+ * `page` is deliberately NOT in this list — see below.
+ */
+const VIEW_PARAMS = [
+  "category",
+  "theme",
+  "attachment",
+  "min",
+  "max",
+  "sort",
+] as const;
+
+/**
+ * Which URL this listing claims to be.
+ *
+ * Nothing on the live site said, so `/shop`, `/shop?theme=Food` and
+ * `/shop?category=Phone+%26+bag&sort=price-asc` were three pages of largely
+ * the same products competing with each other.
+ *
+ *  • Any filter or sort present → `/shop`. A filtered view is a subset of the
+ *    catalogue with no copy of its own, and every product it can reach is in
+ *    /sitemap.xml by its own URL, so nothing becomes undiscoverable by
+ *    folding these into the one listing.
+ *  • `?page=N` with no filter → `/shop?page=N`, itself. Page 2 is NOT a
+ *    duplicate of page 1 — it holds twelve different products — and Google is
+ *    explicit that paginated pages should not be canonicalised to the first.
+ *    Saying otherwise here would be a false statement about the content.
+ *  • Anything else, `?utm_source=` included → `/shop`.
+ *
+ * The origin comes from `metadataBase` (app/layout.tsx → `siteUrl()`); this
+ * returns a path, never a host. See `app/seo.ts`.
+ */
+function canonicalShopPath(
+  params: Record<string, string | string[] | undefined>,
+): string {
+  const filtered = VIEW_PARAMS.some((key) => Boolean(one(params[key])));
+  if (filtered) return "/shop";
+
+  const page = toInt(one(params.page));
+  return page && page > 1 ? `/shop?page=${page}` : "/shop";
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}): Promise<Metadata> {
+  const canonical = canonicalShopPath(await searchParams);
+
+  return {
+    title: "Shop all",
+    description:
+      "Every Bam Studio clicker keychain, charm and desk piece — printed to order in Sydney.",
+    alternates: { canonical },
+    openGraph: { ...SITE_OPEN_GRAPH, url: canonical },
+  };
 }
 
 export default async function ShopPage({

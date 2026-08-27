@@ -12,8 +12,10 @@ import {
   socialLinks,
 } from "@/lib/contact";
 import { isEmailConfigured } from "@/lib/email";
+import { selfCanonical } from "../../seo";
 
 export const metadata: Metadata = {
+  ...selfCanonical("/legal/refunds"),
   title: "Refund policy",
   description:
     "Bam Studio's returns, refunds and replacements: 30 days for change of mind on stock designs, the personalised-items exception, and your Australian Consumer Law rights.",

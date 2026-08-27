@@ -11,8 +11,10 @@ import {
   socialLinks,
 } from "@/lib/contact";
 import { isEmailConfigured } from "@/lib/email";
+import { selfCanonical } from "../../seo";
 
 export const metadata: Metadata = {
+  ...selfCanonical("/legal/privacy"),
   title: "Privacy policy",
   description:
     "What personal information Bam Studio collects when you order, why we collect it, who we share it with, and how to access or correct it.",

@@ -26,6 +26,20 @@ const CAN_SIGN_IN = isSupabaseConfigured();
 
 export const metadata: Metadata = {
   title: "Sign in",
+  /*
+   * Not for the index, and robots.txt is the wrong tool for saying so.
+   *
+   * The header links "Sign in" from every signed-out page, and /signup,
+   * /forgot-password and the `proxy.ts` account guard all point here.
+   *
+   * Google therefore finds it whatever /robots.txt says, and a `Disallow`
+   * would only stop it FETCHING the page, leaving it free to list the bare
+   * URL from those links with no directive it is allowed to read. `noindex`
+   * on a page that stays crawlable is what actually keeps it out. The
+   * default `follow` is kept, so link equity still flows through to the shop
+   * pages linked from here. See `app/robots.ts`.
+   */
+  robots: { index: false },
   description: CAN_SIGN_IN
     ? "Sign in to your Bam Studio account to track orders, see favourites and check out faster."
     : "Bam Studio accounts aren't open yet, so there's nothing to sign in to just now.",

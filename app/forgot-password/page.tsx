@@ -20,6 +20,19 @@ const CAN_RESET = isSupabaseConfigured();
 
 export const metadata: Metadata = {
   title: "Reset your password",
+  /*
+   * Not for the index, and robots.txt is the wrong tool for saying so.
+   *
+   * The sign-in form links here.
+   *
+   * Google therefore finds it whatever /robots.txt says, and a `Disallow`
+   * would only stop it FETCHING the page, leaving it free to list the bare
+   * URL from those links with no directive it is allowed to read. `noindex`
+   * on a page that stays crawlable is what actually keeps it out. The
+   * default `follow` is kept, so link equity still flows through to the shop
+   * pages linked from here. See `app/robots.ts`.
+   */
+  robots: { index: false },
   description: CAN_RESET
     ? "Send yourself a link to set a new password for your Bam Studio account."
     : "Setting a new password for your Bam Studio account isn't available just yet.",

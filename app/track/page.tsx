@@ -5,6 +5,7 @@ import { TrackForm } from "./TrackForm";
 import { PRINT_LEAD_TIME, transitRangeLabel } from "@/lib/config";
 import { canReachStudio, sendsOrderConfirmation } from "@/lib/contact";
 import { isEmailConfigured } from "@/lib/email";
+import { selfCanonical } from "../seo";
 
 /**
  * Rendered on every request, never baked at build time.
@@ -29,6 +30,7 @@ export const dynamic = "force-dynamic";
 const SENDS_CONFIRMATION = sendsOrderConfirmation(isEmailConfigured());
 
 export const metadata: Metadata = {
+  ...selfCanonical("/track"),
   title: "Track your order",
   description:
     "Check where your Bam Studio order is — confirmed, printing, packed or shipped — with your order number and email. No account needed.",

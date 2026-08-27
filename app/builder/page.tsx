@@ -3,10 +3,12 @@ import { BuilderClient } from "./BuilderClient";
 import { Icon, Pill } from "@/components/ui";
 import { getCollections, getProducts } from "@/lib/queries";
 import { PRINT_LEAD_TIME } from "@/lib/config";
+import { selfCanonical } from "../seo";
 
 export const revalidate = 300;
 
 export const metadata: Metadata = {
+  ...selfCanonical("/builder"),
   title: "Design your own name charm",
   description:
     "Pick a colourway, spell a name in printed letter caps and add a matching charm. Flat price by name length, made to order in Sydney.",

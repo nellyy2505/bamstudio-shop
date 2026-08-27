@@ -16,8 +16,10 @@ import {
 } from "@/lib/contact";
 import { isEmailConfigured } from "@/lib/email";
 import { money } from "@/lib/format";
+import { selfCanonical } from "../seo";
 
 export const metadata: Metadata = {
+  ...selfCanonical("/faq"),
   title: "Help centre",
   description:
     "Answers on printing times, shipping, returns, materials, custom requests and market dates for Bam Studio's 3D-printed clickers and charms.",

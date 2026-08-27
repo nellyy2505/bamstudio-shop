@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ProductArt } from "@/components/ProductArt";
 import { ProductGrid } from "@/components/product/ProductCard";
@@ -13,8 +14,16 @@ import {
 } from "@/lib/config";
 import { money } from "@/lib/format";
 import type { ArtKey, Tint } from "@/lib/types";
+import { selfCanonical } from "./seo";
 
 export const revalidate = 300;
+
+/**
+ * Title and description are inherited from the root layout; this exists only
+ * to declare the home page's own address. Without it the shop served no
+ * rel=canonical anywhere, so `/?utm_source=…` and `/` were two pages.
+ */
+export const metadata: Metadata = selfCanonical("/");
 
 /** Tailwind scans source statically, so tint classes must appear literally. */
 const TINT_BG: Record<Tint, string> = {

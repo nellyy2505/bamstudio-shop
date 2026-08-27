@@ -7,10 +7,12 @@ import { getCollections } from "@/lib/queries";
 import { BUILDER_PRICING } from "@/lib/config";
 import { money } from "@/lib/format";
 import type { ArtKey, Tint } from "@/lib/types";
+import { selfCanonical } from "../seo";
 
 export const revalidate = 300;
 
 export const metadata: Metadata = {
+  ...selfCanonical("/collections"),
   title: "Colourway collections",
   description:
     "Six colourways for the DIY name charm — cap, letter and cord colours with a matching food charm.",

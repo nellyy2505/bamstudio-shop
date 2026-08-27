@@ -11,6 +11,7 @@ import { getUser } from "@/lib/supabase/server";
 import { isFreeShipping, SHIPPING, SHOP } from "@/lib/config";
 import { money } from "@/lib/format";
 import { siteUrl } from "@/lib/stripe";
+import { SITE_OPEN_GRAPH } from "./seo";
 
 /**
  * §0.10: the description promised "Free Australian shipping from $49" — both
@@ -49,11 +50,14 @@ export const metadata: Metadata = {
   description:
     "Fidget clicker keychains, custom name charms and desk pieces, 3D-printed to order in Sydney." +
     FREE_SHIPPING_SENTENCE,
-  openGraph: {
-    type: "website",
-    siteName: SHOP.name,
-    locale: "en_AU",
-  },
+  /*
+   * Shared with every page through `app/seo.ts`, because `openGraph` is
+   * REPLACED by the last segment that defines it rather than deep-merged —
+   * a page adding its own `og:url` here would otherwise drop siteName and
+   * locale. No `url` at this level: og:url is per page, and one set here
+   * would claim every page in the shop is the home page.
+   */
+  openGraph: { ...SITE_OPEN_GRAPH },
 };
 
 export default async function RootLayout({

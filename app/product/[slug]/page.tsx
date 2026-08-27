@@ -11,10 +11,17 @@ import {
   getRelatedProducts,
   getReviews,
 } from "@/lib/queries";
-import { PRINT_LEAD_TIME, SHIPPING, SHOP, transitDays } from "@/lib/config";
+import {
+  BUILDER_PRICING,
+  PRINT_LEAD_TIME,
+  SHIPPING,
+  SHOP,
+  transitDays,
+} from "@/lib/config";
 import { canReachStudio } from "@/lib/contact";
 import { deliveryWindow, money, pluralise } from "@/lib/format";
 import { siteUrl } from "@/lib/stripe";
+import { SITE_OPEN_GRAPH } from "../../seo";
 
 export const revalidate = 300;
 
@@ -36,13 +43,32 @@ export async function generateMetadata({
   const product = await getProductBySlug(slug);
   if (!product) return { title: "Product not found" };
 
+  /*
+   * One address per product, declared.
+   *
+   * A product link is the thing people actually share — out of Instagram, out
+   * of a newsletter, off a market QR code — and every one of those hangs a
+   * tracking parameter on it. With no canonical, `/product/x?utm_source=ig`
+   * was a second product page carrying identical copy. The path is relative:
+   * `metadataBase` in app/layout.tsx supplies the origin from `siteUrl()`, so
+   * attaching the custom domain stays a rebuild. See `app/seo.ts`.
+   *
+   * `SITE_OPEN_GRAPH` is spread rather than `type` being retyped, because an
+   * `openGraph` key REPLACES the root layout's wholesale — which is what the
+   * previous version of this block was silently doing, losing `siteName` and
+   * `locale` on every product page in the shop.
+   */
+  const path = `/product/${product.slug}`;
+
   return {
     title: product.short_name,
     description: product.description.slice(0, 155),
+    alternates: { canonical: path },
     openGraph: {
+      ...SITE_OPEN_GRAPH,
+      url: path,
       title: `${product.short_name} · ${SHOP.name}`,
       description: product.description.slice(0, 155),
-      type: "website",
     },
   };
 }
@@ -59,7 +85,56 @@ export default async function ProductPage({ params }: { params: Params }) {
 
   const readyToShip = product.stock_on_hand > 0;
 
-  // Structured data helps the listing show its price and rating in search.
+  /*
+   * Nothing is warehoused by default — anything not already printed is made
+   * to order, which is PreOrder, not OutOfStock. This is the same
+   * `readyToShip` the visible stock line below is drawn from, deliberately:
+   * Google requires the structured data to state what the page states, and
+   * two derivations of "is it in stock" would eventually disagree.
+   */
+  const availability = readyToShip
+    ? "https://schema.org/InStock"
+    : "https://schema.org/PreOrder";
+  const offerUrl = `${siteUrl()}/product/${product.slug}`;
+
+  /*
+   * A builder charm has no single price, and the page has never claimed one.
+   *
+   * Defect this closes: `offers` was a flat `Offer` with
+   * `price: product.price` for every product, including the two priced by
+   * name length. The headline on this very page renders "From $4.00" for
+   * those (see the `personalisation_mode === "builder"` branch below), while
+   * the structured data told Google the price simply WAS $4.00 — so a search
+   * result could advertise $4.00 for a four-letter name that costs $7.00.
+   * That is a price representation the page itself contradicts, made to a
+   * consumer, by an Australian trader; the same reason `supabase/seed.sql`
+   * seeds no reviews applies to it. schema.org's answer for a price that
+   * varies is AggregateOffer with lowPrice/highPrice, so that is what a
+   * builder product emits.
+   *
+   * `lowPrice` is `product.price` because that is the figure the page prints
+   * after the word "From". `highPrice` is the dearest bundle in
+   * BUILDER_PRICING — the single source the builder itself prices from
+   * (lib/config.ts) — floored at `product.price` so the range can never come
+   * out inverted if the two ever drift.
+   */
+  const priced =
+    product.personalisation_mode === "builder"
+      ? {
+          "@type": "AggregateOffer",
+          priceCurrency: "AUD",
+          lowPrice: (product.price / 100).toFixed(2),
+          highPrice: (
+            Math.max(product.price, ...Object.values(BUILDER_PRICING)) / 100
+          ).toFixed(2),
+        }
+      : {
+          "@type": "Offer",
+          priceCurrency: "AUD",
+          price: (product.price / 100).toFixed(2),
+        };
+
+  // Structured data helps the listing show its price in search.
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -67,6 +142,14 @@ export default async function ProductPage({ params }: { params: Params }) {
     description: product.description,
     sku: product.sku,
     brand: { "@type": "Brand", name: SHOP.name },
+    /*
+     * No reviews have ever been written, so `review_count` is 0 everywhere
+     * and this stays absent. Keep the guard: an `aggregateRating` on a
+     * product with no reviews is a fabricated rating in a search result and
+     * a breach of Google's own structured-data policy, and `public.products`
+     * still defaults `rating` to 5.0 — so dropping the condition would print
+     * five stars for the whole catalogue.
+     */
     aggregateRating:
       product.review_count > 0
         ? {
@@ -75,17 +158,7 @@ export default async function ProductPage({ params }: { params: Params }) {
             reviewCount: product.review_count,
           }
         : undefined,
-    offers: {
-      "@type": "Offer",
-      priceCurrency: "AUD",
-      price: (product.price / 100).toFixed(2),
-      // Nothing is warehoused by default — anything not already printed is
-      // made to order, which is PreOrder, not OutOfStock.
-      availability: readyToShip
-        ? "https://schema.org/InStock"
-        : "https://schema.org/PreOrder",
-      url: `${siteUrl()}/product/${product.slug}`,
-    },
+    offers: { ...priced, availability, url: offerUrl },
   };
 
   // JSON.stringify does not escape the less-than sign, so a product name

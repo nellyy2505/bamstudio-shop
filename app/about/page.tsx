@@ -5,8 +5,10 @@ import type { IconName } from "@/components/ui";
 import { PRINT_LEAD_TIME, SHOP } from "@/lib/config";
 import { canReachStudio, hasSocialAccount } from "@/lib/contact";
 import type { ArtKey, Tint } from "@/lib/types";
+import { selfCanonical } from "../seo";
 
 export const metadata: Metadata = {
+  ...selfCanonical("/about"),
   title: "Our story",
   description:
     "Bam Studio is three family members and one 3D printer — designed together, printed to order in Sydney, kept deliberately small.",

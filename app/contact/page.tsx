@@ -10,8 +10,10 @@ import {
   hasStudioMailbox,
 } from "@/lib/contact";
 import { isEmailConfigured } from "@/lib/email";
+import { selfCanonical } from "../seo";
 
 export const metadata: Metadata = {
+  ...selfCanonical("/contact"),
   title: "Contact us",
   // Static metadata cannot branch on the config flags below, so it says what
   // holds however the shop is configured rather than promising an answer.
