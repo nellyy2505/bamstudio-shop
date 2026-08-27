@@ -1,5 +1,12 @@
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import type { Collection, Product, Review } from "@/lib/types";
+import type {
+  Collection,
+  Product,
+  Review,
+  ScoopTier,
+  ScoopTierWithPool,
+} from "@/lib/types";
+import { tierAvailability, type ScoopAvailability } from "@/lib/scoop";
 import { FALLBACK_COLLECTIONS, FALLBACK_PRODUCTS } from "./fallback-data";
 
 /**
@@ -442,4 +449,179 @@ export async function getOrderConfirmationSummary(
     );
     return { state: "unavailable" };
   }
+}
+
+/* -------------------------------------------------------------- lucky scoop */
+
+/**
+ * A tier as the shopfront needs it: the row, its pool, and whether the pool can
+ * actually fill it today.
+ *
+ * `availability.sellable` IS THE GATE, and both the page and the checkout have
+ * to apply it. RLS already hides a tier that is inactive or unpriced, so
+ * everything that comes back here is published — but "published" and "sellable"
+ * are different questions, because a bowl empties. The tiers are returned
+ * either way rather than filtered here: a tier that says "sold out — back
+ * soon" is a better page than a tier that vanishes, and the caller is in a
+ * better position to decide which it wants than this function is.
+ */
+export type ScoopTierListing = ScoopTierWithPool & {
+  availability: ScoopAvailability;
+};
+
+/*
+ * One PostgREST select for the row and its pool. `scoop_tier_products` is a
+ * pure join table, so the pool comes back as an array of wrappers each holding
+ * one product; `mapScoopTier` flattens them.
+ *
+ * Nothing here asks for `active` or `price_cents is not null` — the RLS policy
+ * in 0007_lucky_scoop.sql already refuses to publish a draft, and repeating the
+ * filter in the query would make it look as though the policy were optional.
+ */
+const SCOOP_TIER_COLUMNS = "*, scoop_tier_products(products(*))";
+
+type ScoopPoolJoin = { products: Product | Product[] | null };
+
+function mapScoopTier(row: unknown): ScoopTierListing {
+  const record = row as ScoopTier & { scoop_tier_products?: ScoopPoolJoin[] };
+
+  const pool: Product[] = (record.scoop_tier_products ?? []).flatMap((entry) => {
+    const product = Array.isArray(entry.products) ? entry.products[0] : entry.products;
+    return product ? [product] : [];
+  });
+
+  const availability = tierAvailability(
+    {
+      pieceCount: record.piece_count,
+      priceCents: record.price_cents,
+      packedWeightGrams: record.packed_weight_grams,
+      active: record.active,
+    },
+    pool.map((product) => ({
+      productId: product.id,
+      stockOnHand: Number(product.stock_on_hand ?? 0),
+      // Anything the anon key can see is active by policy; read rather than
+      // assumed, so this keeps working if the studio ever reads through here.
+      active: product.active !== false,
+      // Cost is never published — the costing tables are service_role only —
+      // and the shopfront has no use for it. Null keeps that explicit rather
+      // than letting a zero look like a measured piece.
+      unitCostCents: null,
+    })),
+  );
+
+  // Rebuilt field by field rather than spread, so the join rows cannot ride
+  // along beside the flattened pool — two spellings of one list is two things
+  // that can disagree — and so a column that is renamed in the schema shows up
+  // here rather than reaching a page as `undefined`.
+  return {
+    id: record.id,
+    slug: record.slug,
+    name: record.name,
+    blurb: record.blurb ?? "",
+    theme: record.theme,
+    piece_count: record.piece_count,
+    price_cents: record.price_cents,
+    packed_weight_grams: record.packed_weight_grams,
+    packed_thickness_mm: record.packed_thickness_mm,
+    sort_order: record.sort_order,
+    active: record.active,
+    created_at: record.created_at,
+    pool,
+    availability,
+  };
+}
+
+/**
+ * Every published scoop tier, in the studio's own order.
+ *
+ * Empty when Supabase is unconfigured, like every other read here — and
+ * deliberately WITHOUT a bundled fallback. `FALLBACK_PRODUCTS` exists so a
+ * fresh clone has a catalogue to render; a fallback tier would need a made-up
+ * price, and "nothing is priced in code" is the whole point of this feature.
+ * A shop with no database simply has no scoops, which is true.
+ */
+export async function getScoopTiers(): Promise<ScoopTierListing[]> {
+  if (!isDatabaseConfigured()) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("scoop_tiers")
+    .select(SCOOP_TIER_COLUMNS)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    console.error("getScoopTiers failed:", error.message);
+    return [];
+  }
+  return (data ?? []).map(mapScoopTier);
+}
+
+/**
+ * Published tiers by slug, keyed by slug — the scoop counterpart of
+ * `loadProductsBySlug` above, and here for the same reason.
+ *
+ * Checkout and the cart's postage quote both need the SERVER's copy of a
+ * basket's tiers: the price in one case, the packed weight in the other, and
+ * `availability.sellable` in both. A second copy of this read would be a second
+ * answer to "may this tier be sold right now", and a basket that quotes on one
+ * set of rows and is charged against another is exactly the drift that having
+ * one entry point exists to stop.
+ *
+ * THE ANON CLIENT IS DELIBERATE, not an oversight in a route that also holds
+ * the service-role key. Reading through RLS is what makes the policy in
+ * 0007_lucky_scoop.sql the first gate: a tier that is inactive or unpriced
+ * simply is not in the result, so a slug typed into a checkout body cannot
+ * reach a draft. The service-role key would bypass exactly the check that
+ * matters. RLS is only the FIRST gate, though — it knows nothing about whether
+ * the bowl is empty, which is why every caller must also test
+ * `availability.sellable`.
+ *
+ * Empty when Supabase is unconfigured, matching `getScoopTiers` and for the
+ * same reason: there is no bundled fallback tier, because a fallback tier would
+ * need a made-up price.
+ */
+export async function loadScoopTiersBySlug(
+  slugs: string[],
+): Promise<Map<string, ScoopTierListing>> {
+  if (slugs.length === 0 || !isDatabaseConfigured()) return new Map();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("scoop_tiers")
+    .select(SCOOP_TIER_COLUMNS)
+    .in("slug", slugs);
+
+  if (error) {
+    // An empty map on a read failure looks identical to "none of these tiers is
+    // published", and both callers turn that into a refusal — which is the safe
+    // direction, because no money moves on a refusal. The log is the only thing
+    // that tells the two apart, so it is not optional.
+    console.error("loadScoopTiersBySlug failed:", error.message);
+    return new Map();
+  }
+
+  return new Map(
+    (data ?? []).map(mapScoopTier).map((tier) => [tier.slug, tier] as const),
+  );
+}
+
+/** One published tier by slug, or null. Null for "no such tier" and for "no database". */
+export async function getScoopTierBySlug(
+  slug: string,
+): Promise<ScoopTierListing | null> {
+  if (!slug || !isDatabaseConfigured()) return null;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("scoop_tiers")
+    .select(SCOOP_TIER_COLUMNS)
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getScoopTierBySlug failed:", error.message);
+    return null;
+  }
+  return data ? mapScoopTier(data) : null;
 }

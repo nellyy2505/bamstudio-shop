@@ -1,7 +1,7 @@
 -- Schema smoke test.
 --
 -- Run this in the Supabase SQL editor after applying every file in
--- supabase/migrations/ in order and then seed.sql. It returns ONE table of 86
+-- supabase/migrations/ in order and then seed.sql. It returns ONE table of 126
 -- rows and every `pass` must be `t`. These are the guarantees that only fail
 -- in production — a missing grant here means paid orders are never recorded,
 -- and you would first hear about it from a customer.
@@ -10,19 +10,27 @@
 -- 24 assertions, then 29 with shipping, 50 with the staff area, 52 with the
 -- letter_eligible default, 65 with 0005 (the confirmation-email stamp, the
 -- observable stock clamp and the refund register), 86 with 0006 (the enquiry
--- and sign-up tables) — so a shorter table than 86 means an older copy of this
--- file, and an older copy is a green result that never looked at part of the
--- schema. That reads like a pass and is not one.
+-- and sign-up tables), 126 with 0007 (the Lucky Scoop tiers, their pools and
+-- what went into a packed scoop) — so a shorter table than 126 means an older
+-- copy of this file, and an older copy is a green result that never looked at
+-- part of the schema. That reads like a pass and is not one.
 --
 -- A migration that is not applied does not shorten the table, it stops the run:
 -- the first assertion that names a missing object raises instead of returning
 -- `f`. `scripts/verify-sql.sh` applies every file in supabase/migrations/
 -- rather than a hand-written list, because the list fell behind twice.
 --
--- It writes six throwaway orders (one with an order item), two throwaway
--- products, one throwaway payment incident, one throwaway enquiry and one
--- throwaway newsletter sign-up inside a transaction it rolls back, so it is
--- safe to run against a live database, though quiet hours are still kinder.
+-- It writes six throwaway orders (three with order items), six throwaway
+-- products, one throwaway payment incident, one throwaway enquiry, one
+-- throwaway newsletter sign-up, and a handful of throwaway scoop tiers with one
+-- packed scoop, inside a transaction it rolls back — so it is safe to run
+-- against a live database, though quiet hours are still kinder.
+--
+-- One thing it does that the others do not: the scoop block briefly SETs ROLE
+-- to `anon` to count what the shopfront can actually see. RLS is invisible from
+-- the postgres role, which bypasses it, so a policy asserted any other way is
+-- asserted by reading its source rather than by running it. The role is reset
+-- immediately afterwards and the whole thing is inside the same rollback.
 
 begin;
 
@@ -54,10 +62,11 @@ union all
 -- 16 since 0003_admin.sql added staff, staff_invitations, colours,
 -- filament_stock, shop_settings, accessories and product_filament; 17 since
 -- 0005_sale_integrity.sql added payment_incidents; 19 since 0006_enquiries.sql
--- added contact_enquiries and newsletter_signups. A new table that forgets to
--- enable RLS lands in `public` readable by the anon key, so this count is
--- deliberately exact rather than `>=`.
-select 'row-level security everywhere',    count(*) = 19 from pg_tables
+-- added contact_enquiries and newsletter_signups; 23 since 0007_lucky_scoop.sql
+-- added scoop_tiers, scoop_tier_products, scoop_packs and scoop_pack_items. A
+-- new table that forgets to enable RLS lands in `public` readable by the anon
+-- key, so this count is deliberately exact rather than `>=`.
+select 'row-level security everywhere',    count(*) = 23 from pg_tables
          where schemaname = 'public' and rowsecurity = true
 union all
 -- A client must never be able to write a review: the old policy let any
@@ -716,6 +725,561 @@ union all
 select 'the studio can read sign-ups',
        has_table_privilege('service_role', 'public.newsletter_signups', 'select');
 
+-- 0007_lucky_scoop.sql: the product that is sold before anyone knows what is
+-- in it.
+--
+-- Every other thing this shop sells is printed to order with a cost known
+-- before the sale. A scoop is sold first and decided afterwards, so its stock
+-- comes off and its cost is written when it is PACKED, and a tier is only
+-- sellable if the pool it draws from can actually fill it. The rows below
+-- assert what that makes structural: a tier cannot be activated without the
+-- facts that make it honest, the pool is explicit rows rather than a filter,
+-- and nothing recording what a customer received is reachable with the key that
+-- ships in the browser.
+--
+-- Four throwaway products, four throwaway tiers and one packed scoop, all
+-- inside the same rollback as everything above.
+
+-- Probe pieces. `-a` and `-b` fill the live tier's pool; `-c` is in the draft
+-- tier's pool and nowhere else, which is what lets the anon block below ask
+-- about a draft pool without being able to see the draft tier at all; `-d` is
+-- the spare the constraint tests are run against, so that a test which is
+-- SUPPOSED to fail cannot, when it stops failing, quietly change one of the
+-- counts further down.
+--
+-- rating 0 for the reason the earlier probes give: 'no fabricated ratings' has
+-- already run, but a row that would break it if this block were ever moved is a
+-- trap rather than a test.
+insert into public.products
+  (slug, sku, name, short_name, category, theme, art, tint, price, rating, stock_on_hand)
+values
+  ('verify-scoop-a', 'VERIFY-100', 'Verify scoop piece A', 'Piece A',
+   'Clicker keychain', 'mono', 'clicker', 'sky', 500, 0, 4),
+  ('verify-scoop-b', 'VERIFY-101', 'Verify scoop piece B', 'Piece B',
+   'Clicker keychain', 'mono', 'clicker', 'sky', 500, 0, 1),
+  ('verify-scoop-c', 'VERIFY-102', 'Verify scoop piece C', 'Piece C',
+   'Clicker keychain', 'mono', 'clicker', 'sky', 500, 0, 0),
+  ('verify-scoop-d', 'VERIFY-103', 'Verify scoop piece D', 'Piece D',
+   'Clicker keychain', 'mono', 'clicker', 'sky', 500, 0, 2);
+
+-- THE TIERS ARE BUILT WHILE THE POOL GUARD IS STILL DEFERRED, which is the
+-- order the studio builds one in: the tier row exists before there is anything
+-- in its pool, and it is the state at COMMIT that has to be legal. Each of the
+-- three below therefore ends this section with a pool that can fill it.
+--
+-- The probe the "default" assertions read. Priced, weighed and fillable, so the
+-- only thing keeping it inactive is the column default — which is the point: if
+-- that default is ever flipped, this row goes live and the two assertions below
+-- go red, rather than the file falling over somewhere unrelated.
+insert into public.scoop_tiers
+  (slug, name, theme, piece_count, price_cents, packed_weight_grams, packed_thickness_mm)
+values
+  ('verify-scoop-default', 'Verify default probe scoop', 'mixed', 1, 2500, 120, 25);
+
+insert into public.scoop_tier_products (tier_id, product_id)
+select t.id, p.id
+  from public.scoop_tiers t, public.products p
+ where t.slug = 'verify-scoop-default' and p.slug = 'verify-scoop-d';
+
+-- The tier the shopfront is meant to see, once it is switched on below.
+insert into public.scoop_tiers
+  (slug, name, theme, piece_count, price_cents, packed_weight_grams, packed_thickness_mm)
+values
+  ('verify-scoop-live', 'Verify live scoop', 'clickers_keyrings', 2, 2500, 120, 25);
+
+insert into public.scoop_tier_products (tier_id, product_id)
+select t.id, p.id
+  from public.scoop_tiers t, public.products p
+ where t.slug = 'verify-scoop-live'
+   and p.slug in ('verify-scoop-a', 'verify-scoop-b');
+
+-- The draft: entered, pooled, and deliberately never priced. `active` is passed
+-- explicitly rather than left to the default, so that the pair of assertions
+-- about that default can fail on their own without taking this row with them.
+insert into public.scoop_tiers
+  (slug, name, theme, piece_count, active)
+values
+  ('verify-scoop-draft', 'Verify draft scoop', 'pet', 1, false);
+
+insert into public.scoop_tier_products (tier_id, product_id)
+select t.id, p.id
+  from public.scoop_tiers t, public.products p
+ where t.slug = 'verify-scoop-draft' and p.slug = 'verify-scoop-c';
+
+-- THE POOL GUARD IS A DEFERRED CONSTRAINT TRIGGER, so this line is not
+-- optional. Deferred constraints fire at COMMIT, and this file ends in a
+-- rollback — without forcing the mode, every assertion about that trigger would
+-- print `t` having never run it, which is exactly the shape of green result
+-- this file exists to refuse. It also settles the three tiers above: from here
+-- on the guard runs on the statement that breaks the rule, which is how a
+-- mistake in the studio surfaces too.
+set constraints all immediate;
+
+insert into _checks (check_name, pass)
+select 'new scoop tiers default to inactive' as check,
+       (select column_default from information_schema.columns
+         where table_schema = 'public' and table_name = 'scoop_tiers'
+           and column_name = 'active') = 'false' as pass
+union all
+-- ...and a row added the way the table editor adds one really does arrive
+-- hidden, whatever the declared default says. Two assertions for the reason
+-- 0004's pair exists: the first catches a changed default, the second catches a
+-- trigger or a rewrite that produces `true` anyway. A tier that goes live the
+-- moment it is typed in is a half-written blurb and an unfinished pool on the
+-- shopfront.
+select 'a hand-added tier is not active',
+       (select active from public.scoop_tiers where slug = 'verify-scoop-default') = false
+union all
+-- Nothing is priced in code and nothing is priced by a default. Null is "she
+-- has not priced it yet" — a fact — and it is what the studio shows as "not
+-- priced yet", in the language it already uses for anything unmeasured. The
+-- column is omitted from the insert above on purpose, so a default appearing
+-- here is what this row catches.
+select 'a hand-added tier has no price',
+       (select price_cents is null from public.scoop_tiers where slug = 'verify-scoop-draft');
+
+-- Zero of forty-four products have a measured cost, so a tier price is a
+-- decision she has not made yet rather than a number to reach for. NULL says
+-- that; 0 says "free" and renders as $0.00 on a product page.
+do $$
+begin
+  begin
+    insert into public.scoop_tiers (slug, name, theme, piece_count, price_cents)
+    values ('verify-scoop-free', 'Verify free scoop', 'mixed', 5, 0);
+    insert into _checks (check_name, pass)
+    values ('a tier priced at zero is refused', false);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('a tier priced at zero is refused', true);
+  end;
+end $$;
+
+-- The theme enum is the studio's dropdown, copied. A value the dropdown cannot
+-- produce did not come from the studio — the argument contact_enquiries.topic
+-- makes in 0006.
+do $$
+begin
+  begin
+    insert into public.scoop_tiers (slug, name, theme, piece_count)
+    values ('verify-scoop-theme', 'Verify themed scoop', 'anything-goes', 5);
+    insert into _checks (check_name, pass)
+    values ('an invented scoop theme is refused', false);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('an invented scoop theme is refused', true);
+  end;
+end $$;
+
+-- A TIER MUST NOT BE ACTIVATABLE WITHOUT THE THINGS THAT MAKE IT HONEST.
+--
+-- A price, because a live tier without one is a product page with no number on
+-- it. A packed weight, because a scoop has no product row to take one from and
+-- postage is quoted on weight alone — an active tier with no weight is a basket
+-- that cannot be posted. And a pool that can fill it, which is the pair after
+-- these two.
+--
+-- Both are built the honest way round — entered inactive, pooled, then switched
+-- on — so that the only thing that can refuse the switch is the rule being
+-- asserted. Inserting them active with an empty pool would be refused by the
+-- POOL guard instead, and the row would print `t` while testing the wrong
+-- constraint.
+do $$
+begin
+  begin
+    insert into public.scoop_tiers
+      (slug, name, theme, piece_count, packed_weight_grams)
+    values ('verify-scoop-unpriced', 'Verify unpriced live scoop', 'mixed', 1, 120);
+    insert into public.scoop_tier_products (tier_id, product_id)
+    select t.id, p.id
+      from public.scoop_tiers t, public.products p
+     where t.slug = 'verify-scoop-unpriced' and p.slug = 'verify-scoop-d';
+    update public.scoop_tiers set active = true where slug = 'verify-scoop-unpriced';
+    insert into _checks (check_name, pass)
+    values ('an active tier without a price is refused', false);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('an active tier without a price is refused', true);
+  end;
+end $$;
+
+do $$
+begin
+  begin
+    insert into public.scoop_tiers
+      (slug, name, theme, piece_count, price_cents)
+    values ('verify-scoop-unweighed', 'Verify unweighed live scoop', 'mixed', 1, 2500);
+    insert into public.scoop_tier_products (tier_id, product_id)
+    select t.id, p.id
+      from public.scoop_tiers t, public.products p
+     where t.slug = 'verify-scoop-unweighed' and p.slug = 'verify-scoop-d';
+    update public.scoop_tiers set active = true where slug = 'verify-scoop-unweighed';
+    insert into _checks (check_name, pass)
+    values ('an active tier without a packed weight is refused', false);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('an active tier without a packed weight is refused', true);
+  end;
+end $$;
+
+-- A tier promising five pieces out of a pool of one is ALLOWED while it is a
+-- draft. Half-built is what a draft is, and a schema that refused it would stop
+-- her entering a real tier before she had decided its contents.
+do $$
+begin
+  begin
+    insert into public.scoop_tiers
+      (slug, name, theme, piece_count)
+    values ('verify-scoop-short', 'Verify short-pool scoop', 'household', 5);
+    insert into public.scoop_tier_products (tier_id, product_id)
+    select t.id, p.id
+      from public.scoop_tiers t, public.products p
+     where t.slug = 'verify-scoop-short' and p.slug = 'verify-scoop-d';
+    insert into _checks (check_name, pass)
+    values ('a draft tier may hold a pool too small to fill it', true);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('a draft tier may hold a pool too small to fill it', false);
+  end;
+end $$;
+
+-- ...and refused the moment that tier is switched on. This is the half of "a
+-- pool that can fill it" the database can enforce: pool membership is a fact
+-- about rows and never changes on its own. The stock half — whether those
+-- products have anything on the shelf today — changes with every sale, so it is
+-- asked at read time by lib/scoop.ts and is deliberately not a constraint.
+do $$
+begin
+  begin
+    update public.scoop_tiers
+       set price_cents = 2500, packed_weight_grams = 120, active = true
+     where slug = 'verify-scoop-short';
+    insert into _checks (check_name, pass)
+    values ('a tier cannot promise more pieces than its pool holds', false);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('a tier cannot promise more pieces than its pool holds', true);
+  end;
+end $$;
+
+-- The other side of the same trigger, and the one that would make the studio
+-- unusable if it were wrong: a tier that IS priced, weighed and fillable must
+-- go live without argument.
+do $$
+begin
+  begin
+    update public.scoop_tiers set active = true where slug = 'verify-scoop-live';
+    insert into _checks (check_name, pass)
+    values ('a priced, weighed, fillable tier can be activated', true);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('a priced, weighed, fillable tier can be activated', false);
+  end;
+end $$;
+
+-- THE POOL IS EXPLICIT ROWS, NOT A CATEGORY FILTER. A filter is a rule about a
+-- column edited somewhere else, and the day a pet bowl is filed under the
+-- category a clicker scoop draws from, the bowl joins the pool in silence and
+-- the tier's price and postage band are both wrong. These two rows assert the
+-- structure that makes a pool a list somebody wrote: a product is in it once or
+-- not at all, and it cannot leave by being deleted.
+do $$
+begin
+  begin
+    insert into public.scoop_tier_products (tier_id, product_id)
+    select t.id, p.id
+      from public.scoop_tiers t, public.products p
+     where t.slug = 'verify-scoop-default' and p.slug = 'verify-scoop-d';
+    insert into _checks (check_name, pass)
+    values ('a pool cannot hold the same product twice', false);
+  exception when unique_violation then
+    insert into _checks (check_name, pass)
+    values ('a pool cannot hold the same product twice', true);
+  end;
+end $$;
+
+-- `on delete restrict`, exactly as product_filament restricts deletes of
+-- colours in 0003: deleting a product a tier draws from would silently shrink
+-- what that tier promises. She deactivates it instead, and the availability
+-- rule already understands an inactive product.
+do $$
+begin
+  begin
+    delete from public.products where slug = 'verify-scoop-d';
+    insert into _checks (check_name, pass)
+    values ('a product in a pool cannot be deleted', false);
+  exception when foreign_key_violation then
+    insert into _checks (check_name, pass)
+    values ('a product in a pool cannot be deleted', true);
+  end;
+end $$;
+
+-- THE SALE. A scoop line points at a tier, not at a product — there is no
+-- product row for it to point at — and that column is what marks the line as a
+-- scoop for the pack panel and for the reports.
+insert into public.order_items
+  (order_id, product_name, art, tint, unit_price, quantity, scoop_tier_id)
+select o.id, 'Verify live scoop', 'clicker', 'sky', 2500, 1, t.id
+  from public.orders o, public.scoop_tiers t
+ where o.stripe_session_id = 'cs_verify_mail'
+   and t.slug = 'verify-scoop-live';
+
+insert into _checks (check_name, pass)
+select 'an order line can be sold as a scoop tier' as check,
+       (select count(*) from public.order_items oi
+          join public.scoop_tiers t on t.id = oi.scoop_tier_id
+         where t.slug = 'verify-scoop-live') = 1 as pass;
+
+-- One thing or the other, never both. A line carrying a product id AND a tier
+-- id has two prices, two weights and two costs, and every reader would have to
+-- guess which one it meant. Written against the default probe tier rather than
+-- the live one so that a line which should not exist cannot, if it starts
+-- existing, also break the count above.
+do $$
+begin
+  begin
+    insert into public.order_items
+      (order_id, product_id, product_name, art, tint, unit_price, quantity, scoop_tier_id)
+    select o.id, p.id, 'Verify confused line', 'clicker', 'sky', 2500, 1, t.id
+      from public.orders o, public.products p, public.scoop_tiers t
+     where o.stripe_session_id = 'cs_verify_mail'
+       and p.slug = 'verify-scoop-a'
+       and t.slug = 'verify-scoop-default';
+    insert into _checks (check_name, pass)
+    values ('a scoop line cannot also be a product line', false);
+  exception when check_violation then
+    insert into _checks (check_name, pass)
+    values ('a scoop line cannot also be a product line', true);
+  end;
+end $$;
+
+-- THE PACK: what actually went in, recorded after the sale, which is the only
+-- moment it is knowable. One row per physical scoop — a line of quantity 2 has
+-- two, numbered by pack_index — so recording is idempotent and "is this order
+-- fully packed" is a count rather than a guess.
+insert into public.scoop_packs (order_item_id, pack_index, piece_count)
+select oi.id, 1, 2
+  from public.order_items oi
+  join public.scoop_tiers t on t.id = oi.scoop_tier_id
+ where t.slug = 'verify-scoop-live';
+
+-- Two pieces: one the studio has measured, one nobody has. The unmeasured one
+-- is the point, and its column is OMITTED rather than set to null, so that a
+-- default quietly appearing on it is caught here rather than turning every
+-- uncosted scoop into a suspiciously profitable one.
+insert into public.scoop_pack_items (pack_id, product_id, quantity, unit_cost_cents)
+select sp.id, p.id, 1, 240
+  from public.scoop_packs sp
+  join public.order_items oi on oi.id = sp.order_item_id
+  join public.scoop_tiers t on t.id = oi.scoop_tier_id
+  cross join public.products p
+ where t.slug = 'verify-scoop-live' and p.slug = 'verify-scoop-a';
+
+insert into public.scoop_pack_items (pack_id, product_id, quantity)
+select sp.id, p.id, 1
+  from public.scoop_packs sp
+  join public.order_items oi on oi.id = sp.order_item_id
+  join public.scoop_tiers t on t.id = oi.scoop_tier_id
+  cross join public.products p
+ where t.slug = 'verify-scoop-live' and p.slug = 'verify-scoop-b';
+
+insert into _checks (check_name, pass)
+select 'a packed scoop is recorded against its line' as check,
+       (select count(*) from public.scoop_packs sp
+          join public.order_items oi on oi.id = sp.order_item_id
+          join public.scoop_tiers t on t.id = oi.scoop_tier_id
+         where t.slug = 'verify-scoop-live') = 1 as pass
+union all
+-- Stock for a scoop moves when the pack is recorded, not in the webhook, so a
+-- re-saved pack panel is the thing that would decrement twice. `stock_applied`
+-- is the compare-and-set claim that stops it, in the shape orders.stock_applied
+-- uses — and a `true` default here would mean every pack is born already
+-- claimed and no stock ever moves at all.
+select 'a new pack has not moved stock',
+       not exists (select 1 from public.scoop_packs where stock_applied)
+union all
+select 'a pack records every piece that went in',
+       (select count(*) from public.scoop_pack_items) = 2
+union all
+-- The cost of a pack is the SUM of those rows and is deliberately stored
+-- nowhere, so there is no second number to disagree with them — the trap
+-- product_filament avoids in 0003 by having no "total grams" column.
+select 'a pack cost is a sum, not a stored column',
+       not exists (select 1 from information_schema.columns
+                    where table_schema = 'public' and table_name = 'scoop_packs'
+                      and column_name in ('cost_cents', 'total_cost_cents'))
+union all
+-- A 13c "cost" that is packaging alone is a 97% margin on a piece nobody has
+-- timed. Null is the honest answer, and packCost() in lib/scoop.ts turns one
+-- null piece into an unknown pack rather than a cheap one.
+select 'an unmeasured piece records a null cost',
+       (select count(*) from public.scoop_pack_items where unit_cost_cents is null) = 1;
+
+-- The same scoop cannot be recorded twice. Without this a double-clicked pack
+-- panel is two packs, two sets of decrements and a doubled cost on the line.
+-- Run against a second line so that a duplicate which does get through cannot
+-- also break the count above.
+insert into public.order_items
+  (order_id, product_name, art, tint, unit_price, quantity, scoop_tier_id)
+select o.id, 'Verify second scoop', 'clicker', 'sky', 2500, 1, t.id
+  from public.orders o, public.scoop_tiers t
+ where o.stripe_session_id = 'cs_verify_mail'
+   and t.slug = 'verify-scoop-default';
+
+insert into public.scoop_packs (order_item_id, pack_index, piece_count)
+select oi.id, 1, 1 from public.order_items oi
+ where oi.product_name = 'Verify second scoop';
+
+do $$
+begin
+  begin
+    insert into public.scoop_packs (order_item_id, pack_index, piece_count)
+    select oi.id, 1, 1 from public.order_items oi
+     where oi.product_name = 'Verify second scoop';
+    insert into _checks (check_name, pass)
+    values ('the same scoop cannot be packed twice', false);
+  exception when unique_violation then
+    insert into _checks (check_name, pass)
+    values ('the same scoop cannot be packed twice', true);
+  end;
+end $$;
+
+-- WHAT THE SHOPFRONT ACTUALLY SEES, asked the way the shopfront asks it.
+--
+-- The grant assertions further down prove anon HAS select on these two tables.
+-- They say nothing about WHICH rows come back, and that is the whole question:
+-- an inactive tier is next month's range and an unpriced one has no number to
+-- render. So this block switches to the `anon` role and counts, which is the
+-- only way to make the RLS policies themselves testable — the postgres role
+-- bypasses RLS and would report every draft as public without noticing.
+--
+-- Written into its own temp table rather than straight into _checks, because
+-- anon has no rights on the assertion table's sequence. The role is reset on
+-- the next line and everything is inside the same rollback.
+create temp table _anon_scoops (label text primary key, n integer);
+grant insert on _anon_scoops to anon;
+
+set local role anon;
+
+-- Wrapped so that a MISSING grant reddens rows instead of stopping the run.
+-- Without the handler, revoking anon's select on either table raises
+-- insufficient_privilege here and the file aborts before printing anything —
+-- and a run that stops is not a run that failed. Caught, the counts stay null
+-- and the four assertions below go red alongside the grant rows.
+do $$
+begin
+  insert into _anon_scoops (label, n)
+  select 'live tier',
+         (select count(*) from public.scoop_tiers where slug = 'verify-scoop-live')
+  union all
+  select 'draft tier',
+         (select count(*) from public.scoop_tiers where slug = 'verify-scoop-draft')
+  union all
+-- Joined through `products` rather than through `scoop_tiers`, on purpose: anon
+-- cannot see the draft tier at all, so asking for its pool by the tier's slug
+-- would be answered by the TIER policy and would prove nothing about the pool
+-- policy. `verify-scoop-c` is in the draft tier's pool and no other.
+  select 'live pool',
+         (select count(*) from public.scoop_tier_products sp
+            join public.products p on p.id = sp.product_id
+           where p.slug in ('verify-scoop-a', 'verify-scoop-b'))
+  union all
+  select 'draft pool',
+         (select count(*) from public.scoop_tier_products sp
+            join public.products p on p.id = sp.product_id
+           where p.slug = 'verify-scoop-c');
+exception when insufficient_privilege then
+  null;
+end $$;
+
+reset role;
+
+-- coalesce, and it is not decoration. scripts/verify-sql.sh matches assertion
+-- rows on `label|t` or `label|f`, so a NULL `pass` is not a red row — it is a
+-- row that DISAPPEARS from the table, which reads as a pass to anyone who does
+-- not also count. Every one of these four reads a count that is genuinely
+-- absent when the anon grant is missing, so each is floored to a value that
+-- cannot match and goes red instead of going quiet.
+insert into _checks (check_name, pass)
+select 'the shop sees a sellable tier' as check,
+       coalesce((select n from _anon_scoops where label = 'live tier'), -1) = 1 as pass
+union all
+select 'the shop cannot see a draft tier',
+       coalesce((select n from _anon_scoops where label = 'draft tier'), -1) = 0
+union all
+-- The pool is public because a visible pool is what makes "five pieces drawn
+-- from these twelve" a true description rather than an unknown.
+select 'the shop sees a sellable tier''s pool',
+       coalesce((select n from _anon_scoops where label = 'live pool'), -1) = 2
+union all
+select 'the shop cannot see a draft tier''s pool',
+       coalesce((select n from _anon_scoops where label = 'draft pool'), -1) = 0;
+
+-- Who may reach it, at the grant level. The shopfront reads tiers and pools
+-- with the anon key that ships in the browser bundle, so those two are readable
+-- — and nothing more. There is no anon INSERT anywhere in 0007_lucky_scoop.sql
+-- and there must never be: such a grant is a public PostgREST endpoint
+-- accepting arbitrary rows, which here would mean anyone inventing a $1 tier or
+-- adding a lamp to a clicker scoop's pool.
+insert into _checks (check_name, pass)
+select 'the shop can read scoop tiers' as check,
+       has_table_privilege('anon', 'public.scoop_tiers', 'select') as pass
+union all
+select 'the shop can read scoop pools',
+       has_table_privilege('anon', 'public.scoop_tier_products', 'select')
+union all
+select 'anon cannot write scoop tiers',
+       not has_table_privilege('anon', 'public.scoop_tiers', 'insert')
+union all
+select 'signed-in cannot write scoop tiers',
+       not has_table_privilege('authenticated', 'public.scoop_tiers', 'update')
+union all
+select 'anon cannot write scoop pools',
+       not has_table_privilege('anon', 'public.scoop_tier_products', 'insert')
+union all
+select 'signed-in cannot write scoop pools',
+       not has_table_privilege('authenticated', 'public.scoop_tier_products', 'insert')
+union all
+-- ...and the studio's own side, without which nothing can be created at all.
+select 'the studio can edit scoop tiers',
+       has_table_privilege('service_role', 'public.scoop_tiers', 'update')
+union all
+select 'the studio can build a pool',
+       has_table_privilege('service_role', 'public.scoop_tier_products', 'insert');
+
+-- A pack records what a named customer's order contained and what the studio
+-- paid for it. Neither is anybody's business but hers, so both tables get the
+-- treatment 0003, 0005 and 0006 document: RLS on with no policy at all, plus an
+-- explicit revoke, because Supabase grants every new table in `public` to anon
+-- and authenticated as it is created and the revoke is what closes it.
+insert into _checks (check_name, pass)
+select 'anon cannot read scoop packs' as check,
+       not has_table_privilege('anon', 'public.scoop_packs', 'select') as pass
+union all
+select 'signed-in cannot read scoop packs',
+       not has_table_privilege('authenticated', 'public.scoop_packs', 'select')
+union all
+select 'anon cannot read what a scoop contained',
+       not has_table_privilege('anon', 'public.scoop_pack_items', 'select')
+union all
+select 'signed-in cannot read what a scoop contained',
+       not has_table_privilege('authenticated', 'public.scoop_pack_items', 'select')
+union all
+select 'anon cannot write scoop packs',
+       not has_table_privilege('anon', 'public.scoop_packs', 'insert')
+union all
+select 'the studio can record a pack',
+       has_table_privilege('service_role', 'public.scoop_packs', 'insert')
+union all
+select 'the studio can record what went in a pack',
+       has_table_privilege('service_role', 'public.scoop_pack_items', 'insert')
+union all
+-- The pool guard is SECURITY DEFINER, so it runs with the owner's rights. A
+-- trigger function the browser key may EXECUTE is a function the browser key
+-- can be made to run, which is why 0001 revokes execute on every definer
+-- function it writes and why this one is revoked too.
+select 'nobody can call the pool guard directly',
+       not has_function_privilege('anon', 'public.scoop_tier_pool_is_big_enough()', 'execute');
+
 -- Search is bounded: a lone wildcard must not match the whole catalogue.
 insert into _checks (check_name, pass)
 select 'search rejects a bare wildcard' as check,
@@ -724,7 +1288,7 @@ union all
 select 'search ignores empty input',
        (select count(*) from public.search_products('   ')) = 0;
 
--- Every assertion, in one result set. `pass` must be `t` on all 86 rows.
+-- Every assertion, in one result set. `pass` must be `t` on all 126 rows.
 select check_name as check, pass from _checks order by ord;
 
 rollback;

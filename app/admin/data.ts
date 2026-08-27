@@ -17,7 +17,18 @@ import {
  * imported them from this module and nothing about where they live changes what
  * they answer.
  */
-import { getSettings, type Accessory } from "@/lib/cost-basis";
+import { getSettings, unitCostsAtSale, type Accessory } from "@/lib/cost-basis";
+import {
+  activationBlockers,
+  packCost,
+  packPieceCount,
+  scoopCostBasis,
+  suggestedTierPrice,
+  tierAvailability,
+  type ScoopAvailability,
+  type ScoopCostBasis,
+} from "@/lib/scoop";
+import type { ScoopTheme } from "@/lib/types";
 import { SERVICE_CODES } from "@/lib/shipping/quote";
 import { isEmailConfigured } from "@/lib/email";
 
@@ -1325,4 +1336,503 @@ export async function getStudioSummary(): Promise<StudioSummary> {
     unmeasured: inventory.unmeasured,
     noOrdersYet: (anyOrder.count ?? 0) === 0,
   };
+}
+
+/* --------------------------------------------------------- lucky scoop */
+
+/** One product in a tier's pool, as the studio needs to see it. */
+export type ScoopPoolProduct = {
+  productId: string;
+  sku: string;
+  name: string;
+  /**
+   * `products.active`. A retired product stays in the pool — deleting it is
+   * refused (0007_lucky_scoop.sql) so that a tier's promise cannot silently
+   * shrink — so the studio has to be able to see that it is no longer drawable.
+   */
+  active: boolean;
+  stockOnHand: number;
+  /**
+   * What one costs to make right now, in whole cents, or null when nobody has
+   * measured it. Same definition and same source as the cost stamped on a sale
+   * (`unitCostsAtSale`), so the suggestion below and the margin on a packed
+   * scoop are computed from one number rather than two.
+   */
+  unitCostCents: number | null;
+};
+
+/**
+ * A tier with everything the studio's tier screen shows: its pool, whether the
+ * pool can fill it today, whether it could be activated at all, and what it
+ * might be worth.
+ */
+export type ScoopTierRow = {
+  id: string;
+  slug: string;
+  name: string;
+  blurb: string;
+  theme: ScoopTheme;
+  pieceCount: number;
+  priceCents: number | null;
+  packedWeightGrams: number | null;
+  packedThicknessMm: number | null;
+  sortOrder: number;
+  active: boolean;
+  createdAt: string;
+  pool: ScoopPoolProduct[];
+  /** Stock-aware: can this be sold right now, and how many scoops are in it. */
+  availability: ScoopAvailability;
+  /**
+   * Why the database would refuse to switch this tier on, in words. Empty when
+   * it would be allowed. Deliberately about the pool's SIZE rather than its
+   * stock — a tier is not un-activated by selling out.
+   */
+  activationBlockers: string[];
+  /** How much of the pool has ever been costed. */
+  costBasis: ScoopCostBasis;
+  /**
+   * A suggestion for the price field, never a value written into it — the same
+   * rule `costProduct()` follows for a product.
+   *
+   * NULL until every product in the pool has been measured, which today is
+   * every pool: 0 of 44 products have a cost. That null is the honest answer,
+   * and `costBasis` is what the screen shows instead ("3 of 12 pieces
+   * measured"). See lib/scoop.ts for why a partial average is refused.
+   */
+  suggestedPriceCents: number | null;
+};
+
+const SCOOP_TIER_COLUMNS =
+  "id, slug, name, blurb, theme, piece_count, price_cents, " +
+  "packed_weight_grams, packed_thickness_mm, sort_order, active, created_at, " +
+  "scoop_tier_products(products(id, sku, name, active, stock_on_hand))";
+
+type ScoopPoolJoin = {
+  products:
+    | { id: string; sku: string; name: string; active: boolean; stock_on_hand: number }
+    | { id: string; sku: string; name: string; active: boolean; stock_on_hand: number }[]
+    | null;
+};
+
+function mapScoopTier(
+  row: Record<string, unknown>,
+  settings: CostSettings,
+  costs: Map<string, number | null>,
+): ScoopTierRow {
+  const pool: ScoopPoolProduct[] = ((row.scoop_tier_products ?? []) as ScoopPoolJoin[])
+    .flatMap((entry) => {
+      const product = Array.isArray(entry.products) ? entry.products[0] : entry.products;
+      return product ? [product] : [];
+    })
+    .map((product) => ({
+      productId: product.id,
+      sku: product.sku,
+      name: product.name,
+      active: Boolean(product.active),
+      stockOnHand: Number(product.stock_on_hand ?? 0),
+      // `?? null` rather than `?? 0`: an id the cost read did not answer for is
+      // an unmeasured product, and a 0 there would make the pool look costed.
+      unitCostCents: costs.get(product.id) ?? null,
+    }));
+
+  const pieceCount = Number(row.piece_count ?? 0);
+  const priceCents = row.price_cents === null || row.price_cents === undefined
+    ? null
+    : Number(row.price_cents);
+  const packedWeightGrams =
+    row.packed_weight_grams === null || row.packed_weight_grams === undefined
+      ? null
+      : Number(row.packed_weight_grams);
+
+  const rules = {
+    pieceCount,
+    priceCents,
+    packedWeightGrams,
+    active: Boolean(row.active),
+  };
+
+  return {
+    id: row.id as string,
+    slug: row.slug as string,
+    name: row.name as string,
+    blurb: (row.blurb as string) ?? "",
+    theme: (row.theme as ScoopTheme) ?? "mixed",
+    pieceCount,
+    priceCents,
+    packedWeightGrams,
+    packedThicknessMm:
+      row.packed_thickness_mm === null || row.packed_thickness_mm === undefined
+        ? null
+        : Number(row.packed_thickness_mm),
+    sortOrder: Number(row.sort_order ?? 0),
+    active: Boolean(row.active),
+    createdAt: row.created_at as string,
+    pool,
+    availability: tierAvailability(rules, pool),
+    activationBlockers: activationBlockers(rules, pool.length),
+    costBasis: scoopCostBasis(pool, pieceCount),
+    suggestedPriceCents: suggestedTierPrice(settings, pool, pieceCount),
+  };
+}
+
+/**
+ * Every scoop tier, drafts included, in the order the studio sorted them.
+ *
+ * Unpaged for the reason `getMeasureQueue` is: there will be a handful of
+ * tiers, not a catalogue, and a pager over four rows is a pager that hides one
+ * of them. One settings read, one cost read and one query for all of it — not
+ * one per tier.
+ */
+export async function listScoopTiers(): Promise<ScoopTierRow[]> {
+  assertServer("listScoopTiers");
+
+  const admin = createAdminClient();
+  const [{ data, error }, settings] = await Promise.all([
+    admin.from("scoop_tiers").select(SCOOP_TIER_COLUMNS).order("sort_order", {
+      ascending: true,
+    }),
+    getSettings(),
+  ]);
+
+  if (error || !data) return [];
+
+  const rows = data.map((row) => asRow(row));
+  const productIds = rows.flatMap((row) =>
+    ((row.scoop_tier_products ?? []) as ScoopPoolJoin[]).flatMap((entry) => {
+      const product = Array.isArray(entry.products) ? entry.products[0] : entry.products;
+      return product ? [product.id] : [];
+    }),
+  );
+
+  const costs = await unitCostsAtSale(productIds);
+  return rows.map((row) => mapScoopTier(row, settings, costs));
+}
+
+/** One tier by id, drafts included. Null when there is no such tier. */
+export async function getScoopTier(id: string): Promise<ScoopTierRow | null> {
+  assertServer("getScoopTier");
+  if (!id) return null;
+
+  const admin = createAdminClient();
+  const [{ data, error }, settings] = await Promise.all([
+    admin.from("scoop_tiers").select(SCOOP_TIER_COLUMNS).eq("id", id).maybeSingle(),
+    getSettings(),
+  ]);
+
+  if (error || !data) return null;
+
+  const row = asRow(data);
+  const productIds = ((row.scoop_tier_products ?? []) as ScoopPoolJoin[]).flatMap(
+    (entry) => {
+      const product = Array.isArray(entry.products) ? entry.products[0] : entry.products;
+      return product ? [product.id] : [];
+    },
+  );
+
+  const costs = await unitCostsAtSale(productIds);
+  return mapScoopTier(row, settings, costs);
+}
+
+/**
+ * Every product a tier's pool could be built from, with the two facts the
+ * owner is actually deciding on: what one costs to make, and how many are on
+ * the shelf.
+ *
+ * ONE ROW PER PRODUCT, AND NOT A `ProductRow`. The picker on the tier screen
+ * renders all forty-four of these at once, so what it is handed matters: a
+ * `ProductRow` carries the gallery, the colour list, the attachments, the
+ * description and the photographs, none of which a checkbox needs, and the
+ * measure screen's own defect (round 14 — 1.2 MB of HTML because every row
+ * shipped a whole palette) is what a fat picker turns into here. Six columns
+ * and one cost lookup.
+ *
+ * Retired products are included on purpose: a pool row survives its product
+ * being switched off (deleting the product is refused, 0007), so the picker has
+ * to be able to show and un-tick one. `active` is what says it is no longer
+ * drawable.
+ */
+export type PoolCandidate = ScoopPoolProduct & { category: string };
+
+export async function listPoolCandidates(): Promise<PoolCandidate[]> {
+  assertServer("listPoolCandidates");
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("products")
+    .select("id, sku, name, category, active, stock_on_hand")
+    .order("category", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error || !data) return [];
+
+  const rows = data.map((row) => asRow(row));
+  const costs = await unitCostsAtSale(rows.map((row) => row.id as string));
+
+  return rows.map((row) => ({
+    productId: row.id as string,
+    sku: (row.sku as string) ?? "",
+    name: (row.name as string) ?? "",
+    category: (row.category as string) ?? "",
+    active: Boolean(row.active),
+    stockOnHand: Number(row.stock_on_hand ?? 0),
+    // `?? null`, never `?? 0`: an id the cost read did not answer for has never
+    // been measured, and a zero there makes an unmeasured pool look costed.
+    unitCostCents: costs.get(row.id as string) ?? null,
+  }));
+}
+
+/* ------------------------------------------------- scoops on one order */
+
+/** One piece recorded as having gone into a scoop — a `scoop_pack_items` row. */
+export type ScoopPackPieceRow = {
+  productId: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  /**
+   * What one cost AT THE MOMENT IT WAS PACKED, read off the stamped column and
+   * never recomputed. A cost derived at read time rewrites every historical
+   * margin the next time filament changes price — the reason
+   * `order_items.unit_cost_cents` exists (0003) and the reason this column does
+   * (0007). Null for a piece nobody had measured when it was packed.
+   */
+  unitCostCents: number | null;
+  /** The product is not in this tier's pool today. A fact, not a violation. */
+  offPool: boolean;
+};
+
+/**
+ * One physical scoop: either what was recorded, or the empty slot where a
+ * recording is still owed.
+ *
+ * A line of quantity 2 is two of these — two draws, two videos, two bags — and
+ * `packIndex` numbers them, which is what makes saving the panel twice produce
+ * one record rather than two (the unique constraint on
+ * `order_item_id, pack_index`).
+ */
+export type ScoopPackRow = {
+  /** Null when nothing has been recorded for this scoop yet. */
+  id: string | null;
+  packIndex: number;
+  /**
+   * The pieces promised. Copied onto the pack when it is recorded, so it is the
+   * promise as it stood then; for a scoop not yet recorded there is nothing to
+   * read but the tier's count as it is today.
+   */
+  pieceCount: number;
+  /** True once the stock for this scoop has come off. The claim flag. */
+  stockApplied: boolean;
+  videoUrl: string | null;
+  note: string | null;
+  packedAt: string | null;
+  items: ScoopPackPieceRow[];
+  /** Pieces actually recorded, so a short pack can be seen. */
+  recordedPieces: number;
+  /**
+   * What this scoop cost to make — the sum of its pieces, or null the moment
+   * one of them was never measured. `packCost()` in lib/scoop.ts, never a
+   * partial sum.
+   */
+  costCents: number | null;
+};
+
+/** One scoop line on an order, with its tier, its pool and its packs. */
+export type OrderScoopLine = {
+  orderItemId: string;
+  tierId: string;
+  tierName: string;
+  /** How many scoops this line sold. Each one is a separate draw. */
+  quantity: number;
+  /** The tier's piece count as it stands today. */
+  pieceCount: number;
+  /** What may be drawn into it, with cost and shelf stock. */
+  pool: ScoopPoolProduct[];
+  /** Exactly `quantity` entries, recorded or not, in pack_index order. */
+  packs: ScoopPackRow[];
+};
+
+export type OrderScoops = {
+  lines: OrderScoopLine[];
+  /**
+   * Scoops on this order whose contents nobody has recorded yet, in words.
+   * Empty when there is nothing outstanding — including on an order with no
+   * scoops on it at all.
+   */
+  outstanding: string[];
+  /**
+   * The read itself failed, so `outstanding` is not a statement about this
+   * order. Callers that use this to REFUSE something must refuse on this too:
+   * "we could not check" is not "there is nothing to check".
+   */
+  unreadable: boolean;
+};
+
+const ORDER_SCOOP_COLUMNS =
+  "id, product_name, quantity, scoop_tier_id, " +
+  "scoop_tiers(name, piece_count, " +
+  "scoop_tier_products(products(id, sku, name, active, stock_on_hand))), " +
+  "scoop_packs(id, pack_index, piece_count, stock_applied, video_url, note, " +
+  "packed_at, scoop_pack_items(product_id, quantity, unit_cost_cents, " +
+  "products(sku, name)))";
+
+/** PostgREST answers a to-one embed as an object or, sometimes, a one-element array. */
+function embedded<T>(value: unknown): T | null {
+  if (Array.isArray(value)) return (value[0] as T) ?? null;
+  return (value as T) ?? null;
+}
+
+/**
+ * The Lucky Scoop lines on one order, and what is still owed on them.
+ *
+ * ONE DEFINITION OF "RECORDED", used by both the pack panel and the guard in
+ * `markShipped`. Two would be one too many: a panel that says the order is
+ * ready and an action that refuses to post it disagree about the same fact, and
+ * the person in the middle has no way to tell which is right.
+ *
+ * A scoop counts as recorded when it has at least one piece against it. Not
+ * "the promised number of pieces" — a short pack is a real thing that happens
+ * (a charm broke, the last one was already gone) and refusing to post the
+ * parcel over it would be the schema deciding something only she can. The panel
+ * shows the count beside the promise so a genuinely short pack is visible.
+ */
+export async function getOrderScoops(orderId: string): Promise<OrderScoops> {
+  assertServer("getOrderScoops");
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("order_items")
+    .select(ORDER_SCOOP_COLUMNS)
+    .eq("order_id", orderId)
+    .not("scoop_tier_id", "is", null);
+
+  // Fails closed. An unreadable table is not an order with no scoops on it, and
+  // the difference decides whether a parcel may be posted.
+  if (error) return { lines: [], outstanding: [], unreadable: true };
+  if (!data) return { lines: [], outstanding: [], unreadable: false };
+
+  const lines: OrderScoopLine[] = data.map((raw) => {
+    const item = asRow(raw);
+    const tier = embedded<Record<string, unknown>>(item.scoop_tiers);
+    const tierName =
+      (tier?.name as string) || (item.product_name as string) || "Lucky Scoop";
+    const pieceCount = Number(tier?.piece_count ?? 0);
+
+    const pool: ScoopPoolProduct[] = ((tier?.scoop_tier_products ?? []) as unknown[])
+      .flatMap((entry) => {
+        const product = embedded<Record<string, unknown>>(asRow(entry).products);
+        return product ? [product] : [];
+      })
+      .map((product) => ({
+        productId: product.id as string,
+        sku: (product.sku as string) ?? "",
+        name: (product.name as string) ?? "",
+        active: Boolean(product.active),
+        stockOnHand: Number(product.stock_on_hand ?? 0),
+        // The pool's costs are filled in below, in one lookup for the whole
+        // order rather than one per line.
+        unitCostCents: null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const inPool = new Set(pool.map((piece) => piece.productId));
+
+    const recorded = new Map<number, ScoopPackRow>();
+    for (const rawPack of (item.scoop_packs ?? []) as unknown[]) {
+      const pack = asRow(rawPack);
+      const items: ScoopPackPieceRow[] = ((pack.scoop_pack_items ?? []) as unknown[]).map(
+        (rawPiece) => {
+          const piece = asRow(rawPiece);
+          const product = embedded<Record<string, unknown>>(piece.products);
+          const productId = piece.product_id as string;
+          return {
+            productId,
+            sku: (product?.sku as string) ?? "",
+            name: (product?.name as string) ?? "This product has been removed",
+            quantity: Number(piece.quantity ?? 0),
+            unitCostCents:
+              piece.unit_cost_cents === null || piece.unit_cost_cents === undefined
+                ? null
+                : Number(piece.unit_cost_cents),
+            offPool: !inPool.has(productId),
+          };
+        },
+      );
+
+      const packIndex = Number(pack.pack_index ?? 1);
+      recorded.set(packIndex, {
+        id: pack.id as string,
+        packIndex,
+        pieceCount: Number(pack.piece_count ?? pieceCount),
+        stockApplied: Boolean(pack.stock_applied),
+        videoUrl: (pack.video_url as string | null) ?? null,
+        note: (pack.note as string | null) ?? null,
+        packedAt: (pack.packed_at as string | null) ?? null,
+        items,
+        recordedPieces: packPieceCount(items),
+        costCents: packCost(items),
+      });
+    }
+
+    const quantity = Math.max(1, Number(item.quantity ?? 1));
+    /*
+     * Never fewer slots than there are recorded packs. The line's quantity is
+     * what the customer bought and is normally the answer, but a row edited by
+     * hand — a quantity corrected downwards after a scoop was already packed —
+     * would otherwise hide a real record and report it as still owed.
+     */
+    const slots = Math.max(quantity, ...[...recorded.keys()], 1);
+    const packs: ScoopPackRow[] = Array.from({ length: slots }, (_, i) => {
+      const index = i + 1;
+      return (
+        recorded.get(index) ?? {
+          id: null,
+          packIndex: index,
+          pieceCount,
+          stockApplied: false,
+          videoUrl: null,
+          note: null,
+          packedAt: null,
+          items: [],
+          recordedPieces: 0,
+          costCents: null,
+        }
+      );
+    });
+
+    return {
+      orderItemId: item.id as string,
+      tierId: (item.scoop_tier_id as string) ?? "",
+      tierName,
+      quantity,
+      pieceCount,
+      pool,
+      packs,
+    };
+  });
+
+  // One cost read for every pool product across the whole order, not one per
+  // line — the same rule `listScoopTiers` follows.
+  const costs = await unitCostsAtSale(
+    lines.flatMap((line) => line.pool.map((piece) => piece.productId)),
+  );
+  for (const line of lines) {
+    for (const piece of line.pool) {
+      piece.unitCostCents = costs.get(piece.productId) ?? null;
+    }
+  }
+
+  const outstanding: string[] = [];
+  for (const line of lines) {
+    for (const pack of line.packs) {
+      if (pack.recordedPieces === 0) {
+        outstanding.push(
+          line.packs.length > 1
+            ? `${line.tierName} — scoop ${pack.packIndex} of ${line.packs.length}`
+            : line.tierName,
+        );
+      }
+    }
+  }
+
+  return { lines, outstanding, unreadable: false };
 }

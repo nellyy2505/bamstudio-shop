@@ -276,3 +276,83 @@ export const AU_STATES = [
   "ACT",
   "NT",
 ] as const;
+
+/* ------------------------------------------------------------ lucky scoop */
+
+/**
+ * The topic a scoop tier draws from.
+ *
+ * THE CUSTOMER PICKS THE THEME; THE DRAW PICKS THE PIECES. At the stall a
+ * charm-colour board maps colour to category and the scoop decides which
+ * category you get. Online that mechanic sells somebody pet things when they
+ * came for clickers, and "goods must match their description" is not waived by
+ * calling it lucky — so the theme is chosen, not drawn, and the board stays in
+ * the video where it is theatre rather than a term of sale.
+ *
+ * Kept in step with the CHECK constraint on `scoop_tiers.theme`
+ * (0007_lucky_scoop.sql). A value that is not one of these is a value the
+ * studio's dropdown cannot produce.
+ */
+export type ScoopTheme = "pet" | "household" | "clickers_keyrings" | "mixed";
+
+/** The dropdown, in display order. One list for the studio and the shopfront. */
+export const SCOOP_THEMES: { value: ScoopTheme; label: string }[] = [
+  { value: "pet", label: "Pet" },
+  { value: "household", label: "Household" },
+  { value: "clickers_keyrings", label: "Clickers & keyrings" },
+  { value: "mixed", label: "Mixed" },
+];
+
+/**
+ * A Lucky Scoop tier — the thing a customer actually buys. "Pet scoop, five
+ * pieces, $X".
+ *
+ * Deliberately not a `Product`: its price starts null, its stock is a property
+ * of a pool of other rows, its cost is not knowable until it is packed, and its
+ * weight is a worst case somebody chose rather than something that was weighed.
+ * See 0007_lucky_scoop.sql for the reasoning in full.
+ *
+ * Row shape, straight off PostgREST, so the columns keep their snake_case names
+ * exactly as `Product` and `Order` do.
+ */
+export type ScoopTier = {
+  id: string;
+  slug: string;
+  name: string;
+  blurb: string;
+  theme: ScoopTheme;
+  /** How many pieces the tier promises. The owner's starting number is 5. */
+  piece_count: number;
+  /**
+   * Price in cents, or null when nobody has priced it yet. NEVER 0 — the
+   * database refuses a zero, because a zero renders as "$0.00" and reads as a
+   * free scoop. A tier cannot be activated while this is null.
+   */
+  price_cents: number | null;
+  /**
+   * Worst-case packed weight in grams. A scoop has no product row to take a
+   * weight from, so postage is quoted from this — set from the heaviest
+   * plausible pack, never the average, or the studio wears the difference.
+   * Null blocks activation.
+   */
+  packed_weight_grams: number | null;
+  /** Worst-case packed thickness in mm. Null until a test pack is measured. */
+  packed_thickness_mm: number | null;
+  sort_order: number;
+  /** Defaults to false: a tier is a draft until somebody switches it on. */
+  active: boolean;
+  created_at: string;
+};
+
+/**
+ * A tier with the products that may be drawn into it.
+ *
+ * The pool is what turns "random" into a describable promise — the product page
+ * can say "five pieces drawn from these twelve" and show them — and it is
+ * explicit rows rather than a category filter, so a pet bowl cannot silently
+ * join a clicker scoop. Read with the anon key, the pool contains only ACTIVE
+ * products: a retired one is still a row in `scoop_tier_products` (deleting the
+ * product is refused) but RLS on `products` drops it here, which is also what
+ * makes the tier's availability fall as things are retired.
+ */
+export type ScoopTierWithPool = ScoopTier & { pool: Product[] };
