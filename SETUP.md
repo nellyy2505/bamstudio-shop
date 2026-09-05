@@ -8,13 +8,16 @@ different way — the box below explains how, and it is the one thing here worth
 reading twice.
 
 > **Most of this is already done — read it as a reference, not as a list to
-> work through.** As at 27 August 2026: Supabase is set up and the schema is
-> applied, the Fly app exists, **the shop is deployed and live at
-> `https://bamstudio-shop.fly.dev`**, and the JWT secret has been rotated. Each
-> step below says at its top whether it is done. **The steps still waiting on
-> you are gathered under "What only you can supply"**, and the shortest version
-> of them is: push the three commits sitting on your computer, run one more SQL
-> file, and fill in the catalogue.
+> work through.** As at 5 September 2026: Supabase is set up and **all seven
+> migrations, `0001` to `0007`, are applied**; the Fly app exists; **the shop is
+> deployed and live at `https://bamstudio-shop.fly.dev`**, carrying the work up
+> to and including round 18; and the JWT secret has been rotated. **Nothing is
+> sitting unpushed on your computer and there is no SQL left for you to paste.**
+> Each step below says at its top whether it is done. **The steps still waiting
+> on you are gathered under "What only you can supply"**, and the shortest
+> version of them is: fill in the catalogue, settle the postage decision, and
+> move the shop onto `bamstudioshop.com` — which is Step 5f, and which is worth
+> doing now rather than later.
 
 Budget about 90 minutes for a first pass if you are setting this up from
 scratch again; far less to check the parts that are already done.
@@ -110,15 +113,28 @@ Go to **Project Settings → API Keys** (and **Data API** for the URL):
    else. It is **not** part of the automatic system below; it is a one-off and
    it has been done.)
 
-`0004`, `0005`, `0006` and `0007` are written and **have not been run**. They
-are what the automatic system will apply the first time you use it. `0007` is
-**Lucky Scoop** — the scoop tiers, the pool of designs each one draws from, and
-the record of what actually went into each scoop. There is a plain-language
-section on running it further down, under **The studio — `/admin`**.
+> ✅ **`0004`, `0005`, `0006` and `0007` have since been run, and all seven
+> migrations are applied to your live database.** They went through the
+> automatic system described below: the backup gate stopped the first attempt
+> exactly as it is designed to, the backup was taken, the gate was ticked, the
+> four hand-run numbers were baselined, and the run finished green. **There is
+> nothing left for you to do in this step.**
+>
+> `0007` is **Lucky Scoop** — the scoop tiers, the pool of designs each one
+> draws from, and the record of what actually went into each scoop. There is a
+> plain-language section on using it further down, under **The studio —
+> `/admin`**.
+>
+> Everything from here to the end of Step 1c is kept as **reference**: how the
+> system works, what that one run did, and what happens when a new migration
+> file appears. You do not work through it again.
 
 ---
 
-#### 6. Add the one new setting
+#### 6. Add the one new setting — ✅ done
+
+`SUPABASE_DB_URL` is set. This is written out because it is the one secret you
+would have to replace by hand if you ever reset your database password.
 
 **Settings → Secrets and variables → Actions → Secrets tab → New repository
 secret.**
@@ -151,11 +167,14 @@ Three things that will otherwise waste an afternoon:
   every customer address and every payment record you hold — it is the single
   most dangerous string in this project.
 
-#### 7. Take a backup. This is not optional and it is the reason the first run refuses.
+#### 7. Take a backup — ✅ done before that run, and the rule has not gone away
 
 **There is no undo.** Nothing in this repo can reverse a migration; the only way
-back is a backup taken before it ran. The system knows this and **will refuse
-its first run** until you tell it you have taken one.
+back is a backup taken before it ran. The system knows this and **refused its
+first run** until it was told a backup had been taken. That is what happened
+here, and it worked as intended. The gate is only ever ticked once; the habit is
+not a one-off — take a fresh backup before any run you would not want to repeat
+with no way back.
 
 In the Supabase dashboard, your project:
 
@@ -177,7 +196,12 @@ This is worth doing properly once. **Turning on Point-in-Time Recovery is the
 single best thing you can do for this shop's data**, and it is the difference
 between "we lost an hour" and "we lost the orders."
 
-#### 8. The first run — the only time you tick these boxes
+#### 8. The first run — ✅ done, and this is what it did
+
+**This has happened and must not be repeated.** It is written out in full
+because it is the only run that was ever different from every run since, and
+because the tables below are the settings the boxes must **never** be given
+again.
 
 Go to the repo's **Actions** tab → **Run migrations** (in the left-hand list) →
 **Run workflow**. You get three boxes:
@@ -231,9 +255,11 @@ assertions and goes red if any of them fails. **Green means done.**
 > There is a coloured banner in the run's header saying the same thing in one
 > line: blue for "action needed", red for "failed".
 
-**`0001 0002 0003 0004` goes in that box exactly once, ever.** After this first
-run your database keeps its own list of what it has had. From then on you leave
-all three boxes empty.
+**`0001 0002 0003 0004` goes in that box exactly once, ever — and that once has
+now happened.** Your database keeps its own list of what it has had. **From here
+on you leave all three boxes empty.** Typing those numbers in again would tell
+your database it had already received a migration it has not, and that
+migration's change would be lost for good.
 
 #### 9. From now on — you do nothing
 
@@ -371,10 +397,13 @@ Supabase → **Authentication → URL Configuration**:
   ```
   http://localhost:3000/auth/callback
   https://bamstudio-shop.fly.dev/auth/callback
-  https://YOUR-DOMAIN.com/auth/callback
+  https://bamstudioshop.com/auth/callback
   ```
-  The `fly.dev` one is the address your first deploy gets for free. Add the
-  real domain line as well once you have bought one (Step 5f).
+  The `fly.dev` one is the address your first deploy gets for free, and it is
+  what the shop answers on today. The third line is your own domain, and it does
+  nothing until you do Step 5f — add it in that step, matching whichever
+  hostname you chose there (`www.` as well, if you attach `www` to Fly rather
+  than forwarding it).
 
 > Email confirmation is on by default, so new sign-ups must click a link
 > before they can sign in. Supabase's built-in email sender is rate-limited
@@ -510,16 +539,38 @@ on their own:
 | **Order confirmation** to the customer, from the Stripe webhook — itemised, with the order number | `RESEND_API_KEY` + `EMAIL_FROM`, and **nothing else**. Set those two and confirmations start going out |
 | **Contact-form enquiries** and **newsletter sign-up notices**, forwarded to you | those two **and** `NEXT_PUBLIC_SUPPORT_EMAIL` — there is nowhere to forward them otherwise |
 
-Nothing stores a contact enquiry or a sign-up, so the email *is* the delivery:
-without a mailbox the shop will not offer your customer a form it cannot
-deliver, and it says so on the page rather than swallowing their message. A faulty-goods claim is
-the message you least want to lose, which is why it is written this way.
+**This used to be because nothing stored a message, so the email *was* the
+delivery. That has not been true since `0006_enquiries.sql`, which is now
+applied — and the reason to set this has changed rather than gone away.** A
+contact-form message is written into your database **first** and the email is a
+notification about a row that already exists; a newsletter sign-up is the same.
+A mail provider having a bad afternoon now costs you a prompt instead of costing
+your customer their message. **Studio → Enquiries** (`/admin/enquiries`) is
+where you read them: every message, filtered by topic or by whether you have
+dealt with it, and every address given to hear about new drops. It is a reading
+screen only — you answer from your own mail client, so the reply is somewhere
+you can see it went.
+
+**What still does not happen without a mailbox is that anybody tells you.**
+Nothing pushes. A message that is findable by whoever next thinks to open a
+studio screen is not the same as a message you were told about, and the topics
+on that form include faulty goods and a parcel that has not arrived — the ones
+where a week of silence is the damage. That is the surviving argument for
+`NEXT_PUBLIC_SUPPORT_EMAIL`, and it is enough on its own.
+
+**And note the order it actually bites in.** The form is only shown when the
+shop can send *and* has a mailbox to send to, so until you have done Step 3 and
+set this variable, `/contact` shows your contact details instead of a box —
+which means no enquiry can be typed, and `/admin/enquiries` is empty because
+nothing has been sent, not because anything is broken.
 
 ### 3d. Check it
 
 With the dev server running, send yourself a message through `/contact`. It
 should arrive at `NEXT_PUBLIC_SUPPORT_EMAIL`, and replying to it should reply
-to you rather than to the shop. If the page instead says it could not send,
+to you rather than to the shop. **It should also be sitting in Studio →
+Enquiries**, whether or not the mail turned up — that is the half that does not
+depend on a mail provider. If the page instead says it could not send,
 the terminal log names the reason — `not_configured` means `RESEND_API_KEY` or
 `EMAIL_FROM` is missing, or the server was not restarted after you set them. If
 the page shows contact details instead of a form at all, it is
@@ -620,20 +671,17 @@ you do.
 
 ### 5a. Put the code on GitHub — already done
 
-> ⚠️ **Three commits are sitting on your computer and are not pushed.** They are
-> the three fixes from 26 August — the studio printing a price for a piece nobody
-> had measured, the inventory screen saying the shelf covered the queue, and the
-> doubled page title — plus the page that makes staff invitations work at all.
-> **Nothing in them is live on `bamstudio-shop.fly.dev` until you push**, and
-> pushing is what triggers the deploy. In the project folder:
+> ✅ **Everything is pushed and everything is deployed.** The three fixes from
+> 26 August that used to sit here unpushed — the studio printing a price for a
+> piece nobody had measured, the inventory screen saying the shelf covered the
+> queue, the doubled page title — plus the page that makes staff invitations
+> work, went up long ago, and the rounds since have gone up with them. The live
+> shop at `https://bamstudio-shop.fly.dev` is serving round 18's code.
 >
-> ```bash
-> git status          # check what it is about to send
-> git push origin master
-> ```
->
-> It has to be you: the assistant's shell has no network access and cannot reach
-> your saved GitHub login.
+> Nothing is waiting on a push. The habit that goes with that is unchanged:
+> **a push to `master` is what deploys**, so `git status` before you commit and
+> `git log origin/master..master --oneline` if you ever want to know what your
+> computer is holding that GitHub is not.
 
 The repository exists: **<https://github.com/nellyy2505/bamstudio-shop>**,
 branch **`master`**, which is the branch the deploy workflow watches. It is
@@ -718,6 +766,21 @@ out and postage quotes from the built-in fallback rates.)
 | `RESEND_API_KEY` | **Fly secret** | `fly secrets set` | Restart only |
 | `EMAIL_FROM` | **Fly secret** | `fly secrets set` | Restart only |
 | `AUSPOST_API_KEY` | **Fly secret** | `fly secrets set` | Restart only |
+| `SENTRY_DSN` | **Fly secret** | `fly secrets set` | Restart only |
+| `UPSTASH_REDIS_REST_URL` | **Fly secret** | `fly secrets set` | Restart only |
+| `UPSTASH_REDIS_REST_TOKEN` | **Fly secret** | `fly secrets set` | Restart only |
+
+**The last three are optional, free, and do nothing at all until you set them.**
+`SENTRY_DSN` sends failures somewhere a person is told about instead of leaving
+them in the log stream (sentry.io, free tier). The two `UPSTASH_` values move
+the rate limiter's counters — the thing standing in front of `/api/track`, which
+hands back a customer's postal address for an order number and matching email —
+out of one machine's memory and into a shared store, so a restart, a deploy or a
+second machine no longer hands somebody a fresh guessing budget
+(console.upstash.com, free tier, pick an `ap-southeast` region so it is next
+door to the Sydney machine). **Both `UPSTASH_` values or neither** — one without
+the other reads as neither. `.env.example` explains each in full. Nothing breaks
+while they are unset; the shop simply behaves the way it always has.
 
 Two things that surprise people:
 
@@ -766,17 +829,26 @@ before it builds anything and stops with a message naming whichever is missing,
 rather than letting you find out thirty screens into a build log. The optional
 ones each print a one-line note when blank.
 
-> ⚠️ **Check what `NEXT_PUBLIC_SITE_URL` is actually set to before your next
-> deploy.** The table above says `https://bamstudio-shop.fly.dev`, and the notes
-> at the top of `.github/workflows/deploy.yml` say `https://bamstudioshop.com`.
-> Both cannot be right, and the second one is wrong today: that domain is still
-> parked at Porkbun (Step 5f) and does not serve the shop. This value is **baked
-> into the browser bundle when the image is built** and it is what Stripe uses
-> as the address to send a paying customer back to. If the Variable really holds
-> `bamstudioshop.com`, **a customer who pays lands on a domain-for-sale page**,
-> and the `/track` links in emails point there too. Open Settings → Secrets and
-> variables → Actions → Variables and read the value. Until Step 5f is finished
-> it must be `https://bamstudio-shop.fly.dev`.
+> ✅ **`NEXT_PUBLIC_SITE_URL` is correct — it holds
+> `https://bamstudio-shop.fly.dev`.** This was an open worry for a while,
+> because the notes at the top of `.github/workflows/deploy.yml` say
+> `https://bamstudioshop.com` and that domain is still parked. It has now been
+> **measured rather than guessed**: the live `robots.txt` builds its `Sitemap:`
+> line from this exact value, and it reads
+> `https://bamstudio-shop.fly.dev/sitemap.xml`. The Variable holds the
+> `fly.dev` address, so a paying customer comes back to the shop and the
+> `/track` links point at the shop.
+>
+> Keep the reason it mattered, because it comes back the day you change it. This
+> value is **baked into the browser bundle when the image is built**, and it is
+> the address Stripe sends a paying customer back to. Set it to a domain that
+> does not serve the shop and **a customer who pays lands on a domain-for-sale
+> page**. Until Step 5f is done it stays `https://bamstudio-shop.fly.dev`; when
+> you do Step 5f, changing it is job 1 and it is a rebuild.
+>
+> **Checking it yourself takes one line**, and does not need the GitHub
+> settings page: open `https://bamstudio-shop.fly.dev/robots.txt` and read the
+> `Sitemap:` line. Whatever address it names is what the running build has.
 
 **What the deploy does now, and in what order.** Every push to `master` runs two
 jobs. The first updates the database and checks it; the second builds and
@@ -788,10 +860,21 @@ Then push to `master` (or hit **Run workflow**). The first build takes a few
 minutes; watch it in the Actions tab. When it finishes:
 
 ```bash
-fly status -a bamstudio-shop      # one machine, in syd, started
+fly status -a bamstudio-shop      # the machines, their region and their state
 fly logs -a bamstudio-shop        # what the server is saying
-curl https://bamstudio-shop.fly.dev/api/health   # {"ok":true}
+curl https://bamstudio-shop.fly.dev/api/health   # {"ok":true,"uptimeSeconds":…}
 ```
+
+> **Read how many machines that lists, rather than assuming one.** `fly.toml`
+> asks for a floor of one always-on machine, not a ceiling of one — and
+> sampling `/api/health` on the live app has returned **two** clearly different
+> uptimes, which means two machines are answering. That is not a fault and
+> nothing about it is urgent, but it does change one thing: the rate limiter
+> keeps its counters in each machine's own memory, so two machines means the
+> allowance in front of `/api/track` is being handed out twice over. Setting the
+> two `UPSTASH_` secrets in Step 5c fixes that properly. `fly status` and
+> `fly machines list -a bamstudio-shop`, run from your own terminal, are what
+> settle how many there actually are.
 
 `/api/health` is a deliberately empty liveness endpoint — it touches no
 database, no Stripe and no network — and Fly polls it every 15 seconds to
@@ -872,6 +955,93 @@ over from the old one.
    to wait, and there is no way to hurry it. Australian registrars: VentraIP,
    Crazy Domains, Netregistry.
 
+#### When can you move? Now — and now is the best time you will get
+
+You asked when the shop can move to `bamstudioshop.com`. **The answer is now,
+and "now" is not merely allowed, it is the safest moment there will ever be.**
+
+Two of the five jobs below reach into other people's systems: **Stripe's webhook
+endpoint** (job 3) and **Supabase's auth URLs** (job 4). Those two are the
+plumbing that turns a payment into a recorded order, and a sign-in into an
+account. Do them clumsily today and the cost is your own afternoon — there is no
+real customer to inconvenience, no real order to lose and no real money in
+flight. Do them clumsily in three months and the cost lands on somebody who has
+just paid you: a card charged, a confirmation posted to a host that is not your
+shop, and **no order recorded at all**.
+
+**You have no real customers and no real orders yet. That is the argument for
+going now, not for waiting.** Nothing is burned by moving either: the
+`bamstudio-shop.fly.dev` address keeps working afterwards, so the old webhook
+and the old sign-in URLs stay valid while you check the new ones.
+
+#### Decide this first: the apex, `www`, or a subdomain
+
+This step used to show `shop.yourdomain.com` in its commands, as an example
+nobody had chosen. **Choose the hostname before you start, because job 1 bakes
+it into the build** — changing your mind later is another rebuild, another edit
+at Stripe and another edit at Supabase, all over again.
+
+| Choice | What a customer types | What you add at Porkbun |
+|---|---|---|
+| **Apex** — `bamstudioshop.com` | the domain, nothing in front | **A and AAAA records** pointing at the app's own addresses — or Porkbun's `ALIAS — CNAME flattening` record, which it supports on the root |
+| **`www`** — `www.bamstudioshop.com` | the domain with `www.` in front | a plain **CNAME**, the ordinary case for a name below the root |
+| **A subdomain** — `shop.bamstudioshop.com` | the domain with `shop.` in front | a plain **CNAME**, exactly as for `www` |
+
+**For a shop, take the apex — `https://bamstudioshop.com` — and point `www` at
+it.** It is the address people type, the address that fits on a market sign and
+the address they will get right when they half-remember it. A `shop.` subdomain
+is for a shop bolted onto a business that already lives at the apex, which is not
+your situation: this *is* the business.
+
+**Why the apex is more work than a subdomain, in one paragraph.** A CNAME says
+"this name is really that other name", and the rules of DNS do not allow one at
+the root of a domain, because the root has to carry other records (mail, for one)
+that a CNAME would displace. So a subdomain gets a one-line CNAME to Fly, while
+an apex needs the addresses themselves — **A** for IPv4 and **AAAA** for IPv6.
+Fly documents A and AAAA as the recommended setup for a domain pointed straight
+at an app, and CNAMEs as the good option for subdomains, warning off a CNAME at
+the apex unless your registrar does flattening. Porkbun does do flattening: its
+`ALIAS — CNAME flattening` record is exactly that, with a blank host field. Either
+route works; the A/AAAA route is the one Fly's own instructions hand you.
+
+**You do not have to look the addresses up.** `fly certs add` prints the records
+to add, and `fly certs show` prints them again:
+
+```bash
+fly ips list -a bamstudio-shop                       # what addresses the app has
+fly certs add bamstudioshop.com -a bamstudio-shop    # prints the DNS records to add
+fly certs show bamstudioshop.com -a bamstudio-shop   # prints them again, plus status
+```
+
+If the app has no IPv4 or IPv6 address of its own, `fly ips allocate` is what
+adds one. A **shared** IPv4 address and IPv6 addresses come with the app at no
+charge; a **dedicated** IPv4 is US$2 a month, and you only need one if something
+later requires an address nobody else answers on. Start without it.
+
+**Making `www` work as well, without building anything.** Fly will happily issue
+a certificate for `www.bamstudioshop.com` too (`fly certs add www.…`), and then
+both addresses serve the same shop — which is fine, though it means the same
+pages exist at two addresses and only `NEXT_PUBLIC_SITE_URL` says which one is
+the real one. **Nothing in this shop's code redirects one hostname to another;
+it never looks at which host it was asked on.** The tidier answer costs nothing
+and is done at the registrar: Porkbun's free **URL forwarding**, with `www` as
+the subdomain, `https://bamstudioshop.com` as the destination, and the **301
+Permanent Redirect** option chosen rather than the default temporary one. Then
+there is one address and `www` politely sends people to it. (Porkbun runs an
+HTTPS forwarder, but check the forward actually works over `https://` once you
+have set it — that is the part worth testing rather than assuming.)
+
+**What this is based on**, so you or anyone after you can check it rather than
+take it on trust — read at the start of September 2026:
+
+- Fly's custom-domain instructions, including A/AAAA versus CNAME and the
+  `fly certs` commands: <https://fly.io/docs/networking/custom-domain/>
+- Fly's pricing for a dedicated IPv4: <https://fly.io/docs/about/pricing/>
+- Porkbun's root-domain record, `ALIAS — CNAME flattening`:
+  <https://kb.porkbun.com/article/85-how-to-connect-your-root-domain-when-your-web-host-wont-provide-an-ip-address>
+- Porkbun's URL forwarding, including the 301 option:
+  <https://kb.porkbun.com/article/39-how-to-set-up-url-forwarding>
+
 **Moving the shop to that domain is five jobs. Do them in this order — the
 order is the whole point, because jobs 1 and 2 are what make the domain answer
 for the shop at all, and job 3 is what tells Stripe where to send the money's
@@ -885,10 +1055,11 @@ parked domain: cards charged, nothing recorded.**
    is no restart, no Fly secret and no dashboard toggle that changes it. Update
    the Variable, then push or run the workflow. Update the pinned value in
    `fly.toml` in the same commit so a manual `fly deploy` agrees with CI.
-2. **Attach the domain to Fly:**
+2. **Attach the domain to Fly** — using the hostname you settled on above, which
+   for a shop is the apex:
    ```bash
-   fly certs add shop.yourdomain.com -a bamstudio-shop
-   fly certs show shop.yourdomain.com -a bamstudio-shop   # tells you the DNS records
+   fly certs add bamstudioshop.com -a bamstudio-shop
+   fly certs show bamstudioshop.com -a bamstudio-shop   # tells you the DNS records
    ```
    Add the records it names at your registrar. The certificate issues by itself
    once DNS resolves.
@@ -896,8 +1067,9 @@ parked domain: cards charged, nothing recorded.**
    your endpoint → edit). The signing secret does not change, so nothing has to
    be re-set on Fly. **Only once jobs 1 and 2 are done and the new address
    actually serves the shop** — check it first with
-   `curl https://shop.yourdomain.com/api/health`, which must return
-   `{"ok":true}`. Until it does, leave the endpoint on `bamstudio-shop.fly.dev`.
+   `curl https://bamstudioshop.com/api/health`, which must return `{"ok":true}`
+   (with an `uptimeSeconds` alongside it). Until it does, leave the endpoint on
+   `bamstudio-shop.fly.dev`.
 4. **Update Supabase**: Authentication → URL Configuration → **Site URL**, and
    add the new `/auth/callback` to the **Redirect URLs** allow-list. Also add
    the new origin to Google Cloud → Credentials → your OAuth client →
@@ -945,9 +1117,19 @@ the only way the first person ever gets in. There is no "sign up as staff" page,
 by design.
 
 Ten screens: **Overview**, **Orders** (including *Record a sale* for a market or
-TikTok order you took in person), **Products**, **Lucky Scoop**, **Inventory**
-(the print queue, the filament buy list, and *Measure the catalogue*),
-**Reports**, **Colours**, **Settings** and **Studio access**.
+TikTok order you took in person), **Enquiries** (contact-form messages and
+newsletter sign-ups), **Products**, **Lucky Scoop**, **Inventory** (the print
+queue, the filament buy list, and *Measure the catalogue*), **Reports**,
+**Colours**, **Settings** and **Studio access**.
+
+Two of them print. **An order's page has a packing slip** — the piece of paper
+that goes in the box, with the personalisation exactly as the customer typed it
+and deliberately no prices on it, because a great many of these are gifts. And
+**Orders → Pick list** is one sheet for every open order at once: plain pieces
+pooled across orders so three of the same clicker in the same colour is one trip
+to the drawer, personalised pieces never pooled, no customer names and no
+addresses. Both are for reading off paper at the bench instead of copying a
+screen by hand.
 
 Three things worth knowing before you use it:
 
@@ -965,8 +1147,8 @@ Three things worth knowing before you use it:
   Orders. That is what moves a customer's `/track` page from *printing* to
   *packed* to *shipped* — it is no longer a hand edit in the Supabase tables.
 
-- **The Overview now tells you when money is owed back.** Once
-  `0005_sale_integrity.sql` has been run (Step 1c, step 7), a payment that
+- **The Overview tells you when money is owed back.** `0005_sale_integrity.sql`
+  is applied, so this is live: a payment that
   cleared for an order you had already cancelled appears there as a refund owed,
   with the amount, and stays until you mark it done. It used to be one line in a
   server log. The same panel shows any order still waiting on its confirmation
@@ -974,8 +1156,11 @@ Three things worth knowing before you use it:
 
 ### Lucky Scoop — how it works, start to finish
 
-**Nothing here works until `0007` has been applied** (Step 1c, steps 6–8). Until
-then the Lucky Scoop screen has no tables to read, and the shop shows no scoops.
+**`0007` is applied**, so the Lucky Scoop screens have their tables and the shop
+will offer scoops as soon as you have a tier that can be sold. Until then
+`/scoop` is a real page that says *the scoops aren't open yet* and explains how
+one works, and no bowl, no home-page card and no sitemap entry appears. That is
+correct rather than broken: there is nothing to sell yet.
 
 **A scoop is the one thing you sell before you know what is in it.** Everything
 else in the shop is printed after it is ordered, so its cost is known before the
@@ -1031,15 +1216,25 @@ an obstacle to work around:
 
 The screen tells you which of the three is stopping you.
 
-**4. A tier goes quiet when the bowl runs low, and that is correct.** A tier is
-only offered while its pool can actually fill a scoop — at least as many
-different designs in stock as the scoop promises pieces. When it cannot, the
-tier stops being listed on the shop and the studio shows you why. **This is the
-opposite of how the rest of the shop behaves**, and deliberately: everything
-else keeps selling when the shelf is empty, because you can print another one. A
-scoop promises pieces that exist *now*, and you cannot print a surprise on
-Tuesday to fill Monday's order without deciding for the customer what they got.
-Print more of the designs in the pool and the tier comes back on its own.
+**4. A low bowl does not take the tier off the shop, and that is your
+correction.** This page used to say the opposite — that a tier stopped being
+listed once its pool could not fill a scoop from stock on hand. **That was
+wrong and it has been taken out**, on your own words: *you can just print it
+after you scoop*. Everything else in the shop keeps selling when the shelf is
+empty, because you print to order, and a scoop is no exception — if the bowl is
+short you print the rest before you pack it. A gate on stock would have quietly
+pulled a paid product off your shop because a shelf count dipped, which is a
+problem you do not have.
+
+What the studio still shows you is **how many scoops the bowl could fill without
+printing anything first**. That is information — a low number is a nudge to
+print — and it decides nothing.
+
+What does still stop a tier being switched on is the truthfulness rule in point
+3, and it is about the tier's own facts rather than the shelf: a price, a packed
+weight, and a pool holding at least as many designs as the scoop promises pieces.
+"Five drawn from these twelve" needs twelve designs listed. It does not need
+twelve on the shelf this morning.
 
 **5. Record what went in — and note that stock has not moved yet.** When a scoop
 order comes in, the order's page in **Orders** has a **Lucky Scoop** panel with
@@ -1104,19 +1299,17 @@ Do these in order on launch day:
 
 0. ~~Rotate the Supabase JWT secret.~~ ✅ **Done, 26 August.** Nothing further is
    needed there.
-0b. **Do the one-time database setup in Step 1c, steps 6–8** — add the
-   `SUPABASE_DB_URL` secret, take a backup, then run **Actions → Run
-   migrations** once with `0001 0002 0003 0004` in the "already run by hand"
-   box. That applies `0004`, `0005`, `0006` and `0007` and checks all **126**
-   assertions for you. You never paste SQL into the Supabase editor again after
-   this. `0005` is the one that makes a lost confirmation email recoverable,
-   makes an oversell visible instead of silently clamped, and gives you a list
-   of payments that owe a refund; `0006` stops a customer's contact-form message
-   from existing only inside an email that might not send; `0007` is Lucky
-   Scoop, and until it is applied the Lucky Scoop screens have no tables to read
-   and the shop shows no scoops at all.
-0c. **Push the three commits sitting on your computer** (Step 5a) — the deploy
-   only runs on a push, so until then the live shop is missing three fixes.
+0b. ~~The one-time database setup.~~ ✅ **Done.** All seven migrations are
+   applied and the **126** assertions pass. You never paste SQL into the
+   Supabase editor again. What each one bought you: `0005` makes a lost
+   confirmation email recoverable, makes an oversell visible instead of silently
+   clamped, and gives you a list of payments that owe a refund; `0006` stops a
+   customer's contact-form message from existing only inside an email that might
+   not send, and **Studio → Enquiries** is where you read those messages; `0007`
+   is Lucky Scoop. From here, migrations run themselves on every deploy and the
+   deploy stops if the database is not what the code expects.
+0c. ~~Push the commits sitting on your computer.~~ ✅ **Done.** Everything is
+   pushed and deployed; a push to `master` is still what deploys.
 1. **Fill in "My price"** in the workbook for every product, then run
    `node scripts/generate-seed.mjs` and re-run `supabase/seed.sql`.
    Until then the shop uses placeholder prices.
@@ -1197,25 +1390,30 @@ Do these in order on launch day:
 > restart will not pick it up; and
 > `fly secrets set SUPABASE_SERVICE_ROLE_KEY='...' -a bamstudio-shop`.
 
-### Do this first — the commits, and the one-time database setup
+### Do this first — the catalogue, and then the domain
 
-> 1. **`git push origin master`** (Step 5a). Fixes made on 26 August and since
->    are sitting on your computer only, and the live shop does not have them.
->    **Check what is actually unpushed before you trust that number** —
->    `git status` and `git log origin/master..master --oneline` are the only
->    honest answer, and this line has gone stale before.
-> 2. **Do the one-time database setup** — Step 1c, steps 6–8. Add the
->    `SUPABASE_DB_URL` secret, take a backup, and run **Actions → Run
->    migrations** once with `0001 0002 0003 0004` in the "already run by hand"
->    box. That applies `0004`, `0005`, `0006` and `0007` and checks all **126**
->    assertions. After this, migrations run themselves on every deploy and the
->    deploy stops if the database is not what the code expects.
-> 3. **Fill in the studio.** Your 44 products are all still priced at the seed's
+> ~~`git push origin master`.~~ ✅ **Done — everything is pushed and deployed.**
+> ~~The one-time database setup.~~ ✅ **Done — all seven migrations are applied
+> and the 126 assertions pass.** Both of those sat at the top of this list for
+> weeks; neither is waiting on you any more. What is left is below, in the order
+> it is worth doing.
+>
+> 1. **Fill in the studio.** Your 44 products are all still priced at the seed's
 >    $9.00, none of them has a filament recipe, and almost none has a print time
 >    — so every cost, margin and suggested price in the studio says "Not
 >    measured", which is correct and useless. **Studio → Inventory → Measure the
 >    catalogue** is the screen built for exactly this: one row per product, a
->    print time, a colour and its grams, Save, next.
+>    print time, a colour and its grams, Save, next. Nothing else you do makes
+>    the studio useful until this is in.
+> 2. **Move the shop onto `bamstudioshop.com`** — Step 5f, which now says why
+>    **now** is the right moment and which hostname to choose. The move touches
+>    Stripe's webhook and Supabase's sign-in URLs, and doing that while there is
+>    no real customer and no real order is strictly safer than doing it after.
+>    Delete Porkbun's `*` parking record first; it is job zero for both this and
+>    email.
+> 3. **Turn email on** (Step 3) and set `NEXT_PUBLIC_SUPPORT_EMAIL` (Step 3c).
+>    Until both are done the contact form is not offered at all, so a customer
+>    with a faulty piece has no box to type into.
 >
 > Do not copy prices out of the workbook's *Suggested price* column: cell C19 on
 > the Settings sheet holds the text `1.6%` rather than a number, so that column
@@ -1255,8 +1453,7 @@ Small orders can go two ways, and the shop is currently taking the safe one.
 | Fits | Anything | Under 125 g, 260 × 360 mm, under 20 mm thick |
 
 Every product is set to "parcel" right now, so nothing is ever underpriced, and
-once you have run `0004` (Step 1c) that is also what a brand-new product row
-starts as. If you want small charm orders to go as letters, that is a checkbox
+because `0004` is applied that is also what a brand-new product row starts as. If you want small charm orders to go as letters, that is a checkbox
 per product (`letter_eligible`) on its row in Supabase, and **it no longer needs
 a code change to go with it**: the site used to tell customers every delivery
 method was "tracked" whatever was actually being sent, and that was fixed — the
@@ -1288,7 +1485,7 @@ until you fill it in.
 | **Support mailbox** — `NEXT_PUBLIC_SUPPORT_EMAIL` | Footer, contact page, legal pages, order pages, account settings | **The largest single gap.** Without it the shop has no mailbox to name, so it tells customers there is currently no way to reach it, contact-form enquiries have nowhere to go, and returns and faults have no starting point |
 | **ABN** — `NEXT_PUBLIC_ABN` | Footer, legal pages, and Stripe's own verification | Hidden wherever it would appear. Stripe will not release money without it |
 | **Hosting provider's name — it is now Fly.io** | `/legal/privacy`, "who we share information with" | Listed generically as "the provider that serves these pages". Accurate, but the privacy page names its other processors (Stripe, Supabase, Resend) and is expected to name this one too. **Edit `app/legal/privacy/page.tsx` to say Fly.io.** It used to be Vercel; do not let an old draft say so |
-| **The domain, attached** — `bamstudioshop.com` **is registered** (Porkbun) | `NEXT_PUBLIC_SITE_URL`, Stripe's webhook URL, Supabase's Site URL and redirect list, the Resend sending domain | Bought, not yet pointed at anything, and **Porkbun's `*` parking CNAME is still there and must be deleted — it shadows email records**. The shop will first go live at `https://bamstudio-shop.fly.dev`. The `.com.au` needs an **issued** ABN (a pending application does not qualify). Step 5f is the move, and its first job is a **rebuild**, not a setting change |
+| **The domain, attached** — `bamstudioshop.com` **is registered** (Porkbun) | `NEXT_PUBLIC_SITE_URL`, Stripe's webhook URL, Supabase's Site URL and redirect list, the Resend sending domain | Still fully parked: the apex answers with Porkbun's parking addresses, `www` is a CNAME to `uixie.porkbun.com`, and **the `*` parking CNAME is still there and must be deleted first — it shadows email records**. The shop is live at `https://bamstudio-shop.fly.dev` meanwhile. **Step 5f is the move and it is worth doing now**, before there is a real customer to inconvenience — it says why, and which of apex / `www` / `shop.` to choose. Its first job is a **rebuild**, not a setting change. The `.com.au` needs an **issued** ABN (a pending application does not qualify) |
 | **Australia Post key** — `AUSPOST_API_KEY` | Postage pricing | Free and instant from developers.auspost.com.au (Step 3b), and it is in `.env.example`. Without it postage is quoted from built-in rates read on 25 August 2026, rounded up one band — the shop works and charges slightly dear |
 | **Three real weights** — one charm, one clicker, one bowl, each in its mailer | `lib/shipping/dimensions.ts`, and each product's row in Supabase | Every weight and size is an estimate today, erring expensive. See the box above — this is the highest-value thing on this page |
 | **Social handles** (optional) — `NEXT_PUBLIC_INSTAGRAM_URL`, `NEXT_PUBLIC_TIKTOK_URL` | Footer, contact, about, and every "message us" fallback | No links shown. They also act as a second channel: with a handle set, pages can still offer a way to reach you even before the mailbox exists |
@@ -1370,7 +1567,10 @@ Email is not configured, or there is no support mailbox to send to. Both are
 needed: `RESEND_API_KEY` + `EMAIL_FROM` (so it *can* send) and
 `NEXT_PUBLIC_SUPPORT_EMAIL` (so there is somewhere to send to). The server log
 names the reason; `not_configured` means one of those is missing or the server
-was not restarted after you set it.
+was not restarted after you set it. **The message itself is not lost** — it was
+written to the database before the send was attempted, so it is on **Studio →
+Enquiries** under "still to deal with". Fix the mail settings so you are told
+next time, then go and read the one that came in while you were not.
 
 **Pages promise a confirmation email but none arrives**
 The shop no longer has a way to promise mail it cannot send — the sentence and

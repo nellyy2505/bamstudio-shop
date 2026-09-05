@@ -157,19 +157,14 @@ claim, rather than assuming any document is current.
 
 **Expect the clones to disagree.** These docs have been written in more than one
 checkout, and a commit that exists in one has repeatedly not existed in another.
-**`git status` is the only trustworthy answer to "what is committed."** What the
-owner's machine reports: `896c08d` (hosting), `36a33d5` (the postage engine),
-`d3f2946`…`8131290` (round 10), `9098449` and `6cfdafb` (the staff area, pushed
-and deployed), and then three round-12 commits that are **committed locally and
-not pushed** — `1a4e0d0` *Stop the studio printing numbers it has not measured*,
-`7c049aa` *Give an invitation somewhere to be accepted*, `10a683f` *Print the
-studio's page title once*. **Only the owner can push**: the device shell has no
-network and cannot reach the Windows credential store.
+**`git status` is the only trustworthy answer to "what is committed."**
 
-**That list is a snapshot from round 12 and rounds 13, 14 and 15 have landed
-since**, so treat it as history rather than as the current tip. Run `git log
-origin/master..master --oneline` yourself; this paragraph is the first thing in
-the file to go stale, and it has.
+**The three round-12 commits that this paragraph used to list as unpushed are
+pushed**, along with everything after them; the live shop serves round 18's
+code. That does not make a commit list here trustworthy — it makes the habit
+more important, not less. **Run `git log origin/master..master --oneline`
+yourself**; this paragraph is the first thing in the file to go stale, and it
+has done so twice.
 
 Two habits this project earned the hard way:
 
@@ -289,21 +284,31 @@ the page out of the layout that would bounce an invited person.
 
 ### Still not built — do not read ticks as "done"
 
-1. **The rate limiter is still one process's memory.** Round 8 fixed *which IP
-   it reads*, not durability; round 15 added the missing throttle on
-   `/order/confirmed` — coverage, not durability. It is still the only thing in
-   front of `/api/track`, which returns a postal address for an order number
-   plus the matching email — and order numbers are a sequence plus four hex
-   characters. Upstash/Redis; the call sites do not change. It is also, with the
-   `after()` email task, why `fly.toml` cannot scale to zero.
+1. **The rate limiter *can* be durable now and is not, because nobody has set
+   the secrets.** Round 19 added `rateLimitDurable()` alongside the untouched
+   `rateLimit()` — deliberately a second export, because making the original
+   async would have left seven call sites holding a Promise, `limit.ok`
+   undefined and every guarded route answering 429. Every route handler is on
+   the durable path; `/order/confirmed` deliberately is not, and the reason is
+   written above the export. **`UPSTASH_REDIS_REST_URL` and
+   `UPSTASH_REDIS_REST_TOKEN` are unset**, so it is still one process's `Map`,
+   resetting on every restart, in front of `/api/track` — which returns a postal
+   address for an order number plus the matching email, and order numbers are a
+   sequence plus four hex characters. **And two machines are serving** (the
+   unexplained observation at the end of *What to do first*), so that allowance
+   is currently being handed out twice over. Nothing in the code is owed here; two secrets are.
 2. **Real account deletion.** The claim was fixed, not the capability. Needs a
    server-side admin route, re-authentication, and an in-flight-order guard.
 3. **A newsletter that sends anything.** `0006_enquiries.sql` added the
    `newsletter_signups` table, so addresses are now kept — but there is no
    audience, no welcome email and no unsubscribe link, and `unsubscribed_at`
-   is set by hand. Likewise `contact_enquiries` stores messages that **no
-   screen can read**: `/admin/enquiries` is owed, roughly a page, a detail
-   view and one server action.
+   is set by hand. ~~Likewise `contact_enquiries` stores messages that no screen
+   can read.~~ **Round 18 built that screen** — `/admin/enquiries` lists both
+   tables for owner and studio (`reports`, not Packing), filters by topic and by
+   handled state, and sends nothing: the customer's address is a `mailto:`, so
+   the reply leaves from the owner's own mail client. **What is still true is
+   narrower and is the reason `formsReachStudio` still gates the form: nothing
+   pushes.** A stored enquiry is findable, not announced.
 5. **The `"unknown"` email sentinel escapes the webhook** into `/track`, the
    account order pages and `lib/queries.ts`, which read the column as an address.
 6. **`components/contact/Reach.tsx`** — the "can the customer reach us" fallback
@@ -334,8 +339,28 @@ the page out of the layout that would bounce an invited person.
 
 ## What to do first
 
+**What changed since this list was last written, and it changes the top of it.**
+Everything is pushed and deployed; the live shop at
+`https://bamstudio-shop.fly.dev` is serving round 18's code. **`0001`–`0007` are
+applied on the live Supabase project**, through the migration pipeline rather
+than by hand — so §0 item J is closed and every "once it is applied" below is
+now "against the live database". The `NEXT_PUBLIC_SITE_URL` worry is settled by
+measurement: the live `robots.txt` builds its `Sitemap:` line from that value and
+it reads `https://bamstudio-shop.fly.dev/sitemap.xml`. **`bamstudioshop.com` is
+still fully parked** — apex on Porkbun's addresses, `www` a CNAME to
+`uixie.porkbun.com`, the `*` wildcard still there.
+
 Roughly this order of value:
 
+0. **Open a browser against the live shop and exercise `0007` on real rows.**
+   This is now possible and was not before. The three that only a real run
+   settles: recording a pack decrements each piece exactly once and a re-saved
+   panel decrements nothing further (`scoop_packs.stock_applied`); an order with
+   an unrecorded scoop cannot be marked posted, and the refusal names the scoop;
+   and a tier missing a price, a packed weight or enough designs in its pool
+   cannot be activated. **Do not re-derive a stock gate while you are in there**
+   — round 18 removed one at the owner's correction, because this shop prints to
+   order.
 1. **Open the pages. This is the gap, and it is now the only one at the top of
    this list.** Round 17 ran everything runnable — `npx tsc --noEmit`,
    `npm run lint`, `npm run build`, `./scripts/verify-sql.sh` (**126/126**,
@@ -398,20 +423,48 @@ Roughly this order of value:
    piece exactly once and a **re-saved panel decrements nothing further**
    (`scoop_packs.stock_applied`); an order with an unrecorded scoop **cannot**
    be marked posted, and the refusal names the scoop; and a tier whose pool
-   falls below its piece count **disappears** from `/scoop` and the sitemap
-   without erroring. `verify.sql` asserts the schema against synthetic rows it
+   falls below its **pool size** — not its stock — **cannot be activated**,
+   while a tier whose *bowl* is low stays listed and sells. That reversal is
+   round 18's, at the owner's correction, and it is the thing to check you have
+   not "fixed" back. `verify.sql` asserts the schema against synthetic rows it
    rolls back, which is a different thing from the studio doing it.
 
-**Waiting on the owner, and blocking nothing you can do yourself:** `git push
-origin master` — check `git log origin/master..master` rather than trusting a
-count written here, which has gone stale before; getting `0005`, `0006`
-and `0007` onto the live project (`0004` is already applied), which is now **one Actions run and then every
-push**, not four pastes (after which `verify.sql` is **126** rows); the three
-Lucky Scoop terms only she can decide — duplicates, the video promise, and
-change of mind on a scoop, with two drafted paragraphs waiting in a comment in
+**Waiting on the owner, and blocking nothing you can do yourself:** ~~the push~~
+and ~~the migrations~~ are both done; what is left is **two secrets that would
+make the rate limiter durable** (`UPSTASH_REDIS_REST_URL`,
+`UPSTASH_REDIS_REST_TOKEN`) and one that turns error reporting on (`SENTRY_DSN`),
+all free and all inert until set; **the domain move** — `SETUP.md` Step 5f now
+says why now is the right moment and settles apex versus `www`; the three Lucky
+Scoop terms only she can decide — duplicates, the video promise, and change of
+mind on a scoop, with two drafted paragraphs waiting in a comment in
 `app/legal/refunds/page.tsx`; **a price and a packed weight for at least one
 tier**, without which no tier can be switched on at all; and the catalogue data
 — 44 products still at the seed's $9.00, none with a filament recipe.
+
+### One observation from round 19 that is not explained
+
+`/api/health` on the live app reports `process.uptime()` of roughly **725,000
+seconds — about 8.4 days** — on both machines, while **the code those machines
+are running was deployed today**. Both facts cannot be simple at once: a deploy
+replaces the process, so an eight-day-old process is not one that started this
+morning, and the running code is demonstrably today's.
+
+**Do not resolve this by picking the most plausible story.** Several fit — a
+machine updated in place rather than replaced, an uptime measuring something
+other than this process's life, a narrower rollout than assumed, a clock — and
+choosing one on plausibility is how a guess becomes a recorded fact. **What
+settles it is `fly status -a bamstudio-shop` and `fly machines list -a
+bamstudio-shop` from the owner's own terminal**, which name each machine, its
+state and when it was last updated. Nobody here has Fly credentials; this is
+**unverified** and stays that way until somebody runs those.
+
+**One consequence is actionable regardless of the cause.** Sampling
+`/api/health` returned **two distinct `uptimeSeconds` clusters about seven
+seconds apart**, so **two machines are serving** — `min_machines_running = 1` is
+a floor, not a ceiling. The in-process rate limiter counts per machine, so the
+allowance in front of `/api/track` is split across two of them and effectively
+doubled. That is a live argument for setting the two `UPSTASH_` secrets, and it
+does not wait on the uptime question.
 
 ## Verification protocol — non-negotiable
 
@@ -614,25 +667,27 @@ prints names only, which is the only listing that should ever appear in a report
 
 Chase these; do not attempt them.
 
-1. **`git push origin master`** — commits are made locally and not pushed, and
-   nothing in them is live until she pushes. The device shell has no network and
-   no access to the Windows credential store, so this cannot be done for her.
-   **Read `git log origin/master..master --oneline` for the current list**; the
-   count written into these docs has gone stale more than once, and rounds 13,
-   14 and 15 have landed since it last said "three".
-2. **Get `0004`, `0005`, `0006` and `0007` onto the live project — which is now
-   one setup run and then nothing.** She does **not** paste SQL into the
-   Supabase editor any more: `scripts/migrate.sh` runs on every deploy through
-   the `migrate` job, applies whatever is missing oldest-first, and stops the
-   rollout if `verify.sql` goes red afterwards. What she does once is add the
-   `SUPABASE_DB_URL` secret, take a backup, and run **Actions → Run migrations**
-   with `0001 0002 0003 0004` in the "already run by hand" box — `SETUP.md` Step 1c,
-   steps 6–8. After that `verify.sql` prints **126** rows all `t`. `0005` is the
-   money one: it makes a lost confirmation email recoverable on a Stripe
-   redelivery, makes an oversell visible instead of silently clamped at zero,
-   and gives her a list of payments that owe a refund on `/admin`. `0006` stops
-   a contact-form message being lost when the mail provider is unset or fails.
+1. ~~**`git push origin master`.**~~ **Done** — everything is pushed and
+   deployed. The habit stands: a push to `master` deploys, and `git log
+   origin/master..master --oneline` is the only honest answer to what a machine
+   is holding back.
+2. ~~**Get `0004`–`0007` onto the live project.**~~ **Done — `0001`–`0007` are
+   applied**, through the pipeline: the backup gate refused the first attempt,
+   the backup was taken, the four hand-run numbers were baselined, and the rest
+   went green. She does **not** paste SQL into the Supabase editor any more, and
+   from here `scripts/migrate.sh` runs on every deploy through the `migrate`
+   job, applies whatever is missing oldest-first, and stops the rollout if
+   `verify.sql` goes red. What each one bought: `0005` makes a lost confirmation
+   email recoverable on a Stripe redelivery, makes an oversell visible instead of
+   silently clamped at zero, and gives her a list of payments that owe a refund
+   on `/admin`; `0006` stops a contact-form message being lost when the mail
+   provider is unset or fails, and `/admin/enquiries` is where she reads those;
    `0007` is Lucky Scoop.
+2a. **Move the shop to `bamstudioshop.com`**, which is the largest thing still
+   open and is now the right moment for it — before a real customer exists, the
+   move only costs an afternoon if it goes wrong. `SETUP.md` Step 5f carries the
+   order (rebuild and attach *before* Stripe's webhook is repointed) and the
+   apex-versus-`www` decision. Porkbun's `*` parking record has to go first.
 2b. **Decide the three Lucky Scoop terms, and give one tier a price and a packed
    weight.** The terms: whether a scoop may contain two of the same charm, how
    the video is promised, and whether a change of mind on a scoop is accepted —
@@ -642,6 +697,11 @@ Chase these; do not attempt them.
    a price and a weighed test pack, by design, so until she supplies both the
    shop shows no scoops at all. Neither is something an agent may decide for
    her.
+2c. **Set the three free secrets that are currently doing nothing**:
+   `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (both or neither), which
+   make the rate limiter durable and un-split it across the two machines that are
+   serving, and `SENTRY_DSN`, which sends failures somewhere a person is told
+   about.
 3. **Fill in the catalogue.** 44 products, all still at the seed price of $9.00,
    **0 of 44 with a filament recipe**, and print times effectively all missing —
    so every cost, margin and suggested price in the studio reads "Not measured".

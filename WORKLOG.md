@@ -48,7 +48,7 @@ act on next.
 
 | # | Item | Who | Where |
 |---|---|---|---|
-| A | **`git push origin master`.** The three round-12 commits (`1a4e0d0`, `7c049aa`, `10a683f`) are made on `master` on the owner's machine and **not pushed** — the device shell has no network and cannot reach the Windows credential store. Nothing in them is live until she pushes | **owner** | §5 round 12, §7 |
+| A | ~~**`git push origin master`.**~~ **Done.** The three round-12 commits, and everything since, are pushed and deployed; `https://bamstudio-shop.fly.dev` serves round 18's code. **Keep the rule that made this an item**: a push to `master` is what deploys, and `git log origin/master..master` is the only honest answer to what a machine is holding back | done | §5 round 12, §7 |
 | B | ~~**Record one real sale against a measured product.**~~ **Done, round 14.** The three embedded-resource selects in `app/admin/data.ts` had run against real PostgREST and returned `[]` every time, because every table behind them was empty; a real sale on Orders → *Record a sale*, against a product with a print time and a filament colour, exercised all three with rows in them, and the costing chain was checked by hand against the live numbers. **Keep the rule that made this an item** — an empty table is a question about the database, not about the query — because the next new join will be in the same position | done | §5 round 14 |
 | C | **Weigh three items and give the real numbers** — one name charm, one clicker keychain, one pet bowl, each in the mailer actually used: grams, and thickness in mm. **Every** weight and dimension in `lib/shipping/dimensions.ts` and in the seed is a reasoned estimate today. These three readings are the single highest-value input to postage accuracy | **owner** | §6 backlog |
 | D | **Decide: cheap-untracked or dearer-tracked.** Every product is `letter_eligible: false`, and since `0004_letter_eligible_default.sql` that is the column's default too, so everything quotes as a tracked parcel — which overcharges slightly and never undercharges. Large Letter is $3.40 against ~$10.20, and is **untracked and uninsured**. Enabling it is a per-row tick in Supabase **plus** carrying `quoteBasket()`'s `tracked` boolean through the UI, which `transitLabel(methodId, tracked)` now requires as an argument. This is a business decision, not a code one | **owner** | §6 |
@@ -56,11 +56,11 @@ act on next.
 | F | **Confirm the production secrets on Fly, then place one test order.** `NEXT_PUBLIC_SUPPORT_EMAIL`, `RESEND_API_KEY`, `EMAIL_FROM` and the **production** `STRIPE_WEBHOOK_SECRET` are filled in `.env.local`; the deployed shop reads Fly secrets, which is a different set of values. Nothing in this repo has ever been through a real Stripe session or put a message in a mailbox | **owner** | §6, `SETUP.md` |
 | G | **`AUSPOST_API_KEY` is a new runtime secret** — free, self-serve, instant from developers.auspost.com.au. It is a **Fly secret, never a build arg**. Without it postage still works: it falls through to the deliberately pessimistic fallback table | **owner** | §6, `SETUP.md` |
 | H | **Delete the Porkbun parking wildcard.** `bamstudioshop.com` is registered, but DNS still carries `*` CNAME → `uixie.porkbun.com`, which shadows email records | **owner** | `SETUP.md` Step 5f |
-| I | **The rate limiter is still one process's memory.** Round 8 fixed *which IP it reads*; round 15 closed the last route family with no limit at all (`/order/confirmed`). Neither made it durable, and it is still the only thing in front of `/api/track` | agent | §6 |
-| J | **Get `0004`, `0005`, `0006` and `0007` onto the live project — which is now one push, not four pastes.** `0005` is the money migration (the confirmation-email stamp, the observable stock clamp, the refund register), `0006` makes a contact message a row, `0007` is Lucky Scoop; **none of the four is applied** and none of them does anything until it is. **The procedure changed in round 17's flow**: migrations run themselves on deploy via `scripts/migrate.sh` and the `migrate` job that `deploy` has a `needs:` on, so she adds the `SUPABASE_DB_URL` secret, takes a backup, and runs **Actions → Run migrations** once with `0001 0002 0003` in the "already run by hand" box. `verify.sql` then prints **126** rows | **owner** | §5 rounds 15–17, `SETUP.md` Step 1c |
+| I | **The rate limiter can be durable and is not, because the secrets are unset.** Round 19 added `rateLimitDurable()` and put every route handler on it, so with `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` the counters survive a restart, a deploy and a second machine. **Neither is set**, so it is still one process's `Map`, and it is still the only thing in front of `/api/track`. **Two machines are serving** (see the unexplained observation at the end of §5), so that allowance is currently handed out twice over | **owner** (set the two secrets) | §5 round 19, §6 |
+| J | ~~**Get `0004`–`0007` onto the live project.**~~ **Done — `0001`–`0007` are applied.** Through the pipeline, not by hand: the backup gate refused the first attempt, the backup was taken, `0001 0002 0003 0004` were baselined as already-run, and the rest applied green. From here migrations run themselves on every deploy and the deploy stops if the database is not what the code expects. **What is still owed is a different claim** — exercising `0005`, `0006` and `0007`'s behaviours against real rows (items K, N and the round-17 list), which the schema assertions do not prove | done | §5 rounds 15–19, `SETUP.md` Step 1c |
 | K | **Exercise `0005`'s three behaviours against real rows.** `verify.sql` asserts them against synthetic rows inside a rolled-back transaction, which proves the schema and not the webhook. An oversell that accumulates on `products.oversold_units`, a redelivered Stripe event that does not send a second email, and a payment on a cancelled order that writes exactly one incident are each still believed-correct-by-reading | agent | §5 round 15 |
-| M | ~~**Run `0006_enquiries.sql` on the live project.**~~ **Folded into J** — the deploy applies every missing migration in order now, so `0006` is not a separate errand. The consequence is unchanged: until it is applied a contact-form message is stored nowhere and a failed send still loses it | **owner** | §5 round 16, `SETUP.md` Step 1c |
-| O | **`0007_lucky_scoop.sql` is not applied to production either, and the shopfront is written to survive that.** No scoop tier exists anywhere — nothing is seeded, and `getScoopTiers()` carries no sample tier — so `/scoop`, the home highlight card, the FAQ answer and the sitemap entries are all conditional on a tier being both active and priced. On a database without `0007` the reads fail closed rather than erroring, and on one with `0007` and no tiers the scoop simply is not there. **That is why "the feature is built" and "the shop sells scoops" are two different statements**; the second needs the owner to create a tier, price it, weigh a test pack and fill a pool | **owner** | §5 round 17, `SETUP.md` |
+| M | ~~**Run `0006_enquiries.sql` on the live project.**~~ **Done with J.** A contact-form message is now a row before it is an email, **and round 18 built the screen that reads those rows** — `/admin/enquiries`, owner and studio only. The remaining gap is not storage and not readability: **nothing pushes**, so an enquiry that arrives while email is unconfigured waits until somebody opens the screen | done | §5 rounds 16 and 18, `SETUP.md` Step 3c |
+| O | **`0007_lucky_scoop.sql` is applied now; what is still missing is a tier.** No scoop tier exists anywhere — nothing is seeded, and `getScoopTiers()` carries no sample tier — so `/scoop`, the home highlight card, the FAQ answer and the sitemap entries are all conditional on a tier being both active and priced. On a database without `0007` the reads fail closed rather than erroring, and on one with `0007` and no tiers the scoop simply is not there. **That is why "the feature is built" and "the shop sells scoops" are two different statements**; the second needs the owner to create a tier, price it, weigh a test pack and fill a pool | **owner** | §5 round 17, `SETUP.md` |
 | P | **Three Lucky Scoop decisions are the owner's, and the copy deliberately says nothing in either direction on all three.** (1) May a scoop contain two of the same charm? (2) How is the video promised — is "we film every scoop" a term of sale, or a thing the studio does? (3) Is a change of mind on a scoop accepted? `app/legal/refunds/page.tsx` carries **two drafted paragraphs in a comment**, (a) accept and (b) decline, for her to choose between; `scoop_packs.video_url` is nullable so that a `not null` does not answer (2) for her; and `scoopsAvailable()` counts **distinct** products so that (1) is safe under either answer. **Do not close any of these by guessing.** Silence favours the customer, which is the safe direction to be wrong in — but (b) on the refunds page is only relied on if it is stated *before* purchase, so it stays a decision rather than a default | **owner** | §5 round 17 |
 | N | **Exercise `0006` against real rows too** — an enquiry posted with the mail provider deliberately unconfigured must still land as a row, which is the whole point of the migration and the case that used to lose the message; a repeated sign-up must be idempotent; an unsubscribe must survive a later sign-up | agent | §5 round 16 |
 | L | ~~**The basket limits exist in three places.**~~ **Done.** `BASKET_LIMITS` is in `lib/config.ts` (line 222) and nowhere else; `components/cart/limits.ts` is deleted, and both route schemas and `CartProvider.tsx` import the constant. **Keep the rule**: change the number there and do not put a literal back into a Zod schema | done | §5 round 15, `AGENTS.md` |
@@ -1860,6 +1860,155 @@ project — `0007` is not applied there (§0 item J) — and no browser has open
 `/scoop` or the pack panel. The studio screens and the tier pages are
 reviewed-by-reading, which is precisely the position round 12's worst defect was
 found from.
+
+### Round 18 — the owner's correction, and the half of the studio that could not be read
+
+**The correction first, because it deleted code rather than adding it.** Round
+17 built a listing gate into `sellable`: a tier stopped being offered once its
+pool could not fill a scoop out of `stock_on_hand`. The reasoning read well —
+*"a scoop's promise is that these exist now"* — and it was wrong about this
+shop. The owner: *"you know we can just print it after we scoop right...? do not
+overthink it."* **This shop prints to order.** `stock_on_hand` is a buffer of
+pieces already printed, not the set of pieces that exist, which is exactly why
+`decrement_stock` returns a shortfall instead of refusing a sale
+(`0005_sale_integrity.sql`). The gate solved a problem she does not have and
+could only ever do harm: it silently took a paid product off the shop because a
+shelf count dipped. It is gone from `lib/scoop.ts`, from `app/sitemap.ts` and
+from the copy. `scoopsAvailable` survives as **information for the studio** — a
+low bowl is a signal to print — and decides nothing. Both files now carry the
+argument in the imperative, because this is a fix an agent will "restore".
+
+What survives the deletion is the truthfulness rule, which was never about
+stock: a tier cannot be activated without a price, a packed weight and a pool at
+least as large as its piece count. *Five drawn from these twelve* needs twelve
+rows in the pool. It does not need twelve on the shelf this morning.
+
+**`/admin/enquiries` — the reading half of round 16.** `0006_enquiries.sql` made
+a customer's message a row before it is an email, and then nothing in the shop
+could read either table, so the notification email went back to being the only
+way anyone learned a message had arrived — the exact failure the migration was
+written to stop. **A row nobody can open is not much better than no row.** The
+screen lists both tables for owner and studio (`reports`, not Packing — it shows
+a customer's own words and the address they wrote from), filters by topic and by
+whether a message has been dealt with, and says whether a notification was ever
+going to be attempted rather than showing a column of blanks. **It sends
+nothing**: a reply typed there would need a provider, a from-address and a thread
+to land in, and would vanish on a deploy with none of them, so the customer's
+address is a `mailto:` and the answer leaves from the owner's own mail client
+where it can be seen to have gone. The privacy policy was edited in the same
+change, because it told customers in as many words that no such screen existed.
+
+**The paper.** Two print views, sharing one stylesheet and one renderer for
+personalisation — `describePersonalisationText`, because two screens formatting
+the same value two ways is how the mistake gets made. **The packing slip** is
+per-order and is checked against one parcel: the personalisation exactly as the
+customer typed it, and deliberately no money on it at all — many of these are
+gifts, and a document listing goods and prices reads as a receipt from a shop
+that is not GST-registered and has no ABN set. **The pick list** is per-shelf and
+is walked once: plain pieces pooled across every open order, personalised pieces
+never pooled, no names and no addresses, because it lives on the bench all day
+and ends up in the recycling. The complaint behind both was reading work off a
+screen and copying it by hand, and on a shop selling custom name charms a
+transposed letter is not a typo, it is a remake with the filament and the postage
+paid twice.
+
+**Nothing in this round was verified in a browser.** The rules changes are
+covered by `scripts/check-scoop.mjs`; the screens are reviewed-by-reading.
+
+### Round 19 — things that are inert until somebody sets a secret
+
+**Error reporting.** `lib/observability.ts` posts to Sentry's envelope endpoint
+over plain `fetch`, server-side only, with no `@sentry/nextjs` dependency —
+`lib/email.ts` made the same call about Resend and `lib/rate-limit.ts` about
+Upstash. Server-only is not timidity: a browser SDK would put a third-party
+ingest host into the CSP that `next.config.ts` derives from what the app
+actually loads. **Unset `SENTRY_DSN` and nothing is attempted**, which is the
+normal state and is not an error; a value that is set but malformed is logged
+once and then treated as unset.
+
+**Durable rate limiting.** `rateLimit()` is left exactly as it was and
+`rateLimitDurable()` is a second export, because making the original async would
+have left `const limit = rateLimit(...)` holding a Promise at seven call sites,
+`limit.ok` undefined, `!limit.ok` true — **a silent total outage from a one-word
+change**. Every route handler is on the durable path; `/order/confirmed`
+deliberately is not, and the reason is written where somebody would otherwise
+"finish the migration". With `UPSTASH_REDIS_REST_URL` and
+`UPSTASH_REDIS_REST_TOKEN` set the counters survive a restart, a deploy and a
+second machine; without them it is the same `Map` it always was. It does not
+fail open and it does not fail closed — 500ms, a circuit breaker, and a fall
+back to the in-process limiter, so an Upstash outage cannot hang a checkout.
+
+**Both of the above are invisible from outside, which is why `register()` in
+`instrumentation.ts` prints one line at boot** — error reporting on/off,
+rate-limit store shared/in-memory, email on/off, capability booleans only, no
+DSN and no token. The whole of this shop's operational configuration is "inert
+unless a secret is present", and an operator otherwise cannot tell a deploy that
+is quietly doing nothing from one that is working. `/api/health` gained
+`uptimeSeconds` and nothing else; the rejected fields, and why a public endpoint
+is the wrong place to advertise that nobody is watching the shop, are argued in
+the route.
+
+**The migration runner says which kind of red it is.** A run that stops because
+it is waiting on a person — the backup gate, a missing secret — now prints
+**⏸️ Action needed — nothing in your database was changed** at the top of the
+run page, above the log, and names the one step. A genuine failure prints
+**❌ Migration failed** and says whether the database had already been changed
+before it stopped. Both are red and both stop the deploy, deliberately: a green
+tick next to "nothing was migrated" is how a database and the code that reads it
+drift apart. The owner met this on the first real run, where the gate did its
+job, changed nothing, and still showed a cross that looked exactly like a broken
+migration.
+
+**The harness moved from PostgreSQL 16 to 17, to match production.**
+`scripts/verify-sql.sh` stood up 16 and refused to run against anything else, so
+all 126 assertions had only ever been proved on a major the shop does not use;
+`migrate.sh` prints the live server's version, and it is 17. The version is no
+longer buried in the script — `--pg-version`, `--both`, and the version printed
+in the first line and the last. **Nothing behaved differently**: all 126
+assertions returned `t` on both, in the same order with the same labels, and the
+two things most likely to differ — the search index column and the ranking of
+search results — produced identical output down to the byte. Nothing needed
+fixing. The harness targets 17 anyway, because matching the database is not
+something you only bother with once a difference has already cost an afternoon.
+It is the same shape of mistake this project has now made three times: a stand-in
+that does not reproduce the real platform, printing green about something the
+code never ships to.
+
+**And the migrations were actually run.** `0001`–`0007` are applied on the live
+Supabase project, through the pipeline rather than by hand: the backup gate
+refused the first attempt, the backup was taken, `0001 0002 0003 0004` were
+baselined as already-run, and the rest applied green. **§0 item J is closed.**
+That is the first time anything in this repo has been proved against the live
+project since round 12.
+
+### An observation from round 19 that is not explained, and should not be explained away
+
+`/api/health` on the live app reports `process.uptime()` of roughly **725,000
+seconds — about 8.4 days** — on both machines, while **the code those machines
+are running was deployed today.** Both of those cannot be simple at once. A
+deploy replaces the machine's process, so a process that has been up for eight
+days is not a process that started this morning; and the running code is
+demonstrably today's.
+
+**Not explained here on purpose.** Several stories fit — a machine that was
+updated in place rather than replaced, an uptime that is measuring something
+other than this process's life, a deploy that rolled a smaller part of the app
+than assumed, a clock — and picking one by plausibility is how a wrong belief
+gets written down as a fact. **What would settle it is `fly status -a
+bamstudio-shop` and `fly machines list -a bamstudio-shop` from the owner's own
+terminal**, which name each machine, its id, its state and when it was last
+updated. Nothing here has run those; this session has no Fly credentials.
+
+**One consequence is already actionable regardless of the cause.** Sampling
+`/api/health` returned **two distinct `uptimeSeconds` clusters about seven
+seconds apart**, which means **two machines are serving**, not the one that
+`fly.toml`'s `min_machines_running = 1` is usually read as promising — it is a
+floor, not a ceiling. The in-process rate limiter keeps its counters per
+machine, so with two machines the allowance in front of `/api/track` — which
+returns a customer's postal address for an order number and the matching email —
+**is being handed out twice over**. That is a live argument for setting
+`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`, and it is an argument
+that does not wait on the uptime question being answered.
 
 
 ## 6. Open items
