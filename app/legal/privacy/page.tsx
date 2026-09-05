@@ -239,8 +239,8 @@ export default function PrivacyPage() {
           drops, and sends the account emails described below.
         </li>
         <li>
-          <strong>Website hosting</strong> — the provider that serves these pages
-          and keeps the basic server logs above.
+          <strong>Website hosting</strong> — Fly.io, which serves these pages
+          from its Sydney region and keeps the basic server logs above.
         </li>
         <li>
           <strong>Delivery</strong> — Australia Post, which receives the name and

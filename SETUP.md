@@ -1333,11 +1333,13 @@ Do these in order on launch day:
    no GST component while you're under the $75,000 threshold, because
    displaying GST you don't collect misrepresents the price. Set it to `true`
    only on the day you register.
-4. **Name Fly.io as the hosting provider** on `/legal/privacy`. The page lists
-   who customer data is shared with — Stripe, Supabase, Resend — and currently
-   describes hosting generically as "the provider that serves these pages".
-   That is now Fly.io, and a privacy policy is expected to name it. Edit
-   `app/legal/privacy/page.tsx`.
+4. ~~Name Fly.io as the hosting provider on `/legal/privacy`.~~ ✅ **Done,
+   5 September.** The "Website hosting" bullet now reads *"Fly.io, which serves
+   these pages from its Sydney region"*, matching how Stripe, Supabase, Resend
+   and Australia Post are each named in the same list. The Sydney region is a
+   fact from `fly.toml` (`primary_region = "syd"`) and is worth stating, because
+   the *Overseas disclosure* section immediately below tells customers some
+   providers hold data offshore — hosting is not one of them.
 5. **Turn email on**, if you skipped Step 3 — `RESEND_API_KEY` and
    `EMAIL_FROM` together as **Fly secrets**:
    ```bash
@@ -1349,15 +1351,37 @@ Do these in order on launch day:
    anywhere, delete it. Then send yourself a contact-form message from the live
    site to confirm — that one also needs `NEXT_PUBLIC_SUPPORT_EMAIL` from step 3
    above, which *is* a rebuild.
-5b. **Set `AUSPOST_API_KEY`** if you have it (Step 3b), and **delete Porkbun's
-   `*` parking CNAME** before you set up email or attach the domain (Step 5f).
-   Neither blocks a launch; both cause confusing failures later if skipped.
-6. **Switch Stripe to live mode**: flip the dashboard toggle, set the live
-   `sk_live_` key with `fly secrets set STRIPE_SECRET_KEY=...`, create a *new*
-   live-mode webhook endpoint pointing at your live URL, and set its
-   `STRIPE_WEBHOOK_SECRET` the same way. Test mode and live mode have
-   completely separate keys and webhooks. Both are secrets, so this is a
-   restart, not a rebuild.
+5b. ~~Delete Porkbun's `*` parking CNAME.~~ ✅ **Done, 5 September.** It was an
+   ALIAS at the apex plus a wildcard CNAME, both invisible in Porkbun's classic
+   DNS editor, and between them they silently discarded every A/AAAA record
+   written for two weeks. Both are gone; the apex and `www` hold real A/AAAA
+   records pointing at Fly, each with its own certificate. **Set
+   `AUSPOST_API_KEY`** if you have it (Step 3b) — it does not block a launch.
+5c-live. ~~Move the shop to `bamstudioshop.com`.~~ ✅ **Done, 5 September.**
+   DNS, both certificates, the `NEXT_PUBLIC_SITE_URL` GitHub Variable, the
+   matching value in `fly.toml`, the Supabase URL configuration and a
+   `www` → apex 308 are all in place and deployed. The shop's address is now
+   `https://bamstudioshop.com`; `bamstudio-shop.fly.dev` still answers.
+6. **Switch Stripe to live mode.** The live-mode webhook endpoint already
+   exists — `https://bamstudioshop.com/api/webhooks/stripe`, subscribed to all
+   four `checkout.session.*` events the code handles. What is left is the two
+   secrets, and both are still the test-mode values set on 25–26 August:
+
+   - `STRIPE_SECRET_KEY` → the live `sk_live_…` key
+   - `STRIPE_WEBHOOK_SECRET` → the **live** endpoint's signing secret
+     (Workbench → Webhooks → that destination → *Signing secret*)
+
+   Test mode and live mode have completely separate keys and webhooks, so the
+   test signing secret will never verify a live event — the webhook would
+   return `400` and no order would be recorded. Set both together.
+
+   Easiest route, since `flyctl` is not installed on your machine:
+   **fly.io → bamstudio-shop → Secrets → Edit** on each. Both are read at
+   request time, so this restarts the machine — no redeploy, no rebuild.
+
+   ⚠️ **Do not do this until every product has a real price** (job 1 above).
+   Everything is still at the `$9.00` seed price, and live keys mean a real
+   card is charged that amount.
 7. **Place one real order yourself** with a real card and refund it, to prove
    the whole path works. Check the order row lands in Supabase with a real
    `order_number` and its line items — if `next_order_number()` cannot run, the
