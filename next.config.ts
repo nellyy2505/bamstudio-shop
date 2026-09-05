@@ -32,6 +32,31 @@ function supabaseOrigin(): string | null {
   }
 }
 
+/**
+ * The `www.` hostname to redirect away from, or null when there isn't one.
+ *
+ * Derived from NEXT_PUBLIC_SITE_URL rather than typed out, for the same reason
+ * `supabaseOrigin()` above reads its origin from the environment: a hostname
+ * written twice is a hostname that will eventually disagree with itself. The
+ * shop moved from bamstudio-shop.fly.dev to bamstudioshop.com once already.
+ *
+ * Returns null when the variable is missing or malformed, and also when the
+ * canonical host is ITSELF a www host — redirecting www to www is a loop, and
+ * a loop in a redirect is a dead site, not a slightly wrong one. Localhost and
+ * the fly.dev hostname simply never match, so this costs development nothing.
+ */
+function wwwHost(): string | null {
+  const url = process.env.NEXT_PUBLIC_SITE_URL;
+  if (!url) return null;
+  try {
+    const { hostname } = new URL(url);
+    if (hostname.startsWith("www.")) return null;
+    return `www.${hostname}`;
+  } catch {
+    return null;
+  }
+}
+
 const isProduction = process.env.NODE_ENV === "production";
 
 /**
@@ -180,6 +205,41 @@ const nextConfig: NextConfig = {
    * announced to everyone who did not.
    */
   poweredByHeader: false,
+
+  /**
+   * Send www.<domain> to the bare domain, permanently.
+   *
+   * Both hostnames have A/AAAA records pointing at this Fly app and both have
+   * their own Fly certificate, so without this the entire shop answers at two
+   * addresses — two copies of every product page, splitting whatever ranking
+   * they earn between them and making `canonical` the only thing telling a
+   * crawler which is real. `metadataBase` already says the bare domain; this
+   * makes the server agree instead of merely hinting.
+   *
+   * It belongs here rather than at the registrar. Porkbun's URL forwarding
+   * works by planting its own record on the www host, and that record is a
+   * CNAME-style pointer that cannot coexist with the A/AAAA the certificate
+   * needs — the same conflict that kept the apex parked for two weeks. One
+   * redirect in the app costs a single 301 and no DNS at all.
+   *
+   * `permanent: true` is a 308, not a 301, so the method survives: a POST to
+   * the www host is replayed as a POST. Nothing should be posting there —
+   * Stripe's webhook is configured on the bare domain — but a 301 would
+   * quietly turn any that did into a GET, and a payment confirmation lost that
+   * way would look like a bug in the shop rather than in a redirect.
+   */
+  async redirects() {
+    const www = wwwHost();
+    if (!www) return [];
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host" as const, value: www }],
+        destination: `${process.env.NEXT_PUBLIC_SITE_URL}/:path*`,
+        permanent: true,
+      },
+    ];
+  },
 
   /**
    * Security response headers. Until this, the shop served none at all.
