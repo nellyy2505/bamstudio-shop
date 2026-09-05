@@ -58,18 +58,19 @@ kill_timeout = "30s"
     # at module scope), so pinning it here means a plain `fly deploy` can never
     # trip that guard.
     #
-    # This is the app's OWN hostname, not the domain the shop will eventually
-    # answer on. It was pinned to https://bamstudioshop.com before anything had
-    # ever been deployed — a domain still pointing at Porkbun's parking page. A
-    # manual `fly deploy` would have baked that in, and this value is Stripe's
-    # `success_url`: a customer would have paid and then been redirected to a
-    # "this domain is parked" page, charged, with no order number. CI overrides
-    # it with the GitHub Variable, so only a hand-run deploy was exposed.
+    # This is the domain the shop answers on. It was briefly pinned to
+    # https://bamstudioshop.com before that domain had been pointed anywhere —
+    # while it still served Porkbun's parking page — and this value is Stripe's
+    # `success_url`, so a hand-run deploy would have charged a customer and then
+    # redirected them to a "this domain is parked" page with no order number. It
+    # was rolled back to the fly.dev hostname until the move was real, and moved
+    # to the apex on 2026-09-05 once bamstudioshop.com resolved to this app's
+    # Fly IPs and served /api/health over a valid certificate.
     #
-    # ⚠️ Change this in the SAME commit as the NEXT_PUBLIC_SITE_URL GitHub
-    # Variable when the custom domain is attached, or CI and a hand-run
-    # `fly deploy` will build two different shops. SETUP.md Step 5f.
-    NEXT_PUBLIC_SITE_URL = "https://bamstudio-shop.fly.dev"
+    # ⚠️ This must stay equal to the NEXT_PUBLIC_SITE_URL GitHub Actions
+    # Variable, or CI and a hand-run `fly deploy` will build two different
+    # shops. Change both together. SETUP.md Step 5f.
+    NEXT_PUBLIC_SITE_URL = "https://bamstudioshop.com"
 
     # The remaining seven are deliberately NOT pinned here. A placeholder would
     # not fail — it would build a perfectly successful image pointing at a
