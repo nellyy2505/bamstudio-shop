@@ -24,7 +24,7 @@ const FREE_RATE_METHOD = SHIPPING.methods.find(
   (option) => isFreeShipping(SHIPPING.freeThreshold, option.id),
 );
 const FREE_SHIPPING_SENTENCE = FREE_RATE_METHOD
-  ? ` Free ${FREE_RATE_METHOD.label.toLowerCase()} post across Australia from ${money(SHIPPING.freeThreshold)}.`
+  ? ` Free ${FREE_RATE_METHOD.label.toLowerCase()} post across Australia from ${money(SHIPPING.freeThreshold)}, half-price from ${money(SHIPPING.subsidyThreshold)}.`
   : "";
 
 const poppins = Poppins({
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     template: `%s · ${SHOP.name}`,
   },
   description:
-    "Fidget clicker keychains, custom name charms and desk pieces, 3D-printed to order in Sydney." +
+    "Fidget clicker keychains, custom name charms and desk pieces, 3D-printed to order in Wollongong." +
     FREE_SHIPPING_SENTENCE,
   /*
    * Shared with every page through `app/seo.ts`, because `openGraph` is

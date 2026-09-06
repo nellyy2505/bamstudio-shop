@@ -60,7 +60,7 @@ const CATEGORIES: {
   {
     icon: "truck",
     title: "Shipping & delivery",
-    body: `Printing takes ${PRINT_LEAD_TIME.label}, then it posts. Free standard shipping from ${money(SHIPPING.freeThreshold)}.`,
+    body: `Printing takes ${PRINT_LEAD_TIME.label}, then it posts. We pay half your standard postage from ${money(SHIPPING.subsidyThreshold)}, and all of it from ${money(SHIPPING.freeThreshold)}.`,
     href: "#shipping",
     linkText: "Delivery times",
   },
@@ -130,9 +130,12 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
           {transitRangeLabel(standard.id)} and express takes{" "}
           {transitRangeLabel(express.id)}. Postage is worked out from the weight
           of your basket at Australia Post&rsquo;s current rates, and shown in
-          full before you pay. Standard shipping is free once your order reaches{" "}
-          {money(SHIPPING.freeThreshold)}. Express speeds up the post, not the
-          printing — the print time still applies.
+          full before you pay. Below {money(SHIPPING.subsidyThreshold)} that postage is yours; from{" "}
+          {money(SHIPPING.subsidyThreshold)} we pay half of it, and from{" "}
+          {money(SHIPPING.freeThreshold)} we pay all of it. The half and the
+          whole apply to {standard.label.toLowerCase()} post only — express
+          speeds up the post, not the printing, and is charged in full at every
+          basket size.
         </p>
       </>
     ),

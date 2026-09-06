@@ -22,10 +22,10 @@
  *
  * ## What this deliberately does not do
  *
- * - **It does not apply the free-shipping threshold.** That is a rule about
- *   the basket *subtotal* and lives in `SHIPPING.freeThreshold` /
- *   `shippingCost()` in `lib/config.ts`. This function answers what the post
- *   office charges; the shop decides who pays it.
+ * - **It does not apply the postage bands.** Those are a rule about the basket
+ *   *subtotal* and live in `SHIPPING.subsidyThreshold` / `SHIPPING.freeThreshold`
+ *   and `shippingCharge()` in `lib/config.ts`. This function answers what the
+ *   post office charges; the shop decides how much of that the customer pays.
  * - **It does not compute or expose GST.** These are GST-inclusive retail
  *   prices and the shop is not GST-registered, so the total is a total. Do not
  *   run `gstComponent()` over the result.

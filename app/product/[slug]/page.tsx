@@ -262,9 +262,13 @@ export default async function ProductPage({ params }: { params: Params }) {
               <span>
                 <b>Estimated delivery {deliveryWindow(...transitDays("standard"))}</b> ·{" "}
                 {/* Postage is priced per basket by weight, so no per-product
-                    figure can be right. The free threshold is the shop's own
-                    promotion and is true on every product page. */}
-                Standard post by weight, free from{" "}
+                    figure can be right. The two thresholds are the shop's own
+                    promotion and are true on every product page — but they are
+                    read off the basket subtotal, not off this product, so the
+                    sentence names the amounts and never claims this item
+                    reaches them. */}
+                Standard post by weight — we pay half from{" "}
+                {money(SHIPPING.subsidyThreshold)}, all of it from{" "}
                 {money(SHIPPING.freeThreshold)}
               </span>
             </p>

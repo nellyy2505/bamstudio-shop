@@ -260,8 +260,12 @@ export default function TermsPage() {
         and the exact amount is shown to you before you pay. Standard post takes{" "}
         {transitRangeLabel("standard")} and express takes{" "}
         {transitRangeLabel("express")}, both measured from dispatch, not from
-        when you order. Standard post is free on orders of{" "}
-        {money(SHIPPING.freeThreshold)} or more.
+        when you order. On orders under{" "}
+        {money(SHIPPING.subsidyThreshold)} you pay that postage in full. On
+        orders of {money(SHIPPING.subsidyThreshold)} or more we pay half of the
+        standard-post charge, and on orders of {money(SHIPPING.freeThreshold)}{" "}
+        or more we pay all of it. Express post is charged in full at every order
+        size.
       </p>
       <p>
         Delivery timeframes are estimates given by the carrier, not guarantees.

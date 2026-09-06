@@ -2764,7 +2764,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Personalised bowl with pet's name",
     "category": "Pet",
     "theme": "Pet",
-    "description": "A personalised bowl with pet's name, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Personalisation is where the margin is. Theme: Pet.",
+    "description": "A personalised bowl with pet's name, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Personalisation is where the margin is. Theme: Pet.",
     "price": 1800,
     "art": "corgi",
     "tint": "cream",
@@ -2780,7 +2780,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A personalised bowl with pet's name, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Personalisation is where the margin is. Theme: Pet."
+        "body": "A personalised bowl with pet's name, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Personalisation is where the margin is. Theme: Pet."
       },
       {
         "title": "Materials & care",
@@ -2810,7 +2810,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Phone stand",
     "category": "Phone & bag",
     "theme": "Phone & bag",
-    "description": "A phone stand, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Theme: Phone & bag.",
+    "description": "A phone stand, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Theme: Phone & bag.",
     "price": 1500,
     "art": "stand",
     "tint": "sky",
@@ -2826,7 +2826,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A phone stand, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Theme: Phone & bag."
+        "body": "A phone stand, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Theme: Phone & bag."
       },
       {
         "title": "Materials & care",
@@ -2856,7 +2856,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Popsocket",
     "category": "Phone & bag",
     "theme": "Phone & bag",
-    "description": "A popsocket, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Theme: Phone & bag.",
+    "description": "A popsocket, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Theme: Phone & bag.",
     "price": 1500,
     "art": "stand",
     "tint": "cream",
@@ -2872,7 +2872,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A popsocket, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Theme: Phone & bag."
+        "body": "A popsocket, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Theme: Phone & bag."
       },
       {
         "title": "Materials & care",
@@ -2902,7 +2902,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Phone charm on strap cord",
     "category": "Phone & bag",
     "theme": "Phone & bag",
-    "description": "A phone charm on strap cord, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Theme: Phone & bag.",
+    "description": "A phone charm on strap cord, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Theme: Phone & bag.",
     "price": 1500,
     "art": "stand",
     "tint": "blush",
@@ -2929,7 +2929,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A phone charm on strap cord, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Theme: Phone & bag."
+        "body": "A phone charm on strap cord, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Theme: Phone & bag."
       },
       {
         "title": "Materials & care",
@@ -2959,7 +2959,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Alphabet bag charm on cord",
     "category": "Phone & bag",
     "theme": "Phone & bag",
-    "description": "A alphabet bag charm on cord, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Theme: Phone & bag.",
+    "description": "A alphabet bag charm on cord, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Theme: Phone & bag.",
     "price": 400,
     "art": "letters",
     "tint": "lilac",
@@ -2991,7 +2991,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A alphabet bag charm on cord, 3D-printed to order in our Sydney studio. Printed in layered PLA and finished by hand. Theme: Phone & bag."
+        "body": "A alphabet bag charm on cord, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Theme: Phone & bag."
       },
       {
         "title": "Materials & care",

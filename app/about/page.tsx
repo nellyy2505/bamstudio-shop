@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   ...selfCanonical("/about"),
   title: "Our story",
   description:
-    "Bam Studio is three family members and one 3D printer — designed together, printed to order in Sydney, kept deliberately small.",
+    "Bam Studio is three family members and one 3D printer — designed together, printed to order in Wollongong, kept deliberately small.",
 };
 
 /*
@@ -44,7 +44,7 @@ const CARDS: {
   {
     icon: "heart",
     title: "Designed as a family",
-    body: "There are three of us. One is here in Sydney running the printer and the market stall; two sisters in Vietnam draw and model the designs. A shape only gets printed once all three of us like it, which is slower than it sounds and much more fun.",
+    body: "There are three of us. One is here in Wollongong running the printer and the market stall; two sisters in Vietnam draw and model the designs. A shape only gets printed once all three of us like it, which is slower than it sounds and much more fun.",
     art: "macaron",
     tint: "blush",
   },

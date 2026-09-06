@@ -23,12 +23,15 @@
  * ---------------------------------------------------------------------- */
 
 /**
- * Where parcels are lodged. The studio is in Sydney; 2000 is the CBD.
+ * Where parcels are lodged. The studio is in Wollongong; 2500 is the CBD.
  *
  * Domestic parcel pricing does not vary by origin *zone* the way international
- * does, but the API demands the parameter, so it may as well be true.
+ * does, but the API demands the parameter, so it may as well be true. The
+ * fallback table in `fallback.ts` was read from 2000 and is left alone for the
+ * same reason: the figures do not move with origin, and re-reading them from
+ * 2500 would be a day's API calls to arrive at the same numbers.
  */
-export const ORIGIN_POSTCODE = "2000";
+export const ORIGIN_POSTCODE = "2500";
 
 /**
  * A destination we send purely because the parcel endpoint refuses to answer
@@ -37,7 +40,7 @@ export const ORIGIN_POSTCODE = "2000";
  * **We never ask the customer where they live in order to price postage.**
  * Domestic parcel price was verified constant across eight destinations from
  * 3000 (Melbourne CBD) to 6798 (Christmas Island) — postcode affects which
- * services are *available*, never what they cost. Sydney → Melbourne is the
+ * services are *available*, never what they cost. NSW → Melbourne is the
  * densest, most-serviced lane in the country, so it is the destination least
  * likely to have a service missing from the list. Quoting before the address
  * form is the whole point: the basket can show a real price on page one.

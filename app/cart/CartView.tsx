@@ -23,9 +23,12 @@ import {
 import {
   BASKET_LIMITS,
   isFreeShipping,
+  isSubsidisedShipping,
   PAYMENT_BADGES,
   PRINT_LEAD_TIME,
   SHIPPING,
+  shippingCharge,
+  shippingShare,
   SHOP,
   transitLabel,
   transitRangeLabel,
@@ -308,18 +311,27 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
     quoted?.signature === basketSignature ? quoted.quotes : null;
   const selectedQuote = quotes?.[method] ?? null;
   /**
-   * §0.10: the free rate applies to standard post only — express is billed at
-   * every subtotal — yet the basket once said "Free shipping unlocked" off the
-   * subtotal alone while charging express. A price claim must never be derived
-   * from the subtotal on its own, so ask isFreeShipping() which method actually
-   * goes free rather than naming one here, and qualify the message with the
-   * method the customer has selected.
+   * §0.10: the promotion applies to standard post only — express is billed in
+   * full at every subtotal — yet the basket once said "Free shipping unlocked"
+   * off the subtotal alone while charging express. A price claim must never be
+   * derived from the subtotal on its own, so ask shippingShare() which method
+   * is actually discounted rather than naming one here, and qualify every
+   * message with the method the customer has selected.
+   *
+   * Three bands now, not two. `selectedIsFree` alone is no longer enough to
+   * describe the basket: between the two thresholds the customer pays half,
+   * which is neither "free" nor "charged" and has to be said out loud — a
+   * halved figure with no explanation reads as a quote that went wrong.
    */
-  const selectedIsFree = isFreeShipping(subtotal, method);
+  const selectedShare = shippingShare(subtotal, method);
+  const selectedIsFree = selectedShare === 0;
+  const selectedIsSubsidised = selectedShare > 0 && selectedShare < 1;
   /** null = not quoted yet. Never 0, which would read to a customer as free. */
   const shipping: number | null = selectedIsFree
     ? 0
-    : (selectedQuote?.amountCents ?? null);
+    : selectedQuote
+      ? shippingCharge(selectedQuote.amountCents, subtotal, method)
+      : null;
   const total: number | null = shipping === null ? null : subtotal + shipping;
 
   const freeRateMethod = SHIPPING.methods.find((option) =>
@@ -328,12 +340,27 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
   const freeRateLabel = freeRateMethod?.label.toLowerCase() ?? "";
   const freeRateReached =
     freeRateMethod !== undefined && isFreeShipping(subtotal, freeRateMethod.id);
+  const subsidyReached =
+    freeRateMethod !== undefined &&
+    isSubsidisedShipping(subtotal, freeRateMethod.id);
+  const subsidyRemaining = Math.max(0, SHIPPING.subsidyThreshold - subtotal);
   const selectedMethodLabel =
     SHIPPING.methods.find((option) => option.id === method)?.label ??
     "your delivery";
+  const subsidyPercentLabel = `${Math.round(
+    (1 - SHIPPING.subsidisedShare) * 100,
+  )}%`;
+  /*
+   * The bar measures the whole way to free post, so the middle band shows as
+   * real progress rather than resetting. The first threshold is drawn on it as
+   * a notch (below) so the customer can see the band they are in.
+   */
   const progress = Math.min(
     100,
     Math.round((subtotal / SHIPPING.freeThreshold) * 100),
+  );
+  const subsidyMark = Math.round(
+    (SHIPPING.subsidyThreshold / SHIPPING.freeThreshold) * 100,
   );
 
   async function checkout() {
@@ -495,11 +522,15 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                 <span className="flex items-start gap-1.5 text-muted">
                   <Icon name="truck" size={14} className="mt-0.5 shrink-0" />
                   <span>
-                    {!freeRateReached
-                      ? `Free ${freeRateLabel} shipping at ${money(SHIPPING.freeThreshold)}`
-                      : selectedIsFree
-                        ? `Free ${freeRateLabel} shipping unlocked`
-                        : `Free ${freeRateLabel} shipping unlocked — ${selectedMethodLabel} is still charged`}
+                    {!freeRateReached && !subsidyReached
+                      ? `We pay ${subsidyPercentLabel} of ${freeRateLabel} shipping from ${money(SHIPPING.subsidyThreshold)}, all of it from ${money(SHIPPING.freeThreshold)}`
+                      : subsidyReached
+                        ? selectedIsSubsidised
+                          ? `We're paying ${subsidyPercentLabel} of your ${freeRateLabel} shipping`
+                          : `We'd pay ${subsidyPercentLabel} of ${freeRateLabel} shipping — ${selectedMethodLabel} is charged in full`
+                        : selectedIsFree
+                          ? `Free ${freeRateLabel} shipping unlocked`
+                          : `Free ${freeRateLabel} shipping unlocked — ${selectedMethodLabel} is still charged`}
                   </span>
                 </span>
                 <b
@@ -508,14 +539,14 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                     selectedIsFree ? "text-good" : "text-muted",
                   )}
                 >
-                  {freeRateReached
+                  {freeRateReached || subsidyReached
                     ? selectedIsFree
                       ? "FREE"
                       : postageText(shipping)
-                    : `${money(freeShippingRemaining)} to go`}
+                    : `${money(subsidyRemaining)} to go`}
                 </b>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-line">
+              <div className="relative h-2 overflow-hidden rounded-full bg-line">
                 <div
                   className={cx(
                     "h-2 rounded-full transition-[width]",
@@ -525,7 +556,26 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                   )}
                   style={{ width: `${progress}%` }}
                 />
+                {/* The half-subsidy threshold, drawn where it falls. Decorative
+                    only — the sentence above it is what states the policy. */}
+                <span
+                  aria-hidden
+                  className="absolute top-0 h-2 w-px bg-bg"
+                  style={{ left: `${subsidyMark}%` }}
+                />
               </div>
+              {freeRateReached ? null : (
+                <p className="mt-1.5 text-[11.5px] text-faint">
+                  {subsidyReached
+                    ? `${money(freeShippingRemaining)} more and ${freeRateLabel} post is free.`
+                    : `Then ${money(
+                        Math.max(
+                          0,
+                          SHIPPING.freeThreshold - SHIPPING.subsidyThreshold,
+                        ),
+                      )} further for free ${freeRateLabel} post.`}
+                </p>
+              )}
             </div>
           ) : null}
 
@@ -537,9 +587,19 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
               {SHIPPING.methods.map((option) => {
                 const optionQuote = quotes?.[option.id] ?? null;
                 const optionFree = isFreeShipping(subtotal, option.id);
+                const optionSubsidised = isSubsidisedShipping(
+                  subtotal,
+                  option.id,
+                );
                 const cost: number | null = optionFree
                   ? 0
-                  : (optionQuote?.amountCents ?? null);
+                  : optionQuote
+                    ? shippingCharge(
+                        optionQuote.amountCents,
+                        subtotal,
+                        option.id,
+                      )
+                    : null;
                 const on = method === option.id;
                 return (
                   <button
@@ -571,6 +631,9 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                           ? transitLabel(option.id, optionQuote.tracked)
                           : transitRangeLabel(option.id)}
                         {optionQuote?.estimated ? " · estimated" : ""}
+                        {optionSubsidised && optionQuote
+                          ? ` · ${subsidyPercentLabel} paid by us`
+                          : ""}
                       </span>
                     </span>
                     <b

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   ...selfCanonical("/builder"),
   title: "Design your own name charm",
   description:
-    "Pick a colourway, spell a name in printed letter caps and add a matching charm. Flat price by name length, made to order in Sydney.",
+    "Pick a colourway, spell a name in printed letter caps and add a matching charm. Flat price by name length, made to order in Wollongong.",
 };
 
 const STEPS = [

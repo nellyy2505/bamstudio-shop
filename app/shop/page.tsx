@@ -80,7 +80,7 @@ export async function generateMetadata({
   return {
     title: "Shop all",
     description:
-      "Every Bam Studio clicker keychain, charm and desk piece — printed to order in Sydney.",
+      "Every Bam Studio clicker keychain, charm and desk piece — printed to order in Wollongong.",
     alternates: { canonical },
     openGraph: { ...SITE_OPEN_GRAPH, url: canonical },
   };
@@ -150,7 +150,7 @@ export default async function ShopPage({
             {filters.category ?? filters.theme ?? "Shop all"}
           </h1>
           <p className="text-sm text-muted">
-            {pluralise(total, "product")} · every one printed to order in Sydney
+            {pluralise(total, "product")} · every one printed to order in Wollongong
           </p>
         </div>
         <SortSelect current={filters.sort ?? "popular"} />

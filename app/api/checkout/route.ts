@@ -13,11 +13,11 @@ import {
   BUILDER_MAX_LETTERS,
   BUILDER_NO_CHARM_DISCOUNT,
   BUILDER_PRICING,
-  isFreeShipping,
   PERSONALISATION_TEXT_MAX,
   PERSONALISATION_TEXT_PATTERN,
   PRINT_LEAD_TIME,
   SHIPPING,
+  shippingCharge,
   transitDays,
 } from "@/lib/config";
 import { clientKey, rateLimitDurable } from "@/lib/rate-limit";
@@ -786,11 +786,13 @@ export async function POST(request: Request) {
    * missing carrier makes postage dearer, never free, and never blocks a sale.
    *
    * Who pays it is a separate question, and deliberately so:
-   * `isFreeShipping()` is the shop's own promotion over the subtotal, while
-   * `quoteBasket()` is what the post office wants. Waiving the charge must not
-   * change what was quoted — the provenance columns staged below record the
-   * real weight and service even on a free-postage order, which is the only way
-   * to reconcile a carrier bill later.
+   * `shippingCharge()` is the shop's own promotion over the subtotal, while
+   * `quoteBasket()` is what the post office wants. Waiving or halving the
+   * charge must not change what was quoted — the provenance columns staged
+   * below record the real weight and service even on a free-postage order,
+   * which is the only way to reconcile a carrier bill later. On a half-paid
+   * order that reconciliation matters more, not less: the studio is now paying
+   * part of a bill it never sees on the order row.
    */
   const quote = await quoteBasket(
     [
@@ -812,9 +814,11 @@ export async function POST(request: Request) {
     ],
     body.shipping_method,
   );
-  const shipping = isFreeShipping(subtotal, body.shipping_method)
-    ? 0
-    : quote.amountCents;
+  const shipping = shippingCharge(
+    quote.amountCents,
+    subtotal,
+    body.shipping_method,
+  );
   const method = SHIPPING.methods.find((m) => m.id === body.shipping_method)!;
 
   const user = await getUser().catch(() => null);

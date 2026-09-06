@@ -20,9 +20,10 @@ export const runtime = "nodejs";
  *  - **It takes slugs and quantities, never weights or prices.** Product rows
  *    are loaded server-side. A basket that could name its own weight could name
  *    its own postage.
- *  - **It does not decide who pays.** It answers what Australia Post charges.
- *    Whether the customer is charged it is `isFreeShipping()` in `lib/config.ts`,
- *    which the cart and checkout both apply to the same subtotal.
+ *  - **It does not decide who pays, or how much of it.** It answers what
+ *    Australia Post charges. How much of that reaches the customer is
+ *    `shippingCharge()` in `lib/config.ts` — three bands over the subtotal,
+ *    which the cart and checkout both apply to the same number.
  *  - **It never fails the cart.** `quoteBasket()` does not throw and does not
  *    return zero for a non-empty basket; the worst case is a pessimistic
  *    `source: "fallback"` figure, which the cart labels as an estimate.

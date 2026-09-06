@@ -88,7 +88,7 @@ const HERO_FACTS = [
     ? [
         {
           icon: "truck" as const,
-          label: `Free ${FREE_RATE_METHOD.label.toLowerCase()} post from ${money(SHIPPING.freeThreshold)}`,
+          label: `Free ${FREE_RATE_METHOD.label.toLowerCase()} post from ${money(SHIPPING.freeThreshold)}, half from ${money(SHIPPING.subsidyThreshold)}`,
         },
       ]
     : []),
@@ -103,7 +103,7 @@ const [STANDARD_MIN, STANDARD_MAX] = transitDays("standard");
  * is printing only — and the free rate is named for the method it applies to.
  */
 const DELIVERY_PROMISE = FREE_RATE_METHOD
-  ? `That's printing time, not delivery — ${FREE_RATE_METHOD.label.toLowerCase()} post adds ${FREE_RATE_METHOD.transitDays[0]}–${FREE_RATE_METHOD.transitDays[1]} business days and is free from ${money(SHIPPING.freeThreshold)}` +
+  ? `That's printing time, not delivery — ${FREE_RATE_METHOD.label.toLowerCase()} post adds ${FREE_RATE_METHOD.transitDays[0]}–${FREE_RATE_METHOD.transitDays[1]} business days, is half-price from ${money(SHIPPING.subsidyThreshold)} and free from ${money(SHIPPING.freeThreshold)}` +
     (PAID_METHOD_COUNT > 0
       ? `; ${PAID_METHOD_LABELS} ${PAID_METHOD_COUNT === 1 ? "is" : "are"} always charged.`
       : ".")

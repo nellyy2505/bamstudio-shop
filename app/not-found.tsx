@@ -6,7 +6,7 @@ import { ButtonLink, Icon } from "@/components/ui";
 export const metadata: Metadata = {
   title: "Page not found",
   description:
-    "That page does not exist any more. Head back to the shop for clickers, charms and desk pieces printed to order in Sydney.",
+    "That page does not exist any more. Head back to the shop for clickers, charms and desk pieces printed to order in Wollongong.",
 };
 
 export default function NotFound() {

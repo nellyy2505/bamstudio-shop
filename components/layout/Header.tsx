@@ -61,14 +61,18 @@ export function Header({
       <div className="bg-ink px-4 py-2.5 text-center text-[13px] font-semibold text-[#F6F2EA]">
         {FREE_RATE_METHOD ? (
           <>
-            Free AU {FREE_RATE_METHOD.label.toLowerCase()} post from{" "}
+            Half-price AU {FREE_RATE_METHOD.label.toLowerCase()} post from{" "}
+            <b className="text-[#F3C89B]">
+              {money(SHIPPING.subsidyThreshold)}
+            </b>
+            , free from{" "}
             <b className="text-[#F3C89B]">{money(SHIPPING.freeThreshold)}</b>
             <span className="hidden sm:inline"> ·</span>
           </>
         ) : null}
         <span className={FREE_RATE_METHOD ? "hidden sm:inline" : undefined}>
           {" "}
-          Every piece 3D-printed to order in Sydney
+          Every piece 3D-printed to order in Wollongong
         </span>
       </div>
 

@@ -2,7 +2,9 @@
  * The price we quote when Australia Post will not answer.
  *
  * Every figure below was read off the live PAC API on 25 August 2026 and is
- * the real published retail rate, Sydney to Melbourne, GST-inclusive.
+ * the real published retail rate, NSW to Melbourne, GST-inclusive. It was read
+ * with an origin of 2000 rather than the studio's own 2500; domestic parcel
+ * price does not vary by origin, so the figures stand.
  *
  * ## This table is deliberately pessimistic, and the lookup makes it more so
  *
