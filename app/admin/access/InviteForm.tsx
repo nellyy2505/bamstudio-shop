@@ -54,7 +54,7 @@ export function InviteForm() {
       <div className="flex flex-wrap items-center gap-3">
         <SubmitButton pendingLabel="Making a link…">Create an invitation</SubmitButton>
         <span className="text-[13px] text-muted">
-          Nothing is emailed. You get a link to send them yourself.
+          Emailed to them, and you get the link to send yourself as well.
         </span>
       </div>
     </AdminForm>

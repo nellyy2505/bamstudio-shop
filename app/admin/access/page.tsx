@@ -142,7 +142,7 @@ export default async function AccessPage() {
 
       <Panel
         title="Invite someone"
-        note="A link you send them yourself. It works once, for that email, for seven days."
+        note="They get an email with the link, and you get the link too. It works once, for that email, for seven days."
       >
         <InviteForm />
       </Panel>

@@ -9,6 +9,7 @@ import { getOrderScoops, MEASURE_COLOUR_SLOTS, unitCostsAtSale } from "./data";
 import { activationBlockers, packCost } from "@/lib/scoop";
 import { SCOOP_THEMES, type ScoopTheme } from "@/lib/types";
 import { siteUrl } from "@/lib/stripe";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
 import {
   hashToken,
   isInvitableRole,
@@ -2029,6 +2030,61 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
  * table holds hashes. The plaintext is returned to the caller exactly once, to
  * be copied into a message; if she loses it, she revokes and re-invites.
  */
+/**
+ * Email the invitation, and say honestly what happened.
+ *
+ * The link is returned to the screen either way. Email is a convenience here,
+ * not the mechanism: `sendEmail()` never throws and never retries, so a send
+ * that fails silently would leave an owner believing a link is on its way to
+ * somebody who will never receive one. Nothing about the invitation depends on
+ * delivery - the token is already in the database - so the honest thing is to
+ * try, report, and still hand over the link to send by hand.
+ *
+ * Returns the status word the screen renders, never the reason: a provider
+ * error string is not something to put in front of a person who just wanted to
+ * add a packer.
+ */
+async function emailInvitation(
+  to: string,
+  role: string,
+  link: string,
+): Promise<"emailed" | "not_emailed" | "email_off"> {
+  if (!isEmailConfigured()) return "email_off";
+
+  const what =
+    role === "studio"
+      ? "everything in the studio except access and settings"
+      : "the orders screen, so you can help get parcels out";
+
+  const result = await sendEmail({
+    to,
+    subject: "You have been invited to the Bam Studio studio",
+    text: [
+      "Someone at Bam Studio has invited you behind the shopfront.",
+      "",
+      `You will be able to see ${what}.`,
+      "",
+      "Open this link to accept. It works once, for this email address, and it",
+      "expires in seven days:",
+      "",
+      link,
+      "",
+      "You will need to be signed in to bamstudioshop.com with this same email",
+      "address. If you do not have an account yet, make one first, then open the",
+      "link again.",
+      "",
+      "If you were not expecting this, ignore it. Nothing happens until the link",
+      "is opened.",
+    ].join("\n"),
+  });
+
+  if (!result.ok) {
+    console.error("[invite] send failed", result.reason, result.status);
+    return "not_emailed";
+  }
+  return "emailed";
+}
+
 export async function inviteStaff(_prev: FormState, form: FormData): Promise<FormState> {
   return guard("access", async () => {
     const staff = await requireStaff("access");
@@ -2064,7 +2120,9 @@ export async function inviteStaff(_prev: FormState, form: FormData): Promise<For
     revalidatePath("/admin/access");
 
     // The one and only time the plaintext exists outside the invitee's hands.
-    return ok(`INVITE_LINK:${siteUrl()}/admin/join?token=${token}`);
+    const link = `${siteUrl()}/admin/join?token=${token}`;
+    const sent = await emailInvitation(email, role, link);
+    return ok(`INVITE_LINK:${sent}|${link}`);
   });
 }
 
@@ -2154,7 +2212,9 @@ export async function reissueInvitation(_prev: FormState, form: FormData): Promi
     if (insertError) return fail(friendly(insertError.message));
 
     revalidatePath("/admin/access");
-    return ok(`INVITE_LINK:${siteUrl()}/admin/join?token=${token}`);
+    const link = `${siteUrl()}/admin/join?token=${token}`;
+    const sent = await emailInvitation(existing.email, existing.role, link);
+    return ok(`INVITE_LINK:${sent}|${link}`);
   });
 }
 
