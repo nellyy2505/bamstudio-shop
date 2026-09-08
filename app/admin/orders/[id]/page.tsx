@@ -24,25 +24,25 @@ import {
  * Those are deliberately two panels with two buttons. "Move it along" is the
  * everyday ladder and is cheap to undo; posting a parcel is a one-way event in
  * the physical world, it is the only change a customer is shown as a new fact,
- * and it is the only one carrying a second piece of information — the tracking
+ * and it is the only one carrying a second piece of information - the tracking
  * number. See DispatchPanel.tsx and `markShipped` for the argument.
  *
  * The making cost of a line is only shown to a role that is allowed to see
- * costs. Packing is orders and nothing else — the person helping post parcels
+ * costs. Packing is orders and nothing else - the person helping post parcels
  * has no business seeing the margin on what they are packing, and the column is
  * simply not rendered for them rather than being hidden with CSS.
  */
 
 /*
  * `shipped` is not here. It is not a step somebody types into a dropdown, it is
- * what "Post this parcel" below records — together with the tracking number, in
+ * what "Post this parcel" below records - together with the tracking number, in
  * one write. `setOrderStatus` rejects it as well, because a select element is
  * markup and a server action is a public endpoint.
  */
 const STATUS_STEPS = [
-  { value: "confirmed", label: "Confirmed — paid, not started" },
+  { value: "confirmed", label: "Confirmed, paid, not started" },
   { value: "printing", label: "Printing" },
-  { value: "packed", label: "Packed — ready to post" },
+  { value: "packed", label: "Packed, ready to post" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
 ];
@@ -65,8 +65,8 @@ export default async function OrderDetailPage({
 
   /*
    * The whole catalogue, and only when a scoop on this order still has to be
-   * packed. It is there for the "something else went in" slot — the pool alone
-   * cannot record a charm that broke and was swapped — and an order with no
+   * packed. It is there for the "something else went in" slot - the pool alone
+   * cannot record a charm that broke and was swapped - and an order with no
    * scoops on it, or with every scoop already recorded, does not pay for the
    * read or render a single option of it.
    */
@@ -83,7 +83,7 @@ export default async function OrderDetailPage({
   /*
    * A posted order can only go forwards from here. Dragging it back into the
    * workshop would leave its tracking number on a row the customer is shown as
-   * still being printed, so that path is "Undo this dispatch" instead — which
+   * still being printed, so that path is "Undo this dispatch" instead - which
    * removes the number in the same write. `setOrderStatus` refuses the
    * backwards move regardless of what this dropdown offers.
    */
@@ -93,7 +93,7 @@ export default async function OrderDetailPage({
       : STATUS_STEPS;
 
   /*
-   * "" when the order's own status is not on the list — a posted order, whose
+   * "" when the order's own status is not on the list - a posted order, whose
    * step is recorded in the panel below. An empty default is safer than
    * silently preselecting the first option, which is how a posted parcel would
    * be knocked back to "confirmed" by somebody pressing the button without
@@ -123,7 +123,7 @@ export default async function OrderDetailPage({
             <>
               {/* Not offered on an unpaid checkout or a cancelled order:
                   neither is a parcel anybody should be packing, and the slip
-                  page refuses them as well — a link is not a check. */}
+                  page refuses them as well - a link is not a check. */}
               {order.status !== "pending" && order.status !== "cancelled" ? (
                 <ButtonLink
                   href={`/admin/orders/${order.id}/slip`}
@@ -238,7 +238,7 @@ export default async function OrderDetailPage({
             </Row>
             {/*
               * Tracking used to be stated here as well, and read "Not posted
-              * yet." whenever the column was null — which is a false statement
+              * yet." whenever the column was null - which is a false statement
               * about a parcel that went as an untracked Large Letter, and is
               * the sort of thing two panels on one screen end up disagreeing
               * about. The dispatch panel below is now the only place on this
@@ -310,26 +310,26 @@ export default async function OrderDetailPage({
  * a payment that cleared for an order somebody had already cancelled: the
  * customer was charged, the webhook correctly refused to number it, move its
  * stock or email them, and the refund is a manual job. It was surfaced on
- * /admin and nowhere else — so the order it happened to, which is the screen a
+ * /admin and nowhere else - so the order it happened to, which is the screen a
  * person is on when they decide whether to print and post something, gave no
  * hint that money was owed on it. Two people, or one person on a Tuesday,
  * could work this order without ever passing the overview.
  *
- * WHO SEES IT — the Packing question, decided.
+ * WHO SEES IT - the Packing question, decided.
  *
  * Packing holds `orders` and nothing else, precisely so that the person helping
  * post parcels never sees a cost or a margin. This panel is shown to them, and
  * the reasoning is that a refund owed is not a cost:
  *
  *  1. Every figure here is one Packing can already see on this page. The amount
- *     is what the customer was charged — the same number the "Paid" line prints
+ *     is what the customer was charged - the same number the "Paid" line prints
  *     two panels down. Nothing about what the piece cost to make appears; the
  *     COST EACH column above stays gated on `showCosts`, which is the line that
  *     actually protects the margin.
  *  2. It is a packing instruction before it is a finance one. The single thing
  *     this row means operationally is DO NOT POST THIS ORDER. Hiding it from
  *     the one role whose whole job is posting parcels would be hiding it from
- *     the person most likely to act on it wrongly — and a parcel that goes out
+ *     the person most likely to act on it wrongly - and a parcel that goes out
  *     on a refunded order costs the studio the postage, the filament and the
  *     piece.
  *  3. The shop already made this call: `resolveRefundIncident` in actions.ts is
@@ -344,11 +344,11 @@ export default async function OrderDetailPage({
  *
  * The wording assumes the one `kind` the table's CHECK constraint allows today,
  * `paid_while_cancelled`. Adding a second kind means reading that column and
- * branching here — a sentence saying "nothing was printed, posted or emailed"
+ * branching here - a sentence saying "nothing was printed, posted or emailed"
  * is only true of this one.
  */
 function RefundOwed({ incidents }: { incidents: PaymentIncident[] }) {
-  // Nothing to say on an ordinary order, and nothing drawn — no reassuring
+  // Nothing to say on an ordinary order, and nothing drawn - no reassuring
   // "no refunds owed" panel, which is a claim about a table this page would
   // then have to keep true.
   if (incidents.length === 0) return null;
@@ -362,14 +362,14 @@ function RefundOwed({ incidents }: { incidents: PaymentIncident[] }) {
             been refunded.
           </b>{" "}
           {/* `noticed_at` is when the webhook recorded it, not when the card
-              cleared, and the two can differ by a retry — so it is worded as
+              cleared, and the two can differ by a retry - so it is worded as
               "noticed". `order_status` is the status the order was in at the
               moment the payment landed, which is the fact that makes this an
               incident; it is stated only when the column holds one. */}
           {incident.orderStatus
             ? `The payment landed when this order was already ${incident.orderStatus}`
-            : "The payment landed on an order the shop could not honour"}
-          , noticed {formatDate(incident.noticedAt)}, so it was never numbered,
+            : "The payment landed on an order the shop could not honour"},
+          noticed {formatDate(incident.noticedAt)}, so it was never numbered,
           no stock moved and no confirmation went out.{" "}
           <b>Do not print or post it.</b> The refund is issued by hand in Stripe
           and marked off on the studio overview.
@@ -424,13 +424,13 @@ function LineNotes({ line }: { line: OrderLine }) {
  * `describePersonalisation` used to live here, a private copy of what is now
  * `describePersonalisationText` in data.ts. It moved because the packing slip
  * and the pick list have to render a customer's letters IDENTICALLY to this
- * screen — this shop sells custom name charms, and two renderings of the same
+ * screen - this shop sells custom name charms, and two renderings of the same
  * jsonb value is exactly how a wrong charm gets made.
  */
 
 /**
  * The address, read defensively. A sale typed in at a market has no address at
- * all — it carries a note instead — and saying so is better than printing five
+ * all - it carries a note instead - and saying so is better than printing five
  * blank lines.
  */
 function AddressBlock({ order }: { order: OrderDetail }) {

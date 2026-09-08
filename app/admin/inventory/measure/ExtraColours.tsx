@@ -17,12 +17,12 @@ import { cx, inputClass } from "@/components/ui";
  *     nodes       4,744
  *
  * Chrome's renderer timed out trying to screenshot it (`Page.captureScreenshot`
- * gave up after 30 s), and it grew with the catalogue — the same page at 200
+ * gave up after 30 s), and it grew with the catalogue - the same page at 200
  * products is about 5 MB. The screen whose whole purpose is to make measuring
  * forty-four pieces fast was the heaviest document in the shop.
  *
  * Nearly all of that was colour <option>s. Every row server-rendered four full
- * palettes — 4 × 19 options — and three of those four sat inside a <details>
+ * palettes - 4 × 19 options - and three of those four sat inside a <details>
  * that almost nobody opens, because almost every piece is one colour. 3,344
  * option elements were shipped so that a handful of multi-colour pieces could
  * be edited without a click.
@@ -37,7 +37,7 @@ import { cx, inputClass } from "@/components/ui";
  * WHAT IS PROTECTED HERE, and must survive any later edit:
  *
  *  1. `saveMeasurement` refuses a payload that does not carry exactly
- *     MEASURE_COLOUR_SLOTS `filament_colour` and `filament_grams` values — a
+ *     MEASURE_COLOUR_SLOTS `filament_colour` and `filament_grams` values - a
  *     POST missing them would otherwise read as "this piece uses no colours"
  *     and wipe a recipe. A closed <details> satisfied that because its controls
  *     are still part of the form. Hidden inputs satisfy it the same way, and
@@ -49,7 +49,7 @@ import { cx, inputClass } from "@/components/ui";
  *     its slots open; the click handler below only stops the navigation once
  *     React has hydrated. A piece that already uses more than one colour is
  *     rendered open by the server with no toggle at all, so the common no-JS
- *     job — correcting a multi-colour piece — needs no round trip either.
+ *     job - correcting a multi-colour piece - needs no round trip either.
  *
  *  3. Nothing here reads app/admin/data.ts. It is a client component; the
  *     palette arrives as a prop from the page.
@@ -95,7 +95,7 @@ export function ExtraColours({
   slots: ExtraSlot[];
   /** Product name, for the field labels. */
   product: string;
-  /** Colours this piece uses that are switched off — see `usable` on the page. */
+  /** Colours this piece uses that are switched off - see `usable` on the page. */
   keep: string[];
   /** The piece already uses more than one colour: always open, no toggle. */
   pinned: boolean;
@@ -159,7 +159,7 @@ export function ExtraColours({
         onClick={(event) => {
           // Only once React is running. Before that this is an ordinary link,
           // the server renders that one row open, and the whole screen still
-          // works — which is the point of it being a link and not a button.
+          // works - which is the point of it being a link and not a button.
           // Following it costs a round trip and anything typed into another row
           // that has not been saved yet, so with React up it never navigates.
           event.preventDefault();

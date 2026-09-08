@@ -38,7 +38,7 @@
  *
  * These are GST-inclusive retail prices. The shop is not GST-registered
  * (`SHOP.gstRegistered`), so the total passes through as a total. Nothing here
- * or downstream may display or compute a GST component from it — that would
+ * or downstream may display or compute a GST component from it - that would
  * claim a tax the shop does not collect.
  */
 
@@ -80,7 +80,7 @@ export const PARCEL_EXPRESS_BANDS: RateBand[] = [
 ];
 
 /**
- * Large Letter, regular. Three bands and that is the lot — over 500 g it is
+ * Large Letter, regular. Three bands and that is the lot - over 500 g it is
  * not a letter at any price.
  */
 export const LETTER_LARGE_BANDS: RateBand[] = [
@@ -99,7 +99,7 @@ export const FALLBACK_BANDS: Record<string, RateBand[]> = {
 };
 
 /**
- * The band a weight genuinely falls in — the honest rate, exported so a test
+ * The band a weight genuinely falls in - the honest rate, exported so a test
  * or an audit can show exactly how much the pessimism above is costing.
  * `quote.ts` does not call this.
  */

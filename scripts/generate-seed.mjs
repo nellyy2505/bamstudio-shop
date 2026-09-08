@@ -5,7 +5,7 @@
  *
  * The workbook is the source of truth for SKUs, names, categories and themes.
  * Art keys, tints and copy are mapped here because the sheet has no artwork
- * column — extend ART_BY_SKU when you add products.
+ * column - extend ART_BY_SKU when you add products.
  *
  * Prices: the sheet's "My price" column is authoritative once filled. Until
  * then we fall back to PRICE_BY_CATEGORY so the shop has something to show.
@@ -97,7 +97,7 @@ const PRICE_BY_CATEGORY = {
  *
  * ⚠️ **Transcribed by hand from `lib/shipping/dimensions.ts`, which is the
  * source of truth.** That module is TypeScript and this is a `.mjs` script, so
- * it cannot be imported — the same constraint that makes BUILDER_PRICING a
+ * it cannot be imported - the same constraint that makes BUILDER_PRICING a
  * text-parse below. Nothing enforces that these two agree: **if you change
  * CATEGORY_DEFAULTS or DEFAULT_DIMENSIONS over there, change them here too and
  * re-run this script**, or the seeded catalogue will quote postage against
@@ -106,7 +106,7 @@ const PRICE_BY_CATEGORY = {
  * Keys are `Category` values exactly as the workbook spells them, which is
  * also how `CATEGORY_DEFAULTS` is keyed.
  *
- * `letter_eligible` has no counterpart in dimensions.ts — it is a per-row
+ * `letter_eligible` has no counterpart in dimensions.ts - it is a per-row
  * judgement, not a measurement, so it is decided here and refined by the owner
  * per row in Supabase afterwards without a deploy. It is `false` for every
  * category below and for anything unrecognised, deliberately: false quotes the
@@ -124,7 +124,7 @@ const SHIPPING_BY_CATEGORY = {
     thickness_mm: 22,
     letter_eligible: false,
   },
-  // Phone stands, popsockets, strap charms — small but three-dimensional.
+  // Phone stands, popsockets, strap charms - small but three-dimensional.
   "Phone & bag": {
     weight_grams: 30,
     length_mm: 90,
@@ -143,7 +143,7 @@ const SHIPPING_BY_CATEGORY = {
 };
 
 /**
- * Applied to a category missing from the table above — mirrors
+ * Applied to a category missing from the table above - mirrors
  * `DEFAULT_DIMENSIONS` in `lib/shipping/dimensions.ts`. Heaviest and bulkiest
  * on purpose: an unrecognised category is an unmeasured product, and an
  * unmeasured product should quote as a parcel.
@@ -166,9 +166,9 @@ const NEW_ITEMS = new Set(["CLK-018", "CLK-019", "CLK-046", "PHB-001"]);
 /**
  * How each personalised product collects what to print.
  *
- *  "builder" — the keycap letter builder, priced by BUILDER_PRICING, so its
+ *  "builder" - the keycap letter builder, priced by BUILDER_PRICING, so its
  *              catalogue price is only a "from" figure.
- *  "text"    — one free-text line on the product page, priced at the
+ *  "text"    - one free-text line on the product page, priced at the
  *              product's own price. The label is the field's prompt.
  *
  * A product NOT listed here is not personalised. Checkout refuses a builder
@@ -208,7 +208,7 @@ function readBuilderFromPrice() {
   );
   if (prices.length === 0) {
     throw new Error(
-      "Could not read BUILDER_PRICING from lib/config.ts — builder products " +
+      "Could not read BUILDER_PRICING from lib/config.ts, builder products " +
         "would be listed at a price the builder cannot charge.",
     );
   }
@@ -219,7 +219,7 @@ function readBuilderFromPrice() {
 const SKIP_CATEGORIES = new Set(["Display & packaging", "Market offer"]);
 
 /**
- * Licensed characters never go in the shop — listing them is what gets shops
+ * Licensed characters never go in the shop - listing them is what gets shops
  * pulled from marketplaces. Keep this list in sync with the workbook.
  */
 const LICENSED_SKUS = new Set(["CLK-038"]); // Hello Kitty
@@ -317,7 +317,7 @@ function slugify(text) {
 function priceFor(row) {
   const sku = String(row.SKU ?? "").trim();
   // Builder charms are priced by letter count at checkout, so the catalogue
-  // price is the cheapest bundle — never the sheet's flat figure, which the
+  // price is the cheapest bundle - never the sheet's flat figure, which the
   // builder can never charge.
   if (PERSONALISATION[sku]?.mode === "builder") return BUILDER_FROM_PRICE;
 
@@ -342,7 +342,7 @@ function describe(row) {
   const theme = row.Theme ?? "";
   const isClicker = String(row.Category ?? "").includes("Clicker");
   const base = isClicker
-    ? `A palm-sized ${String(row.Product).toLowerCase()} with a spring-loaded clicker inside — the fidget you keep reaching for.`
+    ? `A palm-sized ${String(row.Product).toLowerCase()} with a spring-loaded clicker inside, the fidget you keep reaching for.`
     : `A ${String(row.Product).toLowerCase()}, 3D-printed to order in our Sydney studio.`;
   const note = row.Notes ? ` ${row.Notes}` : "";
   return `${base} Printed in layered PLA and finished by hand.${note} Theme: ${theme}.`;
@@ -391,7 +391,7 @@ const values = rows.map((row) => {
     { title: "Item details", body: describe(row) },
     {
       title: "Materials & care",
-      body: "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers — a wipe with a damp cloth is all it needs.",
+      body: "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers. A wipe with a damp cloth is all it needs.",
     },
     {
       title: "Shipping & returns",
@@ -404,7 +404,7 @@ const values = rows.map((row) => {
   return `  (${[
     q(slug),
     q(sku),
-    q(`${row.Product} — ${row.Category}`),
+    q(String(row.Product)),
     q(row.Product),
     q(row.Category),
     q(row.Theme ?? "Other"),
@@ -412,7 +412,7 @@ const values = rows.map((row) => {
     price,
     q(art),
     q(tint),
-    json([{ art, tint, alt: `${row.Product} — front view` }]),
+    json([{ art, tint, alt: `${row.Product}, front view` }]),
     json(colours),
     json(attachments),
     json(details),
@@ -421,7 +421,7 @@ const values = rows.map((row) => {
     // customers write them, and these columns are recomputed from those.
     0,
     0,
-    // stock_on_hand: nothing is printed ahead — everything is made to order.
+    // stock_on_hand: nothing is printed ahead - everything is made to order.
     // Set from real counts once we start printing stock in advance.
     0,
     BESTSELLERS.has(sku),
@@ -432,7 +432,7 @@ const values = rows.map((row) => {
     // Written explicitly rather than left to the column defaults in
     // 0002_shipping.sql. Those defaults are a single charm-sized guess
     // (12 g, 60×60×8 mm, letter_eligible true) that exists so the migration
-    // needs no backfill — they are not the per-category values, and
+    // needs no backfill - they are not the per-category values, and
     // letter_eligible would arrive `true`, which is the undercharging
     // direction. Emitting them keeps a seeded database quoting the same
     // postage as lib/fallback-data.ts.
@@ -445,15 +445,15 @@ const values = rows.map((row) => {
 });
 
 const COLLECTIONS = [
-  ["retro-key", "Retro Key", "#E9DCC4", "#5B4636", "#B08968", "coffee", "Tiramisu Cake", "cream", false],
-  ["strawberry-milk", "Strawberry Milk", "#F6CFD8", "#FFFFFF", "#E75480", "icecream", "Ice Cream Cone", "blush", false],
-  ["matcha-latte", "Matcha Latte", "#A9BC7F", "#FFFFFF", "#B08968", "matcha", "Matcha Set", "sage", true],
-  ["blueberry", "Blueberry", "#BCD3E8", "#FFFFFF", "#9AA0A6", "macaron", "Macaron", "sky", false],
-  ["mono", "Mono", "#FFFFFF", "#252220", "#2B2B2B", "smore", "S'mores", "cream", false],
-  ["butter-toast", "Butter Toast", "#F2D98B", "#5B4636", "#E4D5BC", "butter", "Butter", "butter", false],
+  ["retro-key", "Retro Key", "#E9DCC4", "#5B4636", "#B08968", "coffee", "Tiramisu Cake", "tiramisu-cake", "cream", false],
+  ["strawberry-milk", "Strawberry Milk", "#F6CFD8", "#FFFFFF", "#E75480", "icecream", "Ice Cream Cone", "ice-cream-cone", "blush", false],
+  ["matcha-latte", "Matcha Latte", "#A9BC7F", "#FFFFFF", "#B08968", "matcha", "Matcha Set", "matcha-set", "sage", true],
+  ["blueberry", "Blueberry", "#BCD3E8", "#FFFFFF", "#9AA0A6", "macaron", "Macaron", "macaron", "sky", false],
+  ["mono", "Mono", "#FFFFFF", "#252220", "#2B2B2B", "smore", "S'mores", "s-mores", "cream", false],
+  ["butter-toast", "Butter Toast", "#F2D98B", "#5B4636", "#E4D5BC", "butter", "Butter", "butter", "butter", false],
 ];
 
-const sql = `-- Generated by scripts/generate-seed.mjs — do not edit by hand.
+const sql = `-- Generated by scripts/generate-seed.mjs, do not edit by hand.
 -- Source: 3D_Planner.xlsx (Products sheet)
 -- Regenerate with: node scripts/generate-seed.mjs
 
@@ -474,11 +474,11 @@ ${values.join(",\n")};
 
 insert into public.collections (
   slug, name, cap_colour, letter_colour, holder_colour,
-  charm_art, charm_name, tint, is_popular, sort_order
+  charm_art, charm_name, charm_slug, tint, is_popular, sort_order
 ) values
 ${COLLECTIONS.map(
   (c, i) =>
-    `  (${q(c[0])}, ${q(c[1])}, ${q(c[2])}, ${q(c[3])}, ${q(c[4])}, ${q(c[5])}, ${q(c[6])}, ${q(c[7])}, ${c[8]}, ${i})`,
+    `  (${q(c[0])}, ${q(c[1])}, ${q(c[2])}, ${q(c[3])}, ${q(c[4])}, ${q(c[5])}, ${q(c[6])}, ${q(c[7])}, ${q(c[8])}, ${c[9]}, ${i})`,
 ).join(",\n")};
 
 -- No seeded reviews: the shop has never sold online, so inventing any would be
@@ -504,7 +504,7 @@ const fallbackProducts = rows.map((row, index) => {
     id: `fallback-${index}`,
     slug,
     sku,
-    name: `${row.Product} — ${row.Category}`,
+    name: String(row.Product),
     short_name: String(row.Product),
     category: String(row.Category),
     theme: String(row.Theme ?? "Other"),
@@ -512,7 +512,7 @@ const fallbackProducts = rows.map((row, index) => {
     price: priceFor(row),
     art,
     tint,
-    gallery: [{ art, tint, alt: `${row.Product} — front view` }],
+    gallery: [{ art, tint, alt: `${row.Product}, front view` }],
     colours: coloursFor(row),
     attachments: ATTACHMENT_SETS[row.Attachment] ?? ATTACHMENT_SETS.None,
     details: [
@@ -522,7 +522,7 @@ const fallbackProducts = rows.map((row, index) => {
         body: "PLA bioplastic with a steel clicker mechanism. Keep it out of hot cars and dishwashers.",
       },
     ],
-    // No review history exists yet — real reviews arrive through the reviews
+    // No review history exists yet - real reviews arrive through the reviews
     // table once customers write them.
     rating: 0,
     review_count: 0,
@@ -533,7 +533,7 @@ const fallbackProducts = rows.map((row, index) => {
     is_personalised: isPersonalised,
     personalisation_mode: PERSONALISATION[sku]?.mode ?? null,
     personalisation_label: PERSONALISATION[sku]?.label ?? null,
-    // Per-category packed size and weight — see SHIPPING_BY_CATEGORY, and keep
+    // Per-category packed size and weight - see SHIPPING_BY_CATEGORY, and keep
     // it in step with lib/shipping/dimensions.ts.
     ...shippingFor(row),
     active: true,
@@ -556,11 +556,12 @@ const fallbackCollections = COLLECTIONS.map((c, i) => ({
   holder_colour: c[4],
   charm_art: c[5],
   charm_name: c[6],
-  tint: c[7],
-  is_popular: c[8],
+  charm_slug: c[7],
+  tint: c[8],
+  is_popular: c[9],
 }));
 
-const ts = `// Generated by scripts/generate-seed.mjs — do not edit by hand.
+const ts = `// Generated by scripts/generate-seed.mjs, do not edit by hand.
 // Sample catalogue used when Supabase env vars are absent, so the app runs
 // on a fresh clone. Regenerate with: node scripts/generate-seed.mjs
 import type { Collection, Product } from "./types";
@@ -574,5 +575,5 @@ mkdirSync("lib", { recursive: true });
 writeFileSync("lib/fallback-data.ts", ts);
 
 console.log(
-  `Wrote supabase/seed.sql and lib/fallback-data.ts — ${values.length} products, ${COLLECTIONS.length} collections, 0 reviews.`,
+  `Wrote supabase/seed.sql and lib/fallback-data.ts, ${values.length} products, ${COLLECTIONS.length} collections, 0 reviews.`,
 );

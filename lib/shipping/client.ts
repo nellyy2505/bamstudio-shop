@@ -14,19 +14,19 @@
  *
  * - **A one-element list is an object.** `services.service`, `costs.cost` and
  *   `options.option` come back as a bare object when there is one entry and as
- *   an array when there are several — sometimes both in the same document. A
+ *   an array when there are several - sometimes both in the same document. A
  *   real response observed here had `options.option` as a 2-element array whose
  *   members each carried `suboptions.option` as a single object. Anything that
  *   indexes `[0]` without normalising is a crash waiting for a quiet basket.
  * - **Money is a string.** `"10.20"`, never `10.2`. Parsed digit-by-digit into
- *   integer cents below — never through a float multiply.
+ *   integer cents below - never through a float multiply.
  * - **An error is not signalled by the status.** The documented behaviour is a
  *   200 carrying `{"error":{"errorMessage":"..."}}`. What this environment
  *   actually returns for the same bad requests is a **404** carrying the same
  *   body. Both happen, so neither is trusted: the body is parsed first and
  *   `error.errorMessage` is the authority, whatever the status line says.
  * - **The letter endpoint's parameter is `thickness`, not `height`**, and it
- *   takes no postcodes — domestic letters are flat-rate nationally.
+ *   takes no postcodes - domestic letters are flat-rate nationally.
  *
  * ## Units, which differ per endpoint
  *
@@ -51,11 +51,11 @@ const REQUEST_TIMEOUT_MS = 2_500;
 const MAX_DETAIL_LENGTH = 300;
 
 export type PacFailureReason =
-  /** AUSPOST_API_KEY missing — nothing was attempted. */
+  /** AUSPOST_API_KEY missing - nothing was attempted. */
   | "not_configured"
   /** No answer inside REQUEST_TIMEOUT_MS. */
   | "timeout"
-  /** DNS/TLS/socket failure — the request never got an HTTP response. */
+  /** DNS/TLS/socket failure - the request never got an HTTP response. */
   | "network_error"
   /** The API said no, in its own words. `detail` is its `errorMessage`. */
   | "api_error"
@@ -117,7 +117,7 @@ export type LetterRequest = {
  * **Server-only, and it throws in the browser rather than lying.**
  * `AUSPOST_API_KEY` is not `NEXT_PUBLIC_`, so Next replaces the read with
  * `undefined` in a client bundle and this would silently answer `false` there
- * while the server said `true` — the exact skew `lib/email.ts` documents at
+ * while the server said `true` - the exact skew `lib/email.ts` documents at
  * length. Postage must be quoted on the server anyway; a client component that
  * needs to know gets the answer as a prop.
  *
@@ -146,7 +146,7 @@ function notConfigured<T>(): PacResult<T> {
   if (!warnedUnconfigured) {
     warnedUnconfigured = true;
     console.info(
-      "[shipping] AUSPOST_API_KEY is unset — postage is being quoted from the " +
+      "[shipping] AUSPOST_API_KEY is unset, postage is being quoted from the " +
         "fallback rate table, which is deliberately pessimistic. Set the key " +
         "(free, self-serve) to quote live rates.",
     );
@@ -178,7 +178,7 @@ export function toArray<T>(value: T | T[] | null | undefined): T[] {
 /**
  * `"10.20"` → `1020`. Integer arithmetic only.
  *
- * The float route — `Math.round(parseFloat(s) * 100)` — is the defect this
+ * The float route - `Math.round(parseFloat(s) * 100)` - is the defect this
  * guards. `parseFloat("10.20") * 100` is `1020.0000000000001` on this runtime,
  * and while `Math.round` happens to rescue that one, the same expression is
  * what produces the classic `1019.9999999999999` for other values, and a
@@ -188,7 +188,7 @@ export function toArray<T>(value: T | T[] | null | undefined): T[] {
  * created at any point.
  *
  * Accepts one or two decimal places (PAC sends two) and a stray `$`. Returns
- * `null` for anything else rather than guessing — a price we cannot read is
+ * `null` for anything else rather than guessing - a price we cannot read is
  * not a price of zero.
  */
 export function parseMoneyToCents(raw: unknown): number | null {
@@ -246,7 +246,7 @@ async function attempt(url: string, apiKey: string): Promise<RawResponse> {
     const response = await fetch(url, {
       method: "GET",
       headers: { "AUTH-KEY": apiKey, Accept: "application/json" },
-      // A fresh signal per attempt — an expired one would abort the retry
+      // A fresh signal per attempt - an expired one would abort the retry
       // before it left the process.
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       // Rates change on the carrier's schedule, not ours, and this module has
@@ -330,7 +330,7 @@ function toFailure<T>(result: RawResponse): PacResult<T> | null {
         detail: result.detail,
       };
     case "body": {
-      // The body decides, not the status — see the file comment.
+      // The body decides, not the status - see the file comment.
       const apiError = readApiError(result.body);
       if (apiError) {
         return {
@@ -491,7 +491,7 @@ export async function calculateParcel(
  * Which letter services can carry this envelope.
  *
  * No postcodes: domestic letters are flat-rate nationally. The third dimension
- * is `thickness`, in millimetres — **not** `height`, whatever the API Explorer
+ * is `thickness`, in millimetres - **not** `height`, whatever the API Explorer
  * says. Sending `height` gets "Please enter Thickness."
  */
 export async function listLetterServices(
@@ -524,7 +524,7 @@ export async function listLetterServices(
 /**
  * Price one named letter service.
  *
- * Takes only a service code and a weight — the letter calculator ignores
+ * Takes only a service code and a weight - the letter calculator ignores
  * dimensions entirely, which is why `quote.ts` prices letters through here
  * rather than reading a price off the service list. Naming the code removes
  * any chance of the API deciding our package is a *Small* Letter and quoting

@@ -36,7 +36,7 @@ import {
 export type ShippableProduct = {
   category: string;
   /**
-   * Whether this product may travel as a Large Letter *at all* — flat enough,
+   * Whether this product may travel as a Large Letter *at all* - flat enough,
    * robust enough, and not something a sorting machine would crush.
    *
    * **Absent means false.** An unmeasured product is quoted as a parcel. That
@@ -58,7 +58,7 @@ export type ShippableProduct = {
  * One line of the basket as the server sees it: a loaded product row, how many
  * of it, and the personalisation that changes its physical form.
  *
- * `custom` mirrors `CartLine["custom"]` in `lib/types.ts` — a builder charm's
+ * `custom` mirrors `CartLine["custom"]` in `lib/types.ts` - a builder charm's
  * weight and length both depend on how many letters were chosen.
  */
 export type ShippingLine = {
@@ -96,7 +96,7 @@ export function isBuilderLine(line: ShippingLine): boolean {
  * Weight of **one** unit of a line, attachment included.
  *
  * A builder charm is computed from its parts because there is no such thing as
- * a stock weight for it — a one-letter charm and a five-letter charm are
+ * a stock weight for it - a one-letter charm and a five-letter charm are
  * different objects. Everything else uses its measured or assumed weight.
  *
  * The attachment is added in both branches. It is a separate physical part
@@ -170,8 +170,8 @@ export function contentsWeightGrams(lines: ShippingLine[]): number {
  *
  * The mailer defaults to `"parcel"` because that is the heavier of the two and
  * therefore the safe answer for any caller that has not yet decided. In
- * practice `select.ts` calls this twice — once as a letter to test eligibility,
- * once as a parcel once it knows — which is why the mailer is a parameter
+ * practice `select.ts` calls this twice - once as a letter to test eligibility,
+ * once as a parcel once it knows - which is why the mailer is a parameter
  * rather than something this function works out for itself. It cannot: whether
  * a basket fits a letter depends on the weight, and the weight depends on the
  * mailer.

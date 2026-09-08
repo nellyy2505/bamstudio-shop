@@ -17,14 +17,14 @@ const STORAGE_KEY = "bamstudio.cart.v1";
 /**
  * What a basket did with an item it was asked to take.
  *
- * The caps themselves are BASKET_LIMITS in lib/config.ts — a business rule the
+ * The caps themselves are BASKET_LIMITS in lib/config.ts - a business rule the
  * two API routes enforce as well. This type is only the shape of the answer
  * `add()` gives back, so it lives with `add()`.
  */
 export type AddToCartResult =
   /** Taken in full. */
   | "added"
-  /** Taken, but capped at `maxLineQuantity` — fewer than asked for. */
+  /** Taken, but capped at `maxLineQuantity` - fewer than asked for. */
   | "clamped"
   /** Refused: the basket already holds `maxLines` different items. */
   | "full";
@@ -37,14 +37,14 @@ export type AddToCartResult =
  *
  * THE PROBLEM. A Lucky Scoop is sold before its contents are decided, so it has
  * no product row: no `product_id`, no colour, no attachment, no per-product
- * price. `order_items` enforces that as a CHECK — `scoop_tier_id` and
- * `product_id` are mutually exclusive (0007_lucky_scoop.sql) — and the reason
+ * price. `order_items` enforces that as a CHECK - `scoop_tier_id` and
+ * `product_id` are mutually exclusive (0007_lucky_scoop.sql) - and the reason
  * is not tidiness. A product id on a scoop line is what would take a charm off
  * the shelf for a scoop nobody has drawn yet.
  *
  * THE SHAPE, AND WHY THIS ONE. A UNION, not one widened type with an optional
  * `scoop_tier_id` hanging off it. A widened type would still carry
- * `product_id: string`, so a scoop line would have to put *something* there —
+ * `product_id: string`, so a scoop line would have to put *something* there -
  * and every "something" available is either a real id the checkout would price
  * and decrement, or an empty string that reads as a product to every
  * `if (line.product_id)` in the codebase. Making the two mutually exclusive in
@@ -57,7 +57,7 @@ export type AddToCartResult =
  */
 
 /**
- * An ordinary product line — exactly `CartLine` as `lib/types.ts` describes it.
+ * An ordinary product line - exactly `CartLine` as `lib/types.ts` describes it.
  * The `never` is what makes the union discriminable from both sides.
  */
 export type ProductBasketLine = CartLine & { scoop_tier_id?: never };
@@ -66,7 +66,7 @@ export type ProductBasketLine = CartLine & { scoop_tier_id?: never };
  * A Lucky Scoop line: a tier and a quantity, and deliberately nothing that
  * looks like a product.
  *
- * `slug` is the TIER's slug (`/scoop/<slug>`), not a product's — the cart links
+ * `slug` is the TIER's slug (`/scoop/<slug>`), not a product's - the cart links
  * a scoop line to its tier page, so the two live in the same field and the row
  * component branches on the kind rather than on the presence of a field.
  *
@@ -98,7 +98,7 @@ export type BasketLine = ProductBasketLine | ScoopBasketLine;
  * A line as a caller supplies it: everything but the key, which `add` derives.
  *
  * Spelled out one member at a time rather than as `Omit<BasketLine, "key">`,
- * because `Omit` over a union collapses it to the keys the members SHARE —
+ * because `Omit` over a union collapses it to the keys the members SHARE -
  * which here throws away `product_id`, `scoop_tier_id`, `colour`, `custom` and
  * everything else that tells the two apart. The result is a type nothing can be
  * assigned to and nothing can be read off. Keeping the union at the top level
@@ -117,8 +117,8 @@ export type NewBasketLine = NewProductBasketLine | NewScoopBasketLine;
  * The one way to ask which kind of line this is.
  *
  * Both directions are exported. `!isScoopLine(line)` does not narrow inside a
- * `.filter()` callback — TypeScript only propagates a guard when the predicate
- * IS the guard — so a caller splitting a basket in two would be left with
+ * `.filter()` callback - TypeScript only propagates a guard when the predicate
+ * IS the guard - so a caller splitting a basket in two would be left with
  * `BasketLine[]` on the product side and would reach for a cast. Two guards,
  * no casts.
  */
@@ -163,13 +163,13 @@ function hasCommonFields(line: Partial<CartLine>): boolean {
  *
  * The scoop branch is the mirror: a tier id and a piece count, and no
  * `product_id`. A stored line carrying BOTH is not a line either half of this
- * shop can price — the database would refuse it — so it is dropped rather than
+ * shop can price - the database would refuse it - so it is dropped rather than
  * repaired into one or the other, which would be a guess at what somebody meant.
  */
 function isBasketLine(value: unknown): value is BasketLine {
   if (!value || typeof value !== "object") return false;
   // Read as an untyped record, deliberately. This is JSON out of the browser's
-  // own storage and it may be anything at all — including a line carrying both
+  // own storage and it may be anything at all - including a line carrying both
   // `product_id` and `scoop_tier_id`, which is a shape NEITHER member of the
   // union describes and which the whole point of this function is to reject.
   // Casting to the union first would have TypeScript collapse the two `never`
@@ -207,7 +207,7 @@ function clampQuantity(quantity: number): number {
 }
 
 /**
- * Stored carts are untrusted input — drop anything malformed, and bring what
+ * Stored carts are untrusted input - drop anything malformed, and bring what
  * survives inside the caps checkout will accept.
  *
  * The clamp here is not belt-and-braces. A basket saved before the caps were
@@ -239,7 +239,7 @@ type CartContextValue = {
   /**
    * Takes what it can and says what it took. The caps are the server's, so a
    * caller that ignores the answer still cannot build a basket checkout will
-   * refuse — but a caller that shows it can tell the customer why they got
+   * refuse - but a caller that shows it can tell the customer why they got
    * fewer than they asked for.
    */
   add: (line: NewBasketLine) => AddToCartResult;
@@ -254,11 +254,11 @@ const CartContext = createContext<CartContextValue | null>(null);
 /**
  * Two basket lines merge only when they are genuinely the same thing to print.
  * The personalisation has to be part of that: without it, a bowl for "Mochi"
- * and one for "Luna" collapse into quantity 2 of "Mochi" — two bowls charged
+ * and one for "Luna" collapse into quantity 2 of "Mochi" - two bowls charged
  * and both printed with the wrong name.
  */
 function lineKey(line: NewBasketLine): string {
-  // A scoop has no colour, no finding and no personalisation — two scoops of
+  // A scoop has no colour, no finding and no personalisation - two scoops of
   // the same tier ARE the same thing to buy, however differently they turn out,
   // because what was bought is the tier. They merge into one line of quantity 2,
   // which is also what `scoop_packs.pack_index` expects: two draws, two videos,
@@ -267,7 +267,7 @@ function lineKey(line: NewBasketLine): string {
   // Prefixed so a tier id can never collide with a product id in this
   // namespace: they come from different tables and nothing makes a uuid from
   // one distinguishable from a uuid from the other. The product branch below is
-  // deliberately UNCHANGED — a basket sitting in a browser holds keys built by
+  // deliberately UNCHANGED - a basket sitting in a browser holds keys built by
   // the old expression, and re-spelling them would stop a re-added product from
   // merging with the line already there and quietly duplicate it.
   if (isNewScoopLine(line)) return `scoop|${line.scoop_tier_id}`;

@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 /**
  * Paths nobody signed-out may reach. Prefixes, matched with a boundary so
- * `/accountant` — a page that does not exist today but might — is not
+ * `/accountant` - a page that does not exist today but might - is not
  * accidentally covered, and so `/admin-something` is not silently guarded
  * while looking like it is.
  */
@@ -22,7 +22,7 @@ function needsSignIn(pathname: string): boolean {
  * Note what this file can and cannot do. It only has the anon client, and the
  * `staff` table is unreadable with the anon key by design (see the header of
  * lib/auth/staff.ts). So the gate below establishes "signed in at all" and
- * nothing more — it is a cheap first pass that keeps signed-out visitors off
+ * nothing more - it is a cheap first pass that keeps signed-out visitors off
  * the staff area. Whether a signed-in account is *staff* is decided by
  * `requireStaff()`, on the server, in every page, route handler and server
  * action under /admin. Do not be tempted to add a role check here.
@@ -31,7 +31,7 @@ function needsSignIn(pathname: string): boolean {
  * The header the root layout reads to decide whether to draw the shop's own
  * chrome around a page.
  *
- * A layout cannot see the path it is rendering — that is by design in the App
+ * A layout cannot see the path it is rendering - that is by design in the App
  * Router, so a layout cannot re-render on navigation. The proxy can, and it
  * already runs on every matched request, so it stamps the path on the request
  * on the way through.
@@ -116,19 +116,19 @@ export const config = {
      * Everything except static assets, the Stripe webhook and the health
      * check.
      *
-     * `api/webhooks` must receive an untouched raw body — Stripe's signature
+     * `api/webhooks` must receive an untouched raw body - Stripe's signature
      * is computed over the exact bytes that arrived.
      *
      * `api/health` is excluded because every matched request runs
      * `supabase.auth.getUser()` above, which is a network round trip to
      * Supabase. Fly health-checks that endpoint every few seconds for the life
      * of the machine, so leaving it matched would spend Supabase free-tier
-     * request budget continuously — on a request that carries no cookies and
+     * request budget continuously - on a request that carries no cookies and
      * can never be signed in.
      *
      * This is a single negative lookahead, and every alternative inside it is
-     * a path *prefix* written without a leading slash. Get one wrong — a stray
-     * `/`, a misplaced `|` — and nothing errors: the exclusion silently
+     * a path *prefix* written without a leading slash. Get one wrong - a stray
+     * `/`, a misplaced `|` - and nothing errors: the exclusion silently
      * widens, and the first thing to stop working is the `/account` guard
      * below, quietly. After any edit, re-check `/account`,
      * `/account/orders`, `/api/health` and `/api/webhooks/stripe` against the

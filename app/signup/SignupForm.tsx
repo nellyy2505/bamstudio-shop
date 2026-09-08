@@ -9,8 +9,8 @@ import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 /**
  * Whether the browser holds the keys it needs to reach Supabase Auth.
  *
- * Defect this closes: with no Supabase env vars — the shop's state today, and
- * a supported mode of this app — `createClient()` threw inside the submit
+ * Defect this closes: with no Supabase env vars - the shop's state today, and
+ * a supported mode of this app - `createClient()` threw inside the submit
  * handler. The rejection was unhandled, `setPending(false)` never ran and the
  * button sat on "Creating account…" forever with no error ever reaching the
  * customer. Same class as WORKLOG §0.1: a customer-facing claim ("Check your
@@ -33,17 +33,17 @@ import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
  * secret and the two could disagree. These two variables are not a mirror of
  * anything: the anon key is public by design and the browser genuinely needs
  * both to talk to Supabase at all, so this reads the browser's own capability
- * directly — the one fact, in the one place, checked by the one helper.
+ * directly - the one fact, in the one place, checked by the one helper.
  */
 const CAN_SIGN_UP = isSupabaseConfigured();
 
 /**
  * Shown when the shop has no accounts system behind it. Plain, in the shop's
  * voice, and it never names an env var, prints an exception or blames the
- * details the customer typed — none of that is theirs to fix.
+ * details the customer typed - none of that is theirs to fix.
  */
 const UNAVAILABLE =
-  "Accounts aren't switched on yet — this shop isn't connected to its accounts system, so we can't create one for you. Nothing you type here would reach us. Have a browse in the meantime and try again later.";
+  "Accounts aren't switched on yet, this shop isn't connected to its accounts system, so we can't create one for you. Nothing you type here would reach us. Have a browse in the meantime and try again later.";
 
 const OFFLINE =
   "We couldn't reach the shop just now. Check your connection and try again.";
@@ -90,7 +90,7 @@ const METER_LABEL = ["", "Weak", "Fair", "Good", "Strong"] as const;
 /**
  * Sign-up errors that are safe to show verbatim-ish, keyed by Supabase's
  * stable error code. Every one of these is about what the visitor just typed
- * or how fast they typed it — none of them reveal whether an address is
+ * or how fast they typed it - none of them reveal whether an address is
  * already registered here.
  */
 const SAFE_SIGNUP_ERRORS: Record<string, string> = {
@@ -106,7 +106,7 @@ const SAFE_SIGNUP_ERRORS: Record<string, string> = {
 /**
  * Supabase reports an existing address as "User already registered" whenever
  * email confirmation is off. Echoing that turns this form into an oracle:
- * anyone could type addresses at it and learn which ones have accounts —
+ * anyone could type addresses at it and learn which ones have accounts -
  * precisely the leak /forgot-password goes out of its way to avoid. So we
  * treat it as indistinguishable from success: the visitor sees the same
  * "check your email to confirm" screen either way, and the real owner of the
@@ -149,7 +149,7 @@ export function SignupForm({
   next: string;
   /**
    * True when `next` came from the URL rather than being the page's own
-   * fallback — the difference between "we'll put you back where you were" and
+   * fallback - the difference between "we'll put you back where you were" and
    * "we'll take you to your orders". Only ever used to choose honest wording
    * and to decide whether a link needs the parameter; the destination itself is
    * `next` either way.
@@ -175,7 +175,7 @@ export function SignupForm({
     setError(null);
 
     // Defence in depth: this button is disabled while unconfigured, so the
-    // click should not be reachable — but if it arrives it must say something
+    // click should not be reachable - but if it arrives it must say something
     // true rather than throw into a dead promise.
     if (!CAN_SIGN_UP) {
       setError(UNAVAILABLE);
@@ -184,7 +184,7 @@ export function SignupForm({
 
     setPending(true);
     // The only path that deliberately leaves the button busy is the one that
-    // is navigating away. Every other path — a returned error, a throw —
+    // is navigating away. Every other path - a returned error, a throw -
     // hands the button back.
     let leaving = false;
     try {
@@ -209,7 +209,7 @@ export function SignupForm({
       // signInWithOAuth redirects the tab itself once it resolves cleanly.
       leaving = true;
     } catch {
-      // The exception is never shown — no stack trace, no env-var name.
+      // The exception is never shown - no stack trace, no env-var name.
       setError(CAN_SIGN_UP ? OFFLINE : UNAVAILABLE);
     } finally {
       if (!leaving) setPending(false);
@@ -248,7 +248,7 @@ export function SignupForm({
           // person leaving the browser: Supabase copies `emailRedirectTo` into
           // the confirmation link's `redirect_to`, so the parameter travels in
           // the email itself rather than in any state we hold locally. The
-          // whole callback URL — query string included — has to be on the
+          // whole callback URL - query string included - has to be on the
           // project's Redirect URLs list, exactly as the Google button above
           // already requires. If it is not, Supabase drops it and falls back to
           // the project's Site URL; the confirmation screen below says what to
@@ -259,14 +259,14 @@ export function SignupForm({
 
       if (signUpError) {
         // A request that never landed says nothing about the address typed,
-        // so it must not be dressed up as "check your details" — and it must
+        // so it must not be dressed up as "check your details" - and it must
         // not reach the confirmation screen either, because no mail was sent.
         if (isOffline(signUpError)) {
           setError(OFFLINE);
           return;
         }
 
-        // Same screen as the success path below — see isAlreadyRegistered.
+        // Same screen as the success path below - see isAlreadyRegistered.
         if (isAlreadyRegistered(signUpError.code, signUpError.message)) {
           setConfirmSent(true);
           return;
@@ -289,7 +289,7 @@ export function SignupForm({
       }
 
       // Confirmation is off, so there is a session already and no round trip
-      // through the inbox at all — straight to where they were headed.
+      // through the inbox at all - straight to where they were headed.
       router.push(next);
       router.refresh();
       leaving = true;
@@ -302,7 +302,7 @@ export function SignupForm({
     }
   }
 
-  // Only reachable once CAN_SIGN_UP is true — every path that sets
+  // Only reachable once CAN_SIGN_UP is true - every path that sets
   // confirmSent runs after a real Supabase signUp call. Supabase Auth's
   // confirmation email genuinely sends once the project is connected, so this
   // claim is true wherever it can be rendered at all; it is gated by
@@ -333,7 +333,7 @@ export function SignupForm({
           {carried ? (
             <p className="mt-2 text-sm text-muted">
               If it signs you in but leaves you somewhere else, open the link
-              that sent you here again — it will pick up from there.
+              that sent you here again, it will pick up from there.
             </p>
           ) : null}
         </div>
@@ -485,7 +485,7 @@ export function SignupForm({
               than starting a subscription. Saying otherwise would promise mail
               that no code writes. */}
           Count me in for news about new drops and restocks. There is no mailing
-          list yet, so nothing will be sent for now — you can change this any
+          list yet, so nothing will be sent for now, you can change this any
           time in your account settings.
         </label>
 

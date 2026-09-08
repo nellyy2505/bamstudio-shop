@@ -11,8 +11,8 @@ import { money } from "@/lib/format";
 
 /**
  * §0.10: the promo bar used to promise "Free AU shipping from $49" flat, but
- * shippingCost() only waives the standard rate — express is charged at every
- * basket size — so the bar names the method. Which method that is is asked of
+ * shippingCost() only waives the standard rate - express is charged at every
+ * basket size - so the bar names the method. Which method that is is asked of
  * shippingCost() rather than written here, so the claim cannot outlive a
  * pricing change; if no method is ever free, the claim is simply not made.
  */
@@ -64,8 +64,8 @@ export function Header({
             Half-price AU {FREE_RATE_METHOD.label.toLowerCase()} post from{" "}
             <b className="text-[#F3C89B]">
               {money(SHIPPING.subsidyThreshold)}
-            </b>
-            , free from{" "}
+            </b>,
+            free from{" "}
             <b className="text-[#F3C89B]">{money(SHIPPING.freeThreshold)}</b>
             <span className="hidden sm:inline"> ·</span>
           </>

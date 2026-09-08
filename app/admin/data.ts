@@ -44,8 +44,8 @@ export {
  * Every read the staff area makes.
  *
  * All of it goes through the service-role client, because most of what the
- * studio looks at — costs, settings, who is staff, how many rolls are on the
- * shelf — is deliberately unreadable with the key that ships to browsers.
+ * studio looks at - costs, settings, who is staff, how many rolls are on the
+ * shelf - is deliberately unreadable with the key that ships to browsers.
  *
  * That makes this module the sharpest edge in the app: it can see everything.
  * Two rules keep it safe.
@@ -56,7 +56,7 @@ export {
  *   2. Nothing here is called from a client component. It is server-side only.
  *
  * Counts use `head: true`, which asks Postgres for the count and none of the
- * rows — on a free-tier database that is the difference between a dashboard and
+ * rows - on a free-tier database that is the difference between a dashboard and
  * a bill.
  */
 
@@ -80,8 +80,8 @@ function assertServer(fn: string): void {
  * Reshape a PostgREST row into something indexable.
  *
  * The Supabase client is untyped in this project (no generated Database type),
- * so for a `select()` built by string concatenation — which the ones below are,
- * because they share a column list — it cannot infer a row shape and falls back
+ * so for a `select()` built by string concatenation - which the ones below are,
+ * because they share a column list - it cannot infer a row shape and falls back
  * to `GenericStringError`. Casting straight to Record<string, unknown> is
  * rejected as a mistake, which is fair: the two types genuinely do not overlap.
  *
@@ -110,7 +110,7 @@ export const OPEN_ORDER_STATUSES = ["confirmed", "printing", "packed"] as const;
  * Statuses that count as real, paid demand.
  *
  * The workbook's rule, from `Orders!H`: everything except Done and Cancelled is
- * still owed to someone. `delivered` is her "Done"; `shipped` is not — a parcel
+ * still owed to someone. `delivered` is her "Done"; `shipped` is not - a parcel
  * in the post is out of the studio but the stock is gone, so it neither needs
  * printing nor sits on the shelf.
  */
@@ -199,7 +199,7 @@ export type ProductRow = {
    * Units sold that the ready-to-ship buffer did not have.
    *
    * A running total, never decremented automatically (0005_sale_integrity.sql).
-   * The shop prints to order, so an oversell is allowed and is not an error —
+   * The shop prints to order, so an oversell is allowed and is not an error -
    * it is somebody who has already paid, waiting for a piece that was not on
    * the shelf. That makes it a print-this-first signal, which is why the
    * inventory screen reads it.
@@ -301,7 +301,7 @@ function mapProductRow(row: Record<string, unknown>): ProductRow {
  *
  * The workbook's Products sheet has four fixed Colour/g pairs, so four is the
  * most any real piece in this catalogue uses. `product_filament` deliberately
- * has no such ceiling (see 0003_admin.sql) — rows, not columns — and a piece
+ * has no such ceiling (see 0003_admin.sql) - rows, not columns - and a piece
  * that outgrows four is still perfectly legal. The measuring screen simply
  * refuses to edit one, and sends the person to the full product form instead,
  * rather than quietly writing back the four it could see and dropping the rest.
@@ -315,7 +315,7 @@ export const MEASURE_COLOUR_SLOTS = 4;
  * Which costing inputs a product is still missing, in words.
  *
  * The same two strings, in the same order, as `unitCost()`'s `missing` in
- * lib/costing.ts — that function decides whether a cost is `unknown`, and this
+ * lib/costing.ts - that function decides whether a cost is `unknown`, and this
  * one decides whether a product appears on the measuring screen. They are two
  * readings of one fact and must move together. It is spelled out again here
  * rather than derived from `unitCost()` because `unitCost()` needs a settings
@@ -356,7 +356,7 @@ export type MeasureQueue = {
  * Deliberately unpaged, and it is the one table in the studio that is. The job
  * this feeds is "sit down and measure forty-four things", and a pager turns
  * that into "measure twenty-five things, then notice there is a page two". The
- * count is bounded by the catalogue — forty-four rows today — so the cost of
+ * count is bounded by the catalogue - forty-four rows today - so the cost of
  * reading all of it is a fraction of the cost of the person's evening. If the
  * catalogue ever grows past a few hundred, use `Pagination` from components/ui
  * like every other table here; do not grow a second pager.
@@ -516,7 +516,7 @@ export function costProduct(
   return {
     cost,
     // A partial cost must not produce a price. With no print time and no
-    // filament weight, `cost.total` is packaging alone — 13c — and
+    // filament weight, `cost.total` is packaging alone - 13c - and
     // suggestedPrice() turned that into a $0.50 suggestion and a 97% margin on
     // a piece nobody has measured, which is exactly the number she would price
     // from. The guard lives here and not in suggestedPrice() because
@@ -535,7 +535,7 @@ export function costProduct(
 /**
  * Open (paid but not yet posted) quantity per product id.
  *
- * The workbook's `Orders!H` — "Open qty" — aggregated the way column AC does.
+ * The workbook's `Orders!H` - "Open qty" - aggregated the way column AC does.
  * One query for the whole catalogue rather than one per product.
  */
 export async function getOpenDemand(): Promise<Map<string, number>> {
@@ -585,12 +585,12 @@ export type Inventory = {
   totalToPrint: number;
   totalRollsToBuy: number;
   totalBuyCostCents: number;
-  /** Products with no filament recipe at all — invisible to the buy list. */
+  /** Products with no filament recipe at all - invisible to the buy list. */
   unmeasured: number;
   /**
    * Units sold that the shelf did not have, across the whole catalogue.
    *
-   * 0 is a real answer — nothing has been oversold — and must be rendered as
+   * 0 is a real answer - nothing has been oversold - and must be rendered as
    * "nothing to report", never as a figure.
    */
   oversoldUnits: number;
@@ -674,7 +674,7 @@ export async function getInventory(): Promise<Inventory> {
    * Oversold first, then by how much there is to print.
    *
    * This is the one ordering change the oversell counter earns. An oversold
-   * piece is not "more to print" — it is somebody who has already paid and is
+   * piece is not "more to print" - it is somebody who has already paid and is
    * waiting for a piece that was not on the shelf when they bought it, so it
    * outranks a product that is merely below its buffer however large the gap.
    * Within each group the old rule stands, so the queue reads the same way it
@@ -742,7 +742,7 @@ export type OrderDetail = OrderRow & {
   /**
    * The Australia Post service the postage on this order was quoted for, e.g.
    * `AUS_PARCEL_REGULAR`. Null for orders taken before postage was quoted, and
-   * for a sale typed in at a market — `0002_shipping.sql` says a null here
+   * for a sale typed in at a market - `0002_shipping.sql` says a null here
    * means "flat-rate era", not "missing data".
    */
   quotedServiceCode: string | null;
@@ -753,13 +753,13 @@ export type OrderDetail = OrderRow & {
   soldAsTracked: boolean | null;
   lines: OrderLine[];
   /**
-   * Open payment incidents recorded against this order — money the shop has
+   * Open payment incidents recorded against this order - money the shop has
    * taken and owes back.
    *
    * Today there is one kind: a payment that cleared for an order somebody had
    * already cancelled (0005_sale_integrity.sql). It showed on the studio
-   * overview and nowhere else, so the order itself — the screen a person is
-   * looking at when they decide whether to print and post it — said nothing
+   * overview and nowhere else, so the order itself - the screen a person is
+   * looking at when they decide whether to print and post it - said nothing
    * about the fact that it was paid for and must not be fulfilled.
    *
    * An array rather than one row: `payment_incidents` is keyed on the Stripe
@@ -777,7 +777,7 @@ export type OrderDetail = OrderRow & {
  * when the answer is feeding a *price*. It is the wrong way round here: this
  * answer decides what the dispatch screen tells the person packing to expect,
  * and guessing "tracked" would have her hunting for a number that was never
- * going to exist. So an unknown code is `null` — Unknown — and the screen says
+ * going to exist. So an unknown code is `null` - Unknown - and the screen says
  * so instead of choosing for her.
  *
  * Keyed off the exported `SERVICE_CODES` rather than the literal strings, so a
@@ -794,7 +794,7 @@ export function wasSoldTracked(serviceCode: string | null): boolean | null {
     case SERVICE_CODES.letterLarge500:
       // A regular Large Letter carries no tracking. Free standard post on a
       // light basket goes this way, so "no number at all" is a real, correct
-      // outcome for a real order — not a gap someone forgot to fill in.
+      // outcome for a real order - not a gap someone forgot to fill in.
       return false;
     default:
       return null;
@@ -889,7 +889,7 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
   const admin = createAdminClient();
   // Two reads, not an embed: `payment_incidents.order_id` is nullable and set
   // null if the order is ever removed, so it is a fact about a *payment* that
-  // happens to point here — not a child of the order. Read alongside rather
+  // happens to point here - not a child of the order. Read alongside rather
   // than nested, so a failure to read incidents cannot lose the order.
   const [{ data, error }, incidents] = await Promise.all([
     admin
@@ -967,7 +967,7 @@ export type Reports = {
   revenue: number;
   /** Making cost of everything sold, where it was recorded. */
   cost: number;
-  /** Null when no line on any order carries a cost — profit is unknowable. */
+  /** Null when no line on any order carries a cost - profit is unknowable. */
   profit: number | null;
   /** How many sold lines have no recorded cost, so profit understates spend. */
   linesWithoutCost: number;
@@ -984,7 +984,7 @@ export type Reports = {
  * plausible-looking chart is not a placeholder, it is a false statement that
  * somebody eventually makes a decision on.
  *
- * The Finance sheet — the loan account, tax, the split — stays in the workbook
+ * The Finance sheet - the loan account, tax, the split - stays in the workbook
  * on purpose. That is a monthly sit-down with real judgement in it, not a
  * dashboard tile.
  */
@@ -1044,7 +1044,7 @@ export async function getReports(): Promise<Reports> {
       const qty = Number(item.quantity ?? 0);
       units += qty;
 
-      const name = (item.product_name as string) ?? "—";
+      const name = (item.product_name as string) ?? "-";
       const p = products.get(name) ?? { units: 0, revenue: 0 };
       p.units += qty;
       p.revenue += qty * Number(item.unit_price ?? 0);
@@ -1081,7 +1081,7 @@ export async function getReports(): Promise<Reports> {
     revenue,
     cost,
     // The workbook's trading profit: revenue less the card fee less making
-    // cost. Null when nothing carries a cost — a "profit" equal to revenue
+    // cost. Null when nothing carries a cost - a "profit" equal to revenue
     // minus a fee is not a profit, it is a missing subtraction.
     profit: anyCost ? revenue * (1 - settings.cardFeeRate) - cost : null,
     linesWithoutCost,
@@ -1130,7 +1130,7 @@ export async function listStaff(): Promise<StaffRow[]> {
   if (rows.length === 0) return [];
 
   // Emails live in auth.users, which PostgREST does not expose. The admin auth
-  // API is the only way to them, and it pages — so ask for one page big enough
+  // API is the only way to them, and it pages - so ask for one page big enough
   // for a studio and map what comes back.
   const { data: users } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
   const emails = new Map((users?.users ?? []).map((u) => [u.id, u.email ?? ""]));
@@ -1190,7 +1190,7 @@ export type StudioSummary = {
   rollsToBuy: number;
   ordersNeedingWork: number;
   /**
-   * Products with no filament recipe — invisible to the buy list.
+   * Products with no filament recipe - invisible to the buy list.
    *
    * This is `Inventory.unmeasured`, which counts a missing recipe and nothing
    * else, because that is the one that makes the buy list wrong. The comment
@@ -1198,7 +1198,7 @@ export type StudioSummary = {
    * costing question `missingCostInputs()` answers and a different number.
    */
   unmeasured: number;
-  /** True when the shop has never taken an order — a real state, not an error. */
+  /** True when the shop has never taken an order - a real state, not an error. */
   noOrdersYet: boolean;
 };
 
@@ -1229,14 +1229,14 @@ export type StudioAttention = {
   /**
    * Whether this deployment can send email at all, read from the one predicate
    * that decides it. On a shop with no mail provider the count below is
-   * meaningless — silence is expected, every page already says no order email
-   * is coming — so the overview says nothing rather than reporting every order
+   * meaningless - silence is expected, every page already says no order email
+   * is coming - so the overview says nothing rather than reporting every order
    * as overdue.
    */
   emailConfigured: boolean;
   /** Paid, numbered website orders with no confirmation email recorded. */
   ordersAwaitingConfirmation: number;
-  /** Units sold that the ready-to-ship buffer did not have — print these first. */
+  /** Units sold that the ready-to-ship buffer did not have - print these first. */
   oversoldUnits: number;
   oversoldProducts: { id: string; name: string; units: number }[];
 };
@@ -1346,9 +1346,9 @@ export type ScoopPoolProduct = {
   sku: string;
   name: string;
   /**
-   * `products.active`. A retired product stays in the pool — deleting it is
+   * `products.active`. A retired product stays in the pool - deleting it is
    * refused (0007_lucky_scoop.sql) so that a tier's promise cannot silently
-   * shrink — so the studio has to be able to see that it is no longer drawable.
+   * shrink - so the studio has to be able to see that it is no longer drawable.
    */
   active: boolean;
   stockOnHand: number;
@@ -1382,8 +1382,8 @@ export type ScoopTierRow = {
   pool: ScoopPoolProduct[];
   /**
    * Two independent things, and `lib/scoop.ts` is where they were untangled.
-   * `sellable`/`blockers` say whether the shop is offering this tier at all —
-   * switched on, priced — and are blind to stock. `drawable`/`scoopsAvailable`
+   * `sellable`/`blockers` say whether the shop is offering this tier at all -
+   * switched on, priced - and are blind to stock. `drawable`/`scoopsAvailable`
    * say how much the bowl holds without printing anything: studio information,
    * a print signal, never a reason a customer is refused.
    */
@@ -1391,13 +1391,13 @@ export type ScoopTierRow = {
   /**
    * Why the database would refuse to switch this tier on, in words. Empty when
    * it would be allowed. Deliberately about the pool's SIZE rather than its
-   * stock — a tier is not un-activated by selling out.
+   * stock - a tier is not un-activated by selling out.
    */
   activationBlockers: string[];
   /** How much of the pool has ever been costed. */
   costBasis: ScoopCostBasis;
   /**
-   * A suggestion for the price field, never a value written into it — the same
+   * A suggestion for the price field, never a value written into it - the same
    * rule `costProduct()` follows for a product.
    *
    * NULL until every product in the pool has been measured, which today is
@@ -1486,7 +1486,7 @@ function mapScoopTier(
  *
  * Unpaged for the reason `getMeasureQueue` is: there will be a handful of
  * tiers, not a catalogue, and a pager over four rows is a pager that hides one
- * of them. One settings read, one cost read and one query for all of it — not
+ * of them. One settings read, one cost read and one query for all of it - not
  * one per tier.
  */
 export async function listScoopTiers(): Promise<ScoopTierRow[]> {
@@ -1548,7 +1548,7 @@ export async function getScoopTier(id: string): Promise<ScoopTierRow | null> {
  * renders all forty-four of these at once, so what it is handed matters: a
  * `ProductRow` carries the gallery, the colour list, the attachments, the
  * description and the photographs, none of which a checkbox needs, and the
- * measure screen's own defect (round 14 — 1.2 MB of HTML because every row
+ * measure screen's own defect (round 14 - 1.2 MB of HTML because every row
  * shipped a whole palette) is what a fat picker turns into here. Six columns
  * and one cost lookup.
  *
@@ -1589,7 +1589,7 @@ export async function listPoolCandidates(): Promise<PoolCandidate[]> {
 
 /* ------------------------------------------------- scoops on one order */
 
-/** One piece recorded as having gone into a scoop — a `scoop_pack_items` row. */
+/** One piece recorded as having gone into a scoop - a `scoop_pack_items` row. */
 export type ScoopPackPieceRow = {
   productId: string;
   sku: string;
@@ -1598,7 +1598,7 @@ export type ScoopPackPieceRow = {
   /**
    * What one cost AT THE MOMENT IT WAS PACKED, read off the stamped column and
    * never recomputed. A cost derived at read time rewrites every historical
-   * margin the next time filament changes price — the reason
+   * margin the next time filament changes price - the reason
    * `order_items.unit_cost_cents` exists (0003) and the reason this column does
    * (0007). Null for a piece nobody had measured when it was packed.
    */
@@ -1611,7 +1611,7 @@ export type ScoopPackPieceRow = {
  * One physical scoop: either what was recorded, or the empty slot where a
  * recording is still owed.
  *
- * A line of quantity 2 is two of these — two draws, two videos, two bags — and
+ * A line of quantity 2 is two of these - two draws, two videos, two bags - and
  * `packIndex` numbers them, which is what makes saving the panel twice produce
  * one record rather than two (the unique constraint on
  * `order_item_id, pack_index`).
@@ -1635,7 +1635,7 @@ export type ScoopPackRow = {
   /** Pieces actually recorded, so a short pack can be seen. */
   recordedPieces: number;
   /**
-   * What this scoop cost to make — the sum of its pieces, or null the moment
+   * What this scoop cost to make - the sum of its pieces, or null the moment
    * one of them was never measured. `packCost()` in lib/scoop.ts, never a
    * partial sum.
    */
@@ -1661,7 +1661,7 @@ export type OrderScoops = {
   lines: OrderScoopLine[];
   /**
    * Scoops on this order whose contents nobody has recorded yet, in words.
-   * Empty when there is nothing outstanding — including on an order with no
+   * Empty when there is nothing outstanding - including on an order with no
    * scoops on it at all.
    */
   outstanding: string[];
@@ -1696,7 +1696,7 @@ function embedded<T>(value: unknown): T | null {
  * the person in the middle has no way to tell which is right.
  *
  * A scoop counts as recorded when it has at least one piece against it. Not
- * "the promised number of pieces" — a short pack is a real thing that happens
+ * "the promised number of pieces" - a short pack is a real thing that happens
  * (a charm broke, the last one was already gone) and refusing to post the
  * parcel over it would be the schema deciding something only she can. The panel
  * shows the count beside the promise so a genuinely short pack is visible.
@@ -1783,7 +1783,7 @@ export async function getOrderScoops(orderId: string): Promise<OrderScoops> {
     /*
      * Never fewer slots than there are recorded packs. The line's quantity is
      * what the customer bought and is normally the answer, but a row edited by
-     * hand — a quantity corrected downwards after a scoop was already packed —
+     * hand - a quantity corrected downwards after a scoop was already packed -
      * would otherwise hide a real record and report it as still owed.
      */
     const slots = Math.max(quantity, ...[...recorded.keys()], 1);
@@ -1817,7 +1817,7 @@ export async function getOrderScoops(orderId: string): Promise<OrderScoops> {
   });
 
   // One cost read for every pool product across the whole order, not one per
-  // line — the same rule `listScoopTiers` follows.
+  // line - the same rule `listScoopTiers` follows.
   const costs = await unitCostsAtSale(
     lines.flatMap((line) => line.pool.map((piece) => piece.productId)),
   );
@@ -1833,7 +1833,7 @@ export async function getOrderScoops(orderId: string): Promise<OrderScoops> {
       if (pack.recordedPieces === 0) {
         outstanding.push(
           line.packs.length > 1
-            ? `${line.tierName} — scoop ${pack.packIndex} of ${line.packs.length}`
+            ? `${line.tierName}, scoop ${pack.packIndex} of ${line.packs.length}`
             : line.tierName,
         );
       }
@@ -1851,7 +1851,7 @@ export async function getOrderScoops(orderId: string): Promise<OrderScoops> {
  * Until this block existed nothing in the shop read either of them: a message
  * a customer typed was a row nobody could open, and the notification email was
  * the only thing that told anyone it had arrived. `notified_at` being null does
- * NOT mean the message was lost — the row is the delivery — it means the only
+ * NOT mean the message was lost - the row is the delivery - it means the only
  * way anybody finds that one is by looking, and this is the looking.
  *
  * Both reads go through the service-role client like everything else here.
@@ -1894,7 +1894,7 @@ export type EnquiryRow = {
   receivedAt: string;
   /**
    * When a mail provider accepted the studio notification, or null. Null is a
-   * fact — "no prompt went out for this one" — never a status and never a
+   * fact - "no prompt went out for this one" - never a status and never a
    * claim that the message was lost.
    */
   notifiedAt: string | null;
@@ -1923,7 +1923,7 @@ export type EnquiryFilters = {
  * two hundred customer email addresses into memory to look two of them up.
  *
  * A lookup that fails is left out of the map, and the screen then says the
- * account is no longer in the studio rather than inventing a name — a staff
+ * account is no longer in the studio rather than inventing a name - a staff
  * member who has been removed is a real state, and the enquiry they answered
  * is still answered.
  */
@@ -1966,7 +1966,7 @@ export async function listEnquiries(
     .order("received_at", { ascending: false });
 
   if (filters.topic) query = query.eq("topic", filters.topic);
-  // `handled_at is null` is the open state and the only definition of it —
+  // `handled_at is null` is the open state and the only definition of it -
   // the same one contact_enquiries_open_idx is built on.
   if (filters.state === "open") query = query.is("handled_at", null);
   else if (filters.state === "handled") query = query.not("handled_at", "is", null);
@@ -2073,7 +2073,7 @@ export async function listSignups(page: number): Promise<Paged<SignupRow>> {
  * only plain lines are grouped.
  *
  * A Lucky Scoop line is neither. Nobody knows what goes in it until somebody
- * decides, and that decision is recorded on the order screen — so it appears as
+ * decides, and that decision is recorded on the order screen - so it appears as
  * work to do against an order, never as a quantity of anything.
  */
 export type PickEntry = {
@@ -2087,7 +2087,7 @@ export type PickEntry = {
   variantLabel: string | null;
   /** Verbatim, as the customer typed it. Never reformatted. */
   personalisation: string | null;
-  /** Which orders want it — one entry for a personalised piece, many for plain. */
+  /** Which orders want it - one entry for a personalised piece, many for plain. */
   orders: { id: string; orderNumber: string | null }[];
 };
 
@@ -2095,7 +2095,7 @@ export type PickList = {
   entries: PickEntry[];
   orderCount: number;
   /**
-   * Physical pieces to pick or print — SCOOPS EXCLUDED.
+   * Physical pieces to pick or print - SCOOPS EXCLUDED.
    *
    * A scoop line's quantity is a count of bags, not of things to fetch off a
    * shelf, and nobody knows what is going in them yet. Adding them in would
@@ -2108,7 +2108,7 @@ export type PickList = {
 /**
  * What has to be printed and picked for every order that is still open.
  *
- * "Open" is `OPEN_ORDER_STATUSES` — confirmed, printing, packed — the same set
+ * "Open" is `OPEN_ORDER_STATUSES` - confirmed, printing, packed - the same set
  * the inventory queue and the overview use. A posted order is not on it, and
  * neither is an unpaid checkout: `pending` is not an order and never appears in
  * a queue.
@@ -2182,7 +2182,7 @@ export async function getPickList(): Promise<PickList> {
         continue;
       }
 
-      // Grouped on everything that changes what comes off the shelf — the
+      // Grouped on everything that changes what comes off the shelf - the
       // product, the colour and the variant. Two lines that differ in colour
       // are two different picks and must not be added together.
       const groupKey = [
@@ -2232,7 +2232,7 @@ export async function getPickList(): Promise<PickList> {
  * `order_items.personalisation` is jsonb and its shape has changed once
  * already, so this reads whatever is there rather than assuming a schema. It
  * lives here rather than on a page because the packing slip and the pick list
- * must show a customer's letters IDENTICALLY — this shop sells custom name
+ * must show a customer's letters IDENTICALLY - this shop sells custom name
  * charms, and two screens formatting the same value two ways is how a remake
  * starts. Nothing is invented: an empty value produces null, not "".
  */

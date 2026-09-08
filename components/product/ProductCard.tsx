@@ -76,7 +76,7 @@ export function ProductCard({
             <span className="text-xs text-muted">({product.review_count})</span>
           </div>
         ) : (
-          /* No reviews yet, so no stars and no "(0)" — but hold the row's
+          /* No reviews yet, so no stars and no "(0)" - but hold the row's
              height so the price line stays put across a mixed grid. */
           <div className="my-0.5 h-4" aria-hidden="true" />
         )}

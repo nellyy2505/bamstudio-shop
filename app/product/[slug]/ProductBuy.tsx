@@ -28,7 +28,7 @@ export function ProductBuy({ product }: { product: Product }) {
   const [added, setAdded] = useState(false);
   const [personalText, setPersonalText] = useState("");
   const [textError, setTextError] = useState<string | null>(null);
-  /** Why the basket would not take this — never colour or silence alone. */
+  /** Why the basket would not take this - never colour or silence alone. */
   const [basketError, setBasketError] = useState<string | null>(null);
 
   const atMax = quantity >= BASKET_LIMITS.maxLineQuantity;
@@ -46,7 +46,7 @@ export function ProductBuy({ product }: { product: Product }) {
       <div className="rounded-2xl bg-lilac p-5">
         <b className="text-[15px]">This one is made to your spec</b>
         <p className="mt-1.5 mb-4 text-sm text-muted">
-          Pick the letters, colourway and cord in the builder — flat price by
+          Pick the letters, colourway and cord in the builder. Flat price by
           name length, from {money(product.price)}.
         </p>
         <Link
@@ -91,7 +91,7 @@ export function ProductBuy({ product }: { product: Product }) {
 
     /*
      * The basket enforces the same caps checkout does, so `add` can take less
-     * than it was asked for — or nothing at all. Reporting that is the whole
+     * than it was asked for - or nothing at all. Reporting that is the whole
      * point: before this, a basket built past either cap reached checkout and
      * came back as a blanket "Invalid basket." with no way to tell which line
      * was the problem, and the cart's postage quote silently fell back to
@@ -107,7 +107,7 @@ export function ProductBuy({ product }: { product: Product }) {
     }
     setBasketError(
       result === "clamped"
-        ? `Your basket now holds ${BASKET_LIMITS.maxLineQuantity} of this — the most we ` +
+        ? `Your basket now holds ${BASKET_LIMITS.maxLineQuantity} of this, the most we ` +
             "can print of one item in a single order."
         : null,
     );

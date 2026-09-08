@@ -2,7 +2,7 @@
  * A fake `@/lib/supabase/server` for scripts/check-observability.mjs.
  *
  * Only what `app/api/track/route.ts` touches: `createAdminClient().rpc(...)`.
- * Deliberately much smaller than scripts/webhook-harness/fake-supabase.mjs —
+ * Deliberately much smaller than scripts/webhook-harness/fake-supabase.mjs -
  * that one models a query builder because the webhook writes; this route only
  * ever calls one RPC and the interesting cases are the two failure modes.
  */

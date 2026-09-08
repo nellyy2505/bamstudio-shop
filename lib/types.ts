@@ -64,12 +64,12 @@ export type Product = {
   is_new: boolean;
   /** Personalised items cannot be returned and skip the ready-to-ship path. */
   is_personalised: boolean;
-  /** How personalisation is collected — see PersonalisationMode. */
+  /** How personalisation is collected - see PersonalisationMode. */
   personalisation_mode: "builder" | "text" | null;
   /** Field label for "text" mode, e.g. "Pet's name". */
   personalisation_label: string | null;
   /**
-   * Packed weight in grams — the only input Australia Post prices a domestic
+   * Packed weight in grams - the only input Australia Post prices a domestic
    * parcel on, so a basket's postage is the sum of these. Non-optional because
    * the column is `not null` with a charm-sized default: a row nobody has put
    * on the scales yet is still quotable, rather than a hole in the checkout.
@@ -79,12 +79,12 @@ export type Product = {
   length_mm: number;
   /** Packed width in mm. Not priced on, but the API validates it. */
   width_mm: number;
-  /** Packed thickness in mm — usually what pushes an item past Large Letter. */
+  /** Packed thickness in mm - usually what pushes an item past Large Letter. */
   thickness_mm: number;
   /**
    * Owner's manual override: false forces a parcel quote however small the
    * measurements look. Bulk is not always a bounding box, and Large Letter is
-   * untracked and uninsured — a lost one is a loss the studio wears.
+   * untracked and uninsured - a lost one is a loss the studio wears.
    */
   letter_eligible: boolean;
   active: boolean;
@@ -101,7 +101,7 @@ export type Collection = {
   charm_name: string;
   /**
    * `products.slug` of the charm this colourway sells as its add-on (0009).
-   * Null means the colourway offers no charm — the builder hides the option
+   * Null means the colourway offers no charm - the builder hides the option
    * rather than guessing a price for it.
    */
   charm_slug: string | null;
@@ -179,7 +179,7 @@ export type Order = {
   shipping_address: Address;
   /**
    * How the postage on this order was arrived at. Null on every order placed
-   * before postage was quoted — that is "flat rate era", not missing data,
+   * before postage was quoted - that is "flat rate era", not missing data,
    * which is why these three are nullable rather than defaulted.
    *
    * Stored so a discrepancy found months later (the studio paid parcel rates
@@ -191,7 +191,7 @@ export type Order = {
   shipping_quote_source: "live" | "cache" | "stale" | "fallback" | null;
   /** Basket weight the quote was priced on. See shipping_quote_source. */
   quoted_weight_grams: number | null;
-  /** Australia Post service the quote was for — the other half of a label. */
+  /** Australia Post service the quote was for - the other half of a label. */
   quoted_service_code: string | null;
   created_at: string;
   items: OrderItem[];
@@ -223,7 +223,7 @@ export type Address = {
   /**
    * Optional because it is not always sent to the client. The public /track
    * endpoint allow-lists the address it returns and drops the phone number
-   * (app/api/track/route.ts) — anyone with an order number and an email can
+   * (app/api/track/route.ts) - anyone with an order number and an email can
    * reach that page. The Stripe webhook still *stores* it (the studio may need
    * to ring about a delivery) and /account/orders/[id], which is behind auth,
    * still shows it.
@@ -292,7 +292,7 @@ export const AU_STATES = [
  * charm-colour board maps colour to category and the scoop decides which
  * category you get. Online that mechanic sells somebody pet things when they
  * came for clickers, and "goods must match their description" is not waived by
- * calling it lucky — so the theme is chosen, not drawn, and the board stays in
+ * calling it lucky - so the theme is chosen, not drawn, and the board stays in
  * the video where it is theatre rather than a term of sale.
  *
  * Kept in step with the CHECK constraint on `scoop_tiers.theme`
@@ -310,7 +310,7 @@ export const SCOOP_THEMES: { value: ScoopTheme; label: string }[] = [
 ];
 
 /**
- * A Lucky Scoop tier — the thing a customer actually buys. "Pet scoop, five
+ * A Lucky Scoop tier - the thing a customer actually buys. "Pet scoop, five
  * pieces, $X".
  *
  * Deliberately not a `Product`: its price starts null, its stock is a property
@@ -330,14 +330,14 @@ export type ScoopTier = {
   /** How many pieces the tier promises. The owner's starting number is 5. */
   piece_count: number;
   /**
-   * Price in cents, or null when nobody has priced it yet. NEVER 0 — the
+   * Price in cents, or null when nobody has priced it yet. NEVER 0 - the
    * database refuses a zero, because a zero renders as "$0.00" and reads as a
    * free scoop. A tier cannot be activated while this is null.
    */
   price_cents: number | null;
   /**
    * Worst-case packed weight in grams. A scoop has no product row to take a
-   * weight from, so postage is quoted from this — set from the heaviest
+   * weight from, so postage is quoted from this - set from the heaviest
    * plausible pack, never the average, or the studio wears the difference.
    * Null blocks activation.
    */
@@ -353,8 +353,8 @@ export type ScoopTier = {
 /**
  * A tier with the products that may be drawn into it.
  *
- * The pool is what turns "random" into a describable promise — the product page
- * can say "five pieces drawn from these twelve" and show them — and it is
+ * The pool is what turns "random" into a describable promise - the product page
+ * can say "five pieces drawn from these twelve" and show them - and it is
  * explicit rows rather than a category filter, so a pet bowl cannot silently
  * join a clicker scoop. Read with the anon key, the pool contains only ACTIVE
  * products: a retired one is still a row in `scoop_tier_products` (deleting the

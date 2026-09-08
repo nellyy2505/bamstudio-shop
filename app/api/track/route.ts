@@ -20,7 +20,7 @@ const BodySchema = z.object({
 });
 
 /**
- * Never distinguishes "no such order" from "email does not match" — and now
+ * Never distinguishes "no such order" from "email does not match" - and now
  * also never distinguishes either from "this deployment has no service-role
  * key" or "the database errored". Every one of those is this exact body with
  * this exact header; only 400 (bad input) and 429 (throttled) differ, and both
@@ -31,7 +31,7 @@ const NOT_FOUND = { found: false } as const;
 /**
  * One constructor for every miss, so the bytes cannot drift apart. Named
  * `miss` rather than `notFound` so nobody reads it as next/navigation's
- * `notFound()`, which throws a 404 — this is a deliberate 200.
+ * `notFound()`, which throws a 404 - this is a deliberate 200.
  */
 function miss() {
   return NextResponse.json(NOT_FOUND, {
@@ -49,7 +49,7 @@ function miss() {
  *
  * Checking it here rather than letting `createAdminClient()` throw keeps the
  * missing-key case cheap and quiet, but the try/catch below is still the
- * backstop — either way the caller sees a miss and only the server log knows
+ * backstop - either way the caller sees a miss and only the server log knows
  * why. The app is meant to run with no database at all (see CLAUDE.md), so
  * "not configured" must stay a normal answer, not an error.
  */
@@ -78,7 +78,7 @@ function number(value: unknown): number {
  *
  * `shipping_address` is jsonb and carries `phone`. /track is a public page
  * reachable with an order number and an email, and app/track/TrackForm.tsx
- * renders the name, line1, optional line2 and "suburb state postcode" — it has
+ * renders the name, line1, optional line2 and "suburb state postcode" - it has
  * never rendered the phone number. Storing it stays correct (the studio may
  * need to ring about a delivery); sending it to the browser was gratuitous.
  */
@@ -127,9 +127,9 @@ function toPublicOrder(row: unknown): PublicTrackedOrder | null {
     shipping_method: text(order.shipping_method),
     // Both of these are load-bearing for what /track is allowed to SAY, not
     // just for what it shows. `tracking_number` being null is the only signal
-    // the page has that a parcel went untracked — `markShipped` refuses a
+    // the page has that a parcel went untracked - `markShipped` refuses a
     // tracked dispatch with an empty box, so the null is an answer somebody
-    // gave — and `shipping_method` of `in_person` is the only signal that
+    // gave - and `shipping_method` of `in_person` is the only signal that
     // nothing was posted at all. Dropping either from this allow-list does not
     // hide a field; it makes the page word a dispatch it cannot see, which is
     // how it came to promise every shipped order a tracking number.
@@ -178,7 +178,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // A missing database — or a database we hold no key for — must look exactly
+  // A missing database - or a database we hold no key for - must look exactly
   // like a miss, so a probe cannot use the response to tell configured
   // deployments from unconfigured ones.
   if (!isLookupConfigured()) {
@@ -189,13 +189,13 @@ export async function POST(request: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY ? null : "SUPABASE_SERVICE_ROLE_KEY",
     ].filter(Boolean);
     console.error(
-      `track lookup unavailable: ${missing.join(" and ")} not set — see SETUP.md`,
+      `track lookup unavailable: ${missing.join(" and ")} not set, see SETUP.md`,
     );
     // A misconfigured deploy answers every genuine customer with "no such
     // order" and looks perfectly healthy from outside. That is precisely the
     // failure nobody finds out about, so it is reported rather than only
     // logged. The names of unset variables are configuration, not secrets, and
-    // nothing from the request goes with them — no order number, no email.
+    // nothing from the request goes with them - no order number, no email.
     await captureMessage("Order tracking is unavailable: missing configuration", {
       scope: "track",
       level: "error",
@@ -209,7 +209,7 @@ export async function POST(request: Request) {
     // Service-role client: it bypasses RLS entirely, which is only acceptable
     // because nothing in the request body can steer it. The body yields
     // exactly two validated strings and both are handed to `lookup_order` as
-    // RPC arguments — never interpolated into SQL, never used to pick a table,
+    // RPC arguments - never interpolated into SQL, never used to pick a table,
     // a column, a filter or a key. The function is SECURITY DEFINER, matches
     // on order number AND email, and excludes `pending`, so the service-role
     // key widens nothing: it only restores the one path that revoking the
@@ -225,7 +225,7 @@ export async function POST(request: Request) {
       console.error("lookup_order failed:", error.message);
       // A failed database read that the customer is shown as "no such order".
       // The message is a FIXED string so every occurrence groups as one issue;
-      // PostgREST's text goes in a tag, where `scrub()` can get at it — its
+      // PostgREST's text goes in a tag, where `scrub()` can get at it - its
       // messages quote the values a statement was given, and the two values
       // this statement is given are an order number and a customer's email.
       await captureMessage("Order lookup failed against the database", {
@@ -250,7 +250,7 @@ export async function POST(request: Request) {
     // Includes `createAdminClient()` throwing on a missing key, which the
     // guard above should already have caught. The caller learns nothing.
     console.error("order tracking failed:", error);
-    // Caught here, so `onRequestError` in instrumentation.ts never sees it —
+    // Caught here, so `onRequestError` in instrumentation.ts never sees it -
     // this route swallows its failures by design so a probe cannot tell a
     // broken deployment from a wrong order number. Reported explicitly for
     // exactly that reason: nothing else would ever surface it.

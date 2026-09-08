@@ -13,7 +13,7 @@ export default async function AccountLayout({
   /*
    * Staff get a way back into the studio from here as well as from the header.
    * This is the page someone lands on after signing in, so it is where they
-   * look — and on a narrow screen the header's Studio button is hidden.
+   * look - and on a narrow screen the header's Studio button is hidden.
    */
   const isStaff = (await getStaffRole()) !== null;
 

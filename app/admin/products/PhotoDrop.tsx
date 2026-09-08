@@ -9,14 +9,14 @@ import { removePhoto, uploadPhotos } from "../actions";
  * The drop zone, and the photos already on the product.
  *
  * There is no panel behind it and no coloured placeholder standing in for
- * pictures that do not exist yet — a product with no photographs shows the drop
+ * pictures that do not exist yet - a product with no photographs shows the drop
  * zone and nothing else. A big empty frame announcing an absence is a worse
  * answer than the thing you use to fix it.
  *
  * A client component because dragging a file onto an area is a browser event
  * with no server-rendered equivalent. The upload itself is the `uploadPhotos`
  * server action, which re-checks staff, re-checks the file type and size, and
- * renames the file — none of which can be trusted to this side.
+ * renames the file - none of which can be trusted to this side.
  */
 export function PhotoDrop({
   productId,
@@ -124,7 +124,7 @@ function Pending() {
 }
 
 /*
- * Its own component so each photo gets its own action state — and, more to the
+ * Its own component so each photo gets its own action state - and, more to the
  * point, so `removePhoto` is *called* from a client component rather than
  * *defined* in one. A "use client" file cannot declare a server action;
  * `<form action={someLocalAsyncFunction}>` written here compiles and type-checks

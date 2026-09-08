@@ -7,7 +7,7 @@ import { createAdminClient, getUser } from "@/lib/supabase/server";
  *
  * DEFECT THIS CLOSES: `inviteStaff` has always handed back a link to
  * `/admin/join?token=…`, and that route did not exist. Every invitation the
- * owner has ever made 404s, so nobody has ever been able to accept one — there
+ * owner has ever made 404s, so nobody has ever been able to accept one - there
  * is no path into `public.staff` for Studio or Packing at all, and the only
  * person in the studio is the owner, placed by hand in the SQL editor. This
  * module is the missing half of the invitation.
@@ -22,7 +22,7 @@ import { createAdminClient, getUser } from "@/lib/supabase/server";
  *   1. The token is matched by its SHA-256 hash, because that is all the
  *      database holds (0003_admin.sql, and `inviteStaff`). The plaintext is
  *      never stored, never logged and never echoed back to the page.
- *   2. Who is accepting comes from the session cookie — `getUser()` — and from
+ *   2. Who is accepting comes from the session cookie - `getUser()` - and from
  *      nothing else. No email, user id or role is ever read out of the URL or
  *      the form.
  *   3. `staff` and `staff_invitations` have RLS on with no policy and are
@@ -35,8 +35,8 @@ import { createAdminClient, getUser } from "@/lib/supabase/server";
  *
  * `staff.role` also allows 'owner'; `staff_invitations.role` does not, and the
  * check constraint in 0003_admin.sql says so. This list is the same rule in
- * TypeScript, so a row that somehow carries 'owner' — a hand-edit in the SQL
- * editor, a constraint dropped in a future migration — is refused here rather
+ * TypeScript, so a row that somehow carries 'owner' - a hand-edit in the SQL
+ * editor, a constraint dropped in a future migration - is refused here rather
  * than quietly minting a second owner who can then invite more owners.
  */
 export const INVITABLE_ROLES = ["studio", "packing"] as const;
@@ -51,7 +51,7 @@ export function isInvitableRole(value: string): value is InvitableRole {
  * The one hashing rule, in one place.
  *
  * `inviteStaff` writes the hash and this module reads it. If the two ever
- * disagreed — a different algorithm, a different digest encoding — every
+ * disagreed - a different algorithm, a different digest encoding - every
  * invitation would silently stop matching and the page would say "not valid"
  * to people holding a perfectly good link. Neither end computes it itself.
  */
@@ -124,7 +124,7 @@ export async function resolveJoin(rawToken: string): Promise<JoinState> {
    * it deliberately does not name the address that was invited.
    *
    * An invitation is to a person, not a link to forward. Somebody who was sent
-   * the link by mistake learns only that it is not theirs — never who it was
+   * the link by mistake learns only that it is not theirs - never who it was
    * for, and never whether it is still live. `inviteStaff` lower-cases the
    * address on the way in, so both sides are compared lower-cased; an account
    * with no email at all can never match.
@@ -143,7 +143,7 @@ export async function resolveJoin(rawToken: string): Promise<JoinState> {
 
   // Already in the studio: say so and send them there rather than writing a
   // second row. `staff.user_id` is the primary key, so a duplicate would fail
-  // anyway — but the person deserves a sentence, not a constraint violation.
+  // anyway - but the person deserves a sentence, not a constraint violation.
   const staff = await getStaffRole();
   if (staff) return { kind: "already_staff", role: staff.role };
 

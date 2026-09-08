@@ -9,7 +9,7 @@
  *
  * The route rate-limits to 10 requests per 60s per IP, and this file sends 7,
  * so requests are spaced by DELAY_MS (default 1000). Two runs back to back will
- * trip the limit — a 429 makes the run meaningless, so it aborts rather than
+ * trip the limit - a 429 makes the run meaningless, so it aborts rather than
  * reporting failures that are really throttling. Raise DELAY_MS to re-run soon.
  */
 import { readFileSync } from "node:fs";
@@ -33,7 +33,7 @@ const CATALOGUE = join(
  * `fallback-N` ids are POSITIONAL: `scripts/generate-seed.mjs` numbers products
  * by their index, so adding or reordering one silently re-points every id after
  * it. Checkout resolves the line by `slug` and only echoes `product_id` back, so
- * a stale hardcoded id would not turn a case red — the harness would keep
+ * a stale hardcoded id would not turn a case red - the harness would keep
  * printing PASS while exercising a different product than the one it names.
  * Deriving the id makes the catalogue the single source and turns that silent
  * drift into a loud abort.
@@ -67,7 +67,7 @@ function loadProductIds() {
   if (ids.size === 0) {
     abort(
       `Parsed 0 products out of ${CATALOGUE}. The generated shape has changed ` +
-        `— this parser assumes "id" is emitted immediately before "slug".`,
+        `- this parser assumes "id" is emitted immediately before "slug".`,
     );
   }
   return ids;
@@ -75,7 +75,7 @@ function loadProductIds() {
 
 function abort(message) {
   console.error(`\n${message}`);
-  console.error("Refusing to guess a product id — this run would be a lie.");
+  console.error("Refusing to guess a product id, this run would be a lie.");
   process.exit(3);
 }
 
@@ -135,7 +135,7 @@ for (const [name, expected, body] of CASES) {
   const data = await res.json().catch(() => ({}));
 
   if (res.status === 429) {
-    console.error(`\n429 on "${name}" — rate limited. Run is INVALID.`);
+    console.error(`\n429 on "${name}", rate limited. Run is INVALID.`);
     console.error(`Wait 60s and retry, or set DELAY_MS higher.`);
     process.exit(2);
   }
@@ -153,5 +153,5 @@ for (const r of rows) {
 
 const failed = rows.filter((r) => !r.pass);
 console.log(`\n${rows.length - failed.length}/${rows.length} passed.`);
-if (!rows[6]?.pass) console.log("Negative control did NOT reject — treat this harness as broken.");
+if (!rows[6]?.pass) console.log("Negative control did NOT reject, treat this harness as broken.");
 process.exit(failed.length > 0 ? 1 : 0);

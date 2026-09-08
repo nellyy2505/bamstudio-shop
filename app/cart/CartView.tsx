@@ -56,7 +56,7 @@ type MethodQuote = {
 };
 
 /**
- * Postage, or a placeholder — never a guess.
+ * Postage, or a placeholder - never a guess.
  *
  * `null` means the quote has not arrived, and it must render as words rather
  * than as a number. Falling back to 0, or to a flat rate, would put a figure in
@@ -82,7 +82,7 @@ function LineRow({ line }: { line: BasketLine }) {
   const href = scoop ? `/scoop/${line.slug}` : `/product/${line.slug}`;
 
   // What the customer bought, in one line under the name. For a scoop that is
-  // the promise and nothing else — "5 pieces" — because at this moment nobody,
+  // the promise and nothing else - "5 pieces" - because at this moment nobody,
   // the studio included, knows what will be in it.
   const variant = scoop
     ? scoopVariantLabel(line.piece_count)
@@ -125,12 +125,12 @@ function LineRow({ line }: { line: BasketLine }) {
                 one the studio had never agreed to. */}
             {scoop ? (
               <p className="mt-1 text-xs text-faint">
-                Drawn by hand after you order — the pieces are a surprise
+                Drawn by hand after you order. The pieces are a surprise
               </p>
             ) : null}
             {!scoop && line.is_personalised ? (
               <p className="mt-1 text-xs text-faint">
-                Personalised — can only be returned if faulty
+                Personalised, can only be returned if faulty
               </p>
             ) : null}
           </div>
@@ -236,7 +236,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
 
   /*
    * Postage is quoted by the server from the server's own product rows. The
-   * browser sends slugs and quantities and nothing else — it never sends a
+   * browser sends slugs and quantities and nothing else - it never sends a
    * weight, and the price it gets back is for display only: checkout re-quotes
    * through the same `quoteBasket()` on the same rows, so this is a preview of
    * that calculation rather than an input to it. A basket that could name its
@@ -249,7 +249,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
    * A scoop has no product row and therefore no weight of its own; the TIER
    * carries a worst-case packed weight, which is a different table and a
    * different lookup on the server. So the two kinds of line are sent to the
-   * quote route in two arrays rather than one — the server can then load each
+   * quote route in two arrays rather than one - the server can then load each
    * from the table it actually lives in, and neither kind can be silently
    * resolved against the wrong one. (`scoop_tiers.slug` and `products.slug` are
    * separate unique indexes; nothing stops the same string existing in both.)
@@ -293,8 +293,8 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
           quotes: res.ok && data?.quotes ? data.quotes : null,
         });
       } catch {
-        // The route cannot really fail — quoteBasket() does not throw and falls
-        // back to a table that needs no network — so this is a dead browser
+        // The route cannot really fail - quoteBasket() does not throw and falls
+        // back to a table that needs no network - so this is a dead browser
         // connection. Recording null keeps the words instead of a wrong price.
         if (!stale) setQuoted({ signature: basketSignature, quotes: null });
       }
@@ -311,8 +311,8 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
     quoted?.signature === basketSignature ? quoted.quotes : null;
   const selectedQuote = quotes?.[method] ?? null;
   /**
-   * §0.10: the promotion applies to standard post only — express is billed in
-   * full at every subtotal — yet the basket once said "Free shipping unlocked"
+   * §0.10: the promotion applies to standard post only - express is billed in
+   * full at every subtotal - yet the basket once said "Free shipping unlocked"
    * off the subtotal alone while charging express. A price claim must never be
    * derived from the subtotal on its own, so ask shippingShare() which method
    * is actually discounted rather than naming one here, and qualify every
@@ -320,7 +320,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
    *
    * Three bands now, not two. `selectedIsFree` alone is no longer enough to
    * describe the basket: between the two thresholds the customer pays half,
-   * which is neither "free" nor "charged" and has to be said out loud — a
+   * which is neither "free" nor "charged" and has to be said out loud - a
    * halved figure with no explanation reads as a quote that went wrong.
    */
   const selectedShare = shippingShare(subtotal, method);
@@ -384,11 +384,11 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
            * Scoops go in their own array for the same reason they do in the
            * quote above: a tier is a different table, and a line that says only
            * "slug" cannot be resolved against the right one without being told
-           * which kind it is. The slug and the quantity are ALL that is sent —
+           * which kind it is. The slug and the quantity are ALL that is sent -
            * no price, no piece count, no weight. Checkout recomputes every one
            * of those from the tier row, exactly as it recomputes a product's
            * price, and refuses the tier outright if the owner has since
-           * switched it off or unpriced it — which is the whole of what
+           * switched it off or unpriced it - which is the whole of what
            * `availability.sellable` asks (lib/scoop.ts). What the browser is
            * holding is a fortnight-old copy of a shop-editable row; it is a
            * display value, never an input to a bill.
@@ -396,7 +396,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
            * "Not sellable right now" was the old phrasing and invited the
            * reading it once had: `sellable` used to fall false when the pool
            * could not fill a scoop off the shelf. It does not, and a basket is
-           * never refused over a shelf count — the shop prints to order, so a
+           * never refused over a shelf count - the shop prints to order, so a
            * short bowl is topped up before packing.
            */
           scoop_lines: lines
@@ -433,7 +433,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
         {cancelled ? (
           <div className="mx-auto mb-8 max-w-xl">
             <Alert tone="info">
-              Checkout was cancelled — nothing has been charged.
+              Checkout was cancelled. Nothing has been charged.
             </Alert>
           </div>
         ) : null}
@@ -443,7 +443,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
           </span>
           <h1 className="mt-7 text-3xl">Your basket is empty</h1>
           <p className="mt-2.5 max-w-md text-muted">
-            Nothing to click yet. Bestsellers are a good place to start — or
+            Nothing to click yet. Bestsellers are a good place to start, or
             design a name charm from scratch.
           </p>
           <div className="mt-7 flex flex-wrap justify-center gap-3.5">
@@ -475,7 +475,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
       {cancelled ? (
         <div className="mb-6">
           <Alert tone="info">
-            Checkout was cancelled — your basket is exactly as you left it and
+            Checkout was cancelled. Your basket is exactly as you left it and
             nothing has been charged.
           </Alert>
         </div>
@@ -500,7 +500,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
               maxLength={500}
               value={giftNote}
               onChange={(event) => setGiftNote(event.target.value)}
-              placeholder="“Happy birthday Mia!” — we'll handwrite it on the card…"
+              placeholder="“Happy birthday Mia!”, we'll handwrite it on the card…"
               className="mt-1.5 w-full rounded-xl border border-line2 bg-surface p-3.5 text-[15px] placeholder:text-faint focus:border-accent focus:outline-none"
             />
           </div>
@@ -527,10 +527,10 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                       : subsidyReached
                         ? selectedIsSubsidised
                           ? `We're paying ${subsidyPercentLabel} of your ${freeRateLabel} shipping`
-                          : `We'd pay ${subsidyPercentLabel} of ${freeRateLabel} shipping — ${selectedMethodLabel} is charged in full`
+                          : `We'd pay ${subsidyPercentLabel} of ${freeRateLabel} shipping, but ${selectedMethodLabel} is charged in full`
                         : selectedIsFree
                           ? `Free ${freeRateLabel} shipping unlocked`
-                          : `Free ${freeRateLabel} shipping unlocked — ${selectedMethodLabel} is still charged`}
+                          : `Free ${freeRateLabel} shipping unlocked, but ${selectedMethodLabel} is still charged`}
                   </span>
                 </span>
                 <b
@@ -550,14 +550,14 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                 <div
                   className={cx(
                     "h-2 rounded-full transition-[width]",
-                    // Green only when the selected method really is free — a
+                    // Green only when the selected method really is free - a
                     // full green bar beside an Express charge reads as "free".
                     selectedIsFree ? "bg-good" : "bg-accent",
                   )}
                   style={{ width: `${progress}%` }}
                 />
                 {/* The half-subsidy threshold, drawn where it falls. Decorative
-                    only — the sentence above it is what states the policy. */}
+                    only - the sentence above it is what states the policy. */}
                 <span
                   aria-hidden
                   className="absolute top-0 h-2 w-px bg-bg"
@@ -623,7 +623,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                       <span className="block text-xs text-muted">
                         {/* Tracking is read off the quote, never asserted. A
                             Large Letter is untracked and uninsured, and
-                            `letter_eligible` is a checkbox on a product row —
+                            `letter_eligible` is a checkbox on a product row -
                             so the only honest source for this word is the
                             service the quote actually picked. Until it lands,
                             the range is stated without a tracking claim. */}
@@ -708,7 +708,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
           </div>
           <p className="mt-3 flex items-center justify-center gap-2 text-center text-[12.5px] text-muted">
             <Icon name="shield" size={15} />
-            Card details go straight to Stripe — we never see them
+            Card details go straight to Stripe. We never see them
           </p>
           <p className="mt-2 flex items-start gap-2 text-[12.5px] text-muted">
             <Icon name="box" size={15} className="mt-px shrink-0" />

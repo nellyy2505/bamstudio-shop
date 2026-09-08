@@ -28,8 +28,8 @@ export type SavedAddress = {
 };
 
 /**
- * Every /account page needs the same signed-in pair. A missing session — or a
- * clone with no Supabase env vars — goes back to /login instead of throwing.
+ * Every /account page needs the same signed-in pair. A missing session - or a
+ * clone with no Supabase env vars - goes back to /login instead of throwing.
  */
 export async function requireAccount() {
   let user = null;

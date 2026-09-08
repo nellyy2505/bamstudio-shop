@@ -76,7 +76,7 @@ export function ProductGallery({ product }: { product: Product }) {
         <span className="absolute right-3.5 bottom-3.5">
           <Pill tone="surface" className="text-muted">
             <Icon name="camera" size={14} />
-            Illustration — photos coming soon
+            Illustration, photos coming soon
           </Pill>
         </span>
       </div>

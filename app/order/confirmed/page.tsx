@@ -35,8 +35,8 @@ export const metadata: Metadata = {
  * the RESEND_API_KEY / EMAIL_FROM secrets on the server at render time.
  * Prerendered, that answer is frozen into the HTML at build: an owner who adds
  * the two secrets to the host without triggering a rebuild would get
- * confirmation emails going out from the Stripe webhook while this page — the
- * first thing a paying customer sees — still tells them none is coming. The
+ * confirmation emails going out from the Stripe webhook while this page - the
+ * first thing a paying customer sees - still tells them none is coming. The
  * page is already uncacheable (it reads a Stripe session per visit), so this
  * costs nothing.
  */
@@ -51,16 +51,16 @@ const STEPS = ["Confirmed", "Printing", "Packed", "Shipped"];
  *
  * This page was the only route family in the shop with no rate limit, and it
  * is `force-dynamic` and takes the session id straight off the query string.
- * Nothing leaks — a session id that is not ours makes `retrieve()` throw, and
- * the catch turns that into "we couldn't check this order" — but each visit
+ * Nothing leaks - a session id that is not ours makes `retrieve()` throw, and
+ * the catch turns that into "we couldn't check this order" - but each visit
  * spends up to two Stripe API calls (`sessions.retrieve` and, when no order
  * row exists yet, `listLineItems`), and Stripe's rate limit is per *account*.
  * A loop on this URL therefore costs nothing to run and 429s real checkouts
  * for real customers, which is the failure that matters.
  *
  * 30 a minute per IP, which is deliberately loose. This page tells people to
- * refresh it — the order number is allocated by the webhook, so the copy in
- * OrderNumberCard says "Refresh this page and it should appear above" — and a
+ * refresh it - the order number is allocated by the webhook, so the copy in
+ * OrderNumberCard says "Refresh this page and it should appear above" - and a
  * customer who has just been charged and is watching for their number must
  * never be the one who gets throttled. Thirty refreshes inside a minute is
  * well past anything a person does and still cheap against Stripe's budget.
@@ -78,11 +78,11 @@ const CONFIRM_WINDOW_MS = 60_000;
  * handler that has one; a page is handed the request headers and nothing else.
  * So the headers are wrapped back into the shape the shared helper expects,
  * rather than growing a second copy of the "which value identifies a caller"
- * decision here — that decision is subtle (see the header of lib/rate-limit.ts
+ * decision here - that decision is subtle (see the header of lib/rate-limit.ts
  * on Fly appending to `x-forwarded-for`) and must exist in exactly one place.
  *
  * The URL is a placeholder: `clientKey()` reads headers only, and `.invalid` is
- * reserved by RFC 2606 so it can never resolve — the same device lib/safe-next.ts
+ * reserved by RFC 2606 so it can never resolve - the same device lib/safe-next.ts
  * uses for the same reason.
  */
 async function confirmationKey(): Promise<string> {
@@ -101,7 +101,7 @@ async function confirmationKey(): Promise<string> {
  * the send is queued with `after()` and can still fail, so the copy below says
  * an email is sent, never that it has arrived.
  *
- * (`canReachStudio` — is there any door at all — comes from lib/contact.ts and
+ * (`canReachStudio` - is there any door at all - comes from lib/contact.ts and
  * is the same test /track uses. It matters most on this page: every "get in
  * touch and we'll put it right" below is the remedy offered to someone who has
  * just been charged, so it must not name a door that does not exist.)
@@ -162,12 +162,12 @@ export default async function OrderConfirmedPage({
   /**
    * Stripe hands the browser this session id BEFORE payment, and redirects
    * here for delayed payment methods while the money is still in flight. So
-   * the page must never take reaching it as proof of payment — it reads the
+   * the page must never take reaching it as proof of payment - it reads the
    * session's real state and says only what is true.
    *
-   *  paid       — money taken, order confirmed.
-   *  processing — checkout completed on a delayed method; not yet paid.
-   *  unpaid     — never completed. Their basket must survive.
+   *  paid       - money taken, order confirmed.
+   *  processing - checkout completed on a delayed method; not yet paid.
+   *  unpaid     - never completed. Their basket must survive.
    */
   let paymentState: "paid" | "processing" | "unpaid" | "unknown" = "unknown";
 
@@ -186,14 +186,14 @@ export default async function OrderConfirmedPage({
     // /api/newsletter, /api/checkout, /api/shipping/quote and
     // /api/search/suggest all take the durable path.
     //
-    // 1. The check exists to make a throttled visit COST NOTHING — that is
+    // 1. The check exists to make a throttled visit COST NOTHING - that is
     //    the paragraph immediately above, and the early return below. A
     //    durable decision is itself a network round trip, so the guard would
     //    start spending the thing it was put here to save. On a route
     //    handler that trade is obviously worth it; on the guard whose entire
     //    argument is "costs nothing", it inverts the argument.
     // 2. What durability buys is "a restart does not hand back an
-    //    allowance", and the allowance here opens Stripe session retrieval —
+    //    allowance", and the allowance here opens Stripe session retrieval -
     //    reachable only with a `session_id`, which is a long Stripe-issued
     //    random string and not a public incrementing sequence. Contrast
     //    /api/track, where the key space is ~65k guesses and a fresh
@@ -213,7 +213,7 @@ export default async function OrderConfirmedPage({
     //    thirty from being told to wait, with nothing to forgive them.
     //
     // If a future reader wants uniformity, the honest way to get it is to
-    // stop counting refreshes and cache the Stripe read instead — not to
+    // stop counting refreshes and cache the Stripe read instead - not to
     // put a network hop in front of the last page a paying customer sees.
     // ─────────────────────────────────────────────────────────────────────
     const limit = rateLimit(
@@ -222,7 +222,7 @@ export default async function OrderConfirmedPage({
       CONFIRM_WINDOW_MS,
     );
     if (!limit.ok) {
-      // Bail out BEFORE the Stripe calls — throttling that still spends the
+      // Bail out BEFORE the Stripe calls - throttling that still spends the
       // quota protects nothing. The early return also means <ClearCartOnMount />
       // is never rendered on this path, so a basket survives being throttled,
       // exactly as it survives an unpaid session.
@@ -265,7 +265,7 @@ export default async function OrderConfirmedPage({
       }
 
       // Line items live in our own database, staged when the session was
-      // created — Stripe's metadata is too small to carry a basket.
+      // created - Stripe's metadata is too small to carry a basket.
       if (isDatabaseConfigured()) {
         const supabase = await createClient();
         const { data: order } = await supabase
@@ -309,8 +309,8 @@ export default async function OrderConfirmedPage({
   //
   // The two states are kept apart all the way into the copy. "unpaid" is
   // Stripe's own answer that no money was taken. "unknown" means the retrieve
-  // above threw — which happens on a transient Stripe outage AFTER a successful
-  // payment just as readily as on a bad session id — so it is only ever "we
+  // above threw - which happens on a transient Stripe outage AFTER a successful
+  // payment just as readily as on a bad session id - so it is only ever "we
   // could not check". Collapsing them, as this page used to, tells someone who
   // has just been charged that no payment was taken.
   if (paymentState === "unpaid" || paymentState === "unknown") {
@@ -330,11 +330,11 @@ export default async function OrderConfirmedPage({
    * This is the fix for WORKLOG §0.1 on this page, and it does not depend on
    * email. A confirmation email carrying this number is sent when the Resend
    * secrets are set, but it is queued with `after()` and can fail silently, and
-   * with the secrets unset nothing is sent at all — while `orders` RLS is
+   * with the secrets unset nothing is sent at all - while `orders` RLS is
    * `auth.uid() = user_id` in every configuration, so a guest can never see
    * their own order through the anon client. Without the number printed here
    * the order they just paid for could be untrackable. The session id in the
-   * URL is the authorisation — unguessable, and only this browser holds it.
+   * URL is the authorisation - unguessable, and only this browser holds it.
    *
    * The helper never throws (no database, no service-role key and query errors
    * all come back as `unavailable`), because a customer who has just been
@@ -346,13 +346,13 @@ export default async function OrderConfirmedPage({
 
   // `missing` is the one state where confirmation must not be claimed: the
   // money moved at Stripe and nothing here recorded it. It is deliberately
-  // distinct from `unavailable` — "we could not look it up" is not evidence
+  // distinct from `unavailable` - "we could not look it up" is not evidence
   // that no order exists, and saying so would be a fresh false claim.
   const view = orderView(lookup);
   const orderMissing = view.kind === "missing";
   const numberPending = view.kind === "pending";
   const orderNumber = view.kind === "number" ? view.orderNumber : null;
-  // Confirmation is claimed only when this page has actually SEEN the order —
+  // Confirmation is claimed only when this page has actually SEEN the order -
   // never on the strength of Stripe's payment_status alone (WORKLOG §0.5:
   // money taken, nothing recorded, page still says "order confirmed"). A
   // failed lookup is not evidence either way, so it too gets the hedged
@@ -360,7 +360,7 @@ export default async function OrderConfirmedPage({
   const orderSeen = view.kind === "number" || view.kind === "pending";
   const confirmed = paid && orderSeen;
 
-  const thanks = firstName ? `Thanks ${firstName} — ` : "Thanks — ";
+  const thanks = firstName ? `Thanks ${firstName}. ` : "Thanks. ";
 
   return (
     <div className="wrap max-w-3xl pt-12">
@@ -381,7 +381,7 @@ export default async function OrderConfirmedPage({
         </span>
         <h1 className="mt-5 mb-2 text-3xl md:text-[34px]">
           {paid
-            ? // "Payment received" whenever no order has been seen here — the
+            ? // "Payment received" whenever no order has been seen here. The
               // money is Stripe's fact, the order is ours, and only the second
               // one can confirm anything.
               `${thanks}${orderSeen ? "order confirmed!" : "payment received"}`
@@ -400,7 +400,7 @@ export default async function OrderConfirmedPage({
             orderMissing ? (
               <>
                 Stripe has your payment. We can&apos;t see an order for it here
-                yet — the note below says what happens now.
+                yet. The note below says what happens now.
               </>
             ) : orderNumber ? (
               <>Your payment went through, and your order number is below.</>
@@ -412,13 +412,13 @@ export default async function OrderConfirmedPage({
             ) : (
               <>
                 Your payment went through. We can&apos;t show your order number
-                just now — the note below says what to do.
+                just now. The note below says what to do.
               </>
             )
           ) : (
             <>
               Your payment method settles over a day or two. Printing starts the
-              moment it clears — nothing to do in the meantime.
+              moment it clears. Nothing to do in the meantime.
             </>
           )}
         </p>
@@ -464,11 +464,11 @@ export default async function OrderConfirmedPage({
           <Icon name="box" size={18} className="mt-px shrink-0" />
           <span>
             {/* No dispatch or tracking notification is sent by anything in this
-                codebase, in any configuration — the order confirmation is the
+                codebase, in any configuration - the order confirmation is the
                 only mail the shop sends, and it says the same thing. So the old
                 "tracking lands in your inbox" promise is gone rather than
                 gated: there is no configuration in which it would be true. */}
-            Your pieces are <b className="text-ink">printed to order</b> —
+            Your pieces are <b className="text-ink">printed to order</b>,
             {paid ? " printing" : " once payment clears, printing"} takes{" "}
             {PRINT_LEAD_TIME.label} before anything is posted. Check where
             it&apos;s up to any time at{" "}
@@ -597,7 +597,7 @@ function OrderNumberCard({
   /**
    * The email address Stripe collected, shown so the customer has BOTH halves
    * of what /track asks for. It comes from the checkout session this page
-   * already reads — never from a second admin query, whose column list is
+   * already reads - never from a second admin query, whose column list is
    * deliberately order number and status only.
    */
   email: string | null;
@@ -613,7 +613,7 @@ function OrderNumberCard({
           {orderNumber}
         </p>
         <p className="mx-auto mt-3 max-w-md text-[13.5px] text-muted">
-          This is the number to quote about your order. Save it — checking
+          This is the number to quote about your order. Save it, because checking
           where the order is up to needs this number and the email you ordered
           with
           {email ? (
@@ -623,14 +623,14 @@ function OrderNumberCard({
           ) : null}
           .
           {/* The one email-shaped statement left on the page, and the only one
-              that may mention the confirmation email — gated on the same
+              that may mention the confirmation email - gated on the same
               secrets the webhook checks, never on a separate flag, because a
               denial printed while the mail is going out is a lie to someone who
               has just been charged. The send is queued after the response and
               can fail, so the true branch never says the email has arrived and
               never makes it the way to track the order. */}
           {SENDS_CONFIRMATION
-            ? " We also email this to you, along with what you ordered. If it does not turn up, this page and the tracking page are how you check on your order — you do not need the email."
+            ? " We also email this to you, along with what you ordered. If it does not turn up, this page and the tracking page are how you check on your order. You do not need the email."
             : " We don't send order emails, so this page and the tracking page are how you check on it."}
         </p>
         <div className="mt-4 flex justify-center">
@@ -645,14 +645,14 @@ function OrderNumberCard({
   if (view.kind === "pending") {
     // Paid (or settling) with no number yet. Order numbers are allocated by
     // the Stripe webhook on payment, not at checkout, so beating the webhook
-    // back to this page is normal — it is not an error and must not read as
+    // back to this page is normal - it is not an error and must not read as
     // one.
     return (
       <div className="card mb-6 p-6 text-center">
         <b className="text-[15px]">Your order number is still being allocated</b>
         <p className="mx-auto mt-2 max-w-md text-[13.5px] text-muted">
           {paid
-            ? "Your order is here, and the number is issued once Stripe confirms the payment — usually within a few moments. Refresh this page and it should appear above, ready to use at "
+            ? "Your order is here, and the number is issued once Stripe confirms the payment, usually within a few moments. Refresh this page and it should appear above, ready to use at "
             : "The number is issued when your payment settles, which takes a day or two on this payment method. Come back to this page then and it should appear above, ready to use at "}
           <Link
             href="/track"
@@ -674,7 +674,7 @@ function OrderNumberCard({
   }
 
   if (view.kind === "missing") {
-    // Stripe has the money and we have no order for it — WORKLOG §0.5's
+    // Stripe has the money and we have no order for it - WORKLOG §0.5's
     // failure, reached here rather than hidden behind "order confirmed".
     return (
       <div className="card mb-6 p-6 text-center">
@@ -683,7 +683,7 @@ function OrderNumberCard({
           Your payment is recorded with Stripe, but no order for it has reached
           us yet, so there is no order number to show and nothing has gone to
           print. Refresh this page in a minute; if it still says this, please
-          don&apos;t pay again —{" "}
+          don&apos;t pay again:{" "}
           {/* The remedy is only real if there is a channel to ask through, so
               it is gated the same way /track gates "message us". With none, the
               customer is at least told not to pay twice and where any channel
@@ -704,7 +704,7 @@ function OrderNumberCard({
 
   // `unavailable`: no database, no service-role key, or the lookup errored.
   // Saying "no order matches" here would be a guess, and a false one whenever
-  // the order exists — exactly the class of claim this page is being fixed
+  // the order exists - exactly the class of claim this page is being fixed
   // for. So it says what is actually true: we cannot tell right now.
   return (
     <div className="card mb-6 p-6 text-center">
@@ -743,7 +743,7 @@ function OrderNumberCard({
 }
 
 /**
- * Reached by opening the success URL without a completed payment — or without
+ * Reached by opening the success URL without a completed payment - or without
  * being able to tell. Nothing is confirmed on either branch, and crucially
  * <ClearCartOnMount /> is NOT rendered, so the basket is still there when they
  * go back.
@@ -756,8 +756,8 @@ function NotPaid({
   hasSession: boolean;
   /**
    * Did Stripe actually answer? True only when `checkout.sessions.retrieve`
-   * returned and said the session was not paid. False when the call threw —
-   * a network blip, an expired key, a Stripe incident — in which case we know
+   * returned and said the session was not paid. False when the call threw -
+   * a network blip, an expired key, a Stripe incident - in which case we know
    * nothing about the payment and must not deny one. Someone whose card HAS
    * been charged can land here, and telling them no money was taken is a false
    * statement to a customer who is out of pocket.
@@ -768,7 +768,7 @@ function NotPaid({
    *
    * Kept apart from `checked` because the two are different facts and the copy
    * has to match: `checked: false` on its own means we tried Stripe and could
-   * not reach it, and saying that here would be untrue — we never tried. The
+   * not reach it, and saying that here would be untrue - we never tried. The
    * remedy differs too. A Stripe outage is "try again in a few minutes"; this
    * clears on its own in under a minute and the only thing to do is stop
    * refreshing.
@@ -798,7 +798,7 @@ function NotPaid({
             <>
               This page has been checked a lot in the last minute, so we&apos;ve
               paused looking your order up. Nothing is wrong and nothing is
-              lost — if you were charged, Stripe has the payment. Wait about a
+              lost. If you were charged, Stripe has the payment. Wait about a
               minute, then reload this page and your order details will be
               here. Your basket is exactly as you left it in the meantime.
             </>
@@ -817,7 +817,7 @@ function NotPaid({
             <>
               We couldn&apos;t reach Stripe to check this checkout, so we
               can&apos;t tell you whether a payment went through. If you were
-              charged, Stripe has the payment and nothing is lost — please
+              charged, Stripe has the payment and nothing is lost. Please
               don&apos;t pay again. Try this page again in a few minutes. Your
               basket is exactly as you left it in the meantime.
             </>

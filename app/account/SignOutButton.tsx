@@ -15,11 +15,11 @@ export function SignOutButton() {
     try {
       await createClient().auth.signOut();
     } catch {
-      // Session already gone or Supabase unreachable — still leave /account.
+      // Session already gone or Supabase unreachable - still leave /account.
     }
     // Unconditional, and before navigating: this is a soft navigation, so the
     // favourites module survives it. Leaving this account's ids in the store
-    // would let the next shopper on a shared machine adopt them — and the
+    // would let the next shopper on a shared machine adopt them - and the
     // reconcile would upsert them under *their* user id.
     clearFavourites();
     router.push("/");

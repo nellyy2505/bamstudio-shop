@@ -13,7 +13,7 @@ export function getStripe(): Stripe {
   if (!key) {
     throw new Error(
       "STRIPE_SECRET_KEY is not set. Add it to .env.local to run locally, " +
-        "and set it on the server with `fly secrets set` — it is a runtime " +
+        "and set it on the server with `fly secrets set`, it is a runtime " +
         "secret, never a build arg. See SETUP.md.",
     );
   }
@@ -35,7 +35,7 @@ export function getStripe(): Stripe {
  * a *production* build was measured sending Stripe
  * `success_url=http://localhost:3000/order/confirmed?session_id=...`. The card
  * is charged, Stripe redirects the customer to their own machine, connection
- * refused — and the webhook records the order anyway. A paid order, and a
+ * refused - and the webhook records the order anyway. A paid order, and a
  * customer certain it failed. So this now throws: the failure is a dead build
  * or a dead boot, which someone sees, instead of a silent charge, which nobody
  * does.
@@ -55,7 +55,7 @@ export function getStripe(): Stripe {
  * `.next/server/chunks/lib_stripe_ts_*.js`, so at runtime the variable is
  * ignored entirely. Booting the built server with a different
  * `NEXT_PUBLIC_SITE_URL` still emits the value it was built with, and booting
- * it with the variable removed does not throw — it serves the baked one.
+ * it with the variable removed does not throw - it serves the baked one.
  *
  * The consequence, which is the thing to remember: **changing the shop's
  * domain requires a REBUILD, not an env change and a restart.** Update the
@@ -64,7 +64,7 @@ export function getStripe(): Stripe {
  * does nothing.
  *
  * `siteUrl()` has no client callers, and the value is absent from
- * `.next/static`, so this is a server-bundle bake only — nothing here leaks a
+ * `.next/static`, so this is a server-bundle bake only - nothing here leaks a
  * secret. Do not call `siteUrl()` from a client component.
  */
 export function siteUrl(): string {
@@ -73,14 +73,14 @@ export function siteUrl(): string {
 
   // The `https://$VERCEL_URL` branch is deleted rather than kept. The shop
   // runs on Fly.io now, which sets nothing of the sort, so on the only target
-  // we have it was unreachable code — and an unreachable branch that ends in a
+  // we have it was unreachable code - and an unreachable branch that ends in a
   // *silent* default is precisely how the localhost bug survived. One source
   // of truth, or a throw.
   if (process.env.NODE_ENV !== "development") {
     throw new Error(
       "NEXT_PUBLIC_SITE_URL is not set. It must be the shop's public origin " +
         "(e.g. https://shop.bamstudio.com.au), and it is needed AT BUILD " +
-        "TIME — it is baked into the bundle: Stripe's success/cancel " +
+        "TIME, it is baked into the bundle: Stripe's success/cancel " +
         "redirects, the " +
         "/track link in confirmation emails and every canonical URL are " +
         "built from it. Without it customers are charged and then redirected " +

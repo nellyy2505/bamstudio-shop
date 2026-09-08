@@ -285,7 +285,7 @@ export function AddressManager({
             <Field
               label="Address line 2"
               htmlFor="addr-line2"
-              hint="Unit, level or building — optional"
+              hint="Unit, level or building (optional)"
             >
               <input
                 id="addr-line2"
@@ -343,7 +343,7 @@ export function AddressManager({
           <Field
             label="Phone"
             htmlFor="addr-phone"
-            hint="For delivery updates — optional"
+            hint="For delivery updates (optional)"
           >
             <input
               id="addr-phone"

@@ -25,7 +25,7 @@ type BrowserClient = ReturnType<typeof createClient>;
  *
  * Memoised at module scope on purpose: /shop renders dozens of buttons and
  * they must share one round trip, not one each. Keyed by user id rather than
- * held as a bare promise, because signing in is a *soft* navigation — the
+ * held as a bare promise, because signing in is a *soft* navigation - the
  * module is never re-evaluated, so a promise cached while signed out would go
  * on answering "no user" for the rest of the session and a guest's hearts
  * would never reach the database.
@@ -33,7 +33,7 @@ type BrowserClient = ReturnType<typeof createClient>;
  * The entry is installed *synchronously*, before the session is read, and the
  * id is filled in once it is known. Installing it only after `getSession()`
  * resolved would let every button that mounted in the same tick past the memo
- * check while they were all still suspended on that await — two dozen selects
+ * check while they were all still suspended on that await - two dozen selects
  * for one page load. The object identity is also the run's ticket: a run only
  * writes anything while `reconciliation` is still pointing at its own entry.
  */
@@ -64,7 +64,7 @@ function setLocalFavourite(productId: string, on: boolean) {
 }
 
 /**
- * Retires the memo as soon as the identity behind it changes — a sign-out
+ * Retires the memo as soon as the identity behind it changes - a sign-out
  * here, or a sign-in/out in another tab sharing the same cookie. Registered
  * only once we know somebody is signed in, so guests still touch nothing.
  */
@@ -75,7 +75,7 @@ function watchAuthIdentity(supabase: BrowserClient) {
     const userId = session?.user?.id ?? null;
     // Token refreshes re-fire with the same user; only a real change matters.
     // An entry keyed null has not read its session yet, so any signed-in
-    // identity counts as a change — and the run it retires notices, because
+    // identity counts as a change - and the run it retires notices, because
     // every write it makes is gated on still owning the memo.
     if (reconciliation && reconciliation.userId !== userId) {
       reconciliation = null;
@@ -90,7 +90,7 @@ function watchAuthIdentity(supabase: BrowserClient) {
  * there. An `await` anywhere in here would reopen the stampede.
  */
 function reconcileFavourites(): Promise<void> {
-  // Signed-out visitors never reach Supabase — the local list is the whole
+  // Signed-out visitors never reach Supabase - the local list is the whole
   // truth for them, exactly as before.
   if (!isSupabaseConfigured()) return Promise.resolve();
 
@@ -117,7 +117,7 @@ async function identifyAndReconcile(entry: Reconciliation): Promise<void> {
 
     if (!userId) {
       // Retire the entry so a sign-in later in this session starts a fresh
-      // one — but only if it is still ours to retire.
+      // one - but only if it is still ours to retire.
       if (reconciliation === entry) reconciliation = null;
       return;
     }
@@ -155,8 +155,8 @@ async function runReconcile(
 
     // The shopper may have signed out while the select was in flight, in which
     // case clearFavourites() has already emptied the store and this run holds
-    // nothing but the previous account's ids. Writing them back — locally or
-    // to the rows — is the shared-machine leak, so stop here instead.
+    // nothing but the previous account's ids. Writing them back - locally or
+    // to the rows - is the shared-machine leak, so stop here instead.
     if (!stillOurs()) return;
 
     const remote = ((data ?? []) as { product_id: string }[]).map(
@@ -164,7 +164,7 @@ async function runReconcile(
     );
     // hydrate(), not getSnapshot(): /account/favourites mounts the sync with
     // no heart on the page, so nothing has subscribed and the cache would
-    // still hold the initial empty list — losing the guest ids to migrate.
+    // still hold the initial empty list - losing the guest ids to migrate.
     const local = favouritesStore.hydrate();
 
     // Union, not replace: anything hearted while signed out has to survive
@@ -187,7 +187,7 @@ async function runReconcile(
     if (!sameIds(merged, local)) favouritesStore.set(merged);
   } catch {
     // Offline, or the table is unreachable. The local list still renders, and
-    // dropping the memo lets the next mount try again — but only if it is
+    // dropping the memo lets the next mount try again - but only if it is
     // still ours, so a failure here can't retire a newer shopper's reconcile.
     if (stillOurs()) reconciliation = null;
   }
@@ -197,7 +197,7 @@ async function runReconcile(
  * Wipe every trace of the current shopper's list. Called on sign-out: without
  * it the next account to sign in on a shared machine inherits the leftover
  * localStorage ids, which the reconcile unions into their list and upserts
- * into their rows — one account's favourites written under another's id.
+ * into their rows - one account's favourites written under another's id.
  */
 export function clearFavourites() {
   reconciliation = null;
@@ -248,7 +248,7 @@ export function FavouriteButton({
     favouritesStore.getServerSnapshot,
   );
 
-  // Kicks the shared, once-per-load reconcile. The store — not setState —
+  // Kicks the shared, once-per-load reconcile. The store - not setState -
   // carries the result, so nothing here sets state from an effect.
   useEffect(() => {
     void reconcileFavourites();
@@ -268,7 +268,7 @@ export function FavouriteButton({
         data: { user },
       } = await supabase.auth.getUser();
       // A guest's list lives only in localStorage, so there is nothing to
-      // check and nothing to revert — the optimistic change *is* the truth.
+      // check and nothing to revert - the optimistic change *is* the truth.
       if (!user) return;
 
       const { error } = next
@@ -283,7 +283,7 @@ export function FavouriteButton({
 
       // supabase-js resolves rather than throwing when RLS refuses a write or
       // the request fails, so an unchecked call leaves the heart filled over a
-      // row that was never written — and /account/favourites disagreeing with
+      // row that was never written - and /account/favourites disagreeing with
       // /shop forever. Springing the heart back is the whole notification.
       if (error) setLocalFavourite(productId, !next);
     } catch {

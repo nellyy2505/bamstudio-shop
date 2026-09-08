@@ -183,18 +183,18 @@ function withFieldAria(
  * Points the field's control at the message underneath it.
  *
  * The control is `children`, so the only way to put an attribute on it from
- * here is to clone it. That is narrower than it sounds — this walks to the
+ * here is to clone it. That is narrower than it sounds - this walks to the
  * *first* `input`/`select`/`textarea` and clones only that:
  *
  *  - a single control (every caller in the shop today) is cloned;
- *  - a control wrapped in a fragment — the sign-up password box, which puts a
- *    strength meter beside its input — is found one level in. A fragment takes
+ *  - a control wrapped in a fragment - the sign-up password box, which puts a
+ *    strength meter beside its input - is found one level in. A fragment takes
  *    no props of its own, so cloning it directly would put `aria-invalid` on a
  *    `React.Fragment` and React would warn and drop it;
  *  - **anything else is returned untouched.** Several children, a custom
  *    component, plain text, `null`: nothing is cloned, nothing throws, and the
  *    field renders exactly as it did before. The error still gets an `id` and
- *    `role="alert"`, so it is still announced when it appears — only the
+ *    `role="alert"`, so it is still announced when it appears - only the
  *    on-focus link is lost, and no caller is in that shape.
  */
 function describeControl(
@@ -227,7 +227,7 @@ function describeControl(
  *
  * The message is wired to the control, not just placed near it. Before this,
  * `{error}` was a bare `<span>` with no `id`, nothing referenced it and the
- * control was never marked invalid — so on every form in the shop the failure
+ * control was never marked invalid - so on every form in the shop the failure
  * was carried by red text in a particular position and by nothing else. A
  * screen reader user tabbing back to a rejected field heard the label again and
  * no reason. `app/product/[slug]/ProductBuy.tsx` had already done this by hand
@@ -236,7 +236,7 @@ function describeControl(
  * Three decisions worth keeping:
  *
  *  - **The ids are derived, not generated.** `useId()` is a hook, and this
- *    module carries no `"use client"` — `app/admin/settings/page.tsx`,
+ *    module carries no `"use client"` - `app/admin/settings/page.tsx`,
  *    `app/admin/orders/page.tsx` and four more render `Field` from *server*
  *    components, where a hook cannot run. Deriving from `htmlFor` (which all 81
  *    call sites pass) is stable across the server render and hydration by
@@ -411,7 +411,7 @@ export function Alert({
  *
  * Server-rendered links rather than client state, so a page of results is a
  * real URL: it survives a refresh, it can be bookmarked, and the back button
- * does what a person expects. Every admin table uses this one — a table that
+ * does what a person expects. Every admin table uses this one - a table that
  * grows its own pager is how two of them end up disagreeing about what "page 1"
  * means.
  *

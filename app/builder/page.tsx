@@ -55,8 +55,8 @@ export default async function BuilderPage({
   ]);
 
   // The builder charges a bundle price, but an order line still needs a real
-  // product row behind it. More than one product is built here — the name
-  // charm and the alphabet bag charm — so `?product=` picks which, and only a
+  // product row behind it. More than one product is built here - the name
+  // charm and the alphabet bag charm - so `?product=` picks which, and only a
   // builder-mode product is ever accepted (checkout rejects anything else).
   const builderProducts = products.filter(
     (p) => p.personalisation_mode === "builder",

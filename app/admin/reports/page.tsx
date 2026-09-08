@@ -7,7 +7,7 @@ import { getReports } from "../data";
 /**
  * The numbers, over real rows only.
  *
- * A shop that has taken no orders gets a sentence saying so and nothing else —
+ * A shop that has taken no orders gets a sentence saying so and nothing else -
  * no zero tiles, no empty axis, no sample month. A placeholder is not a neutral
  * thing to leave lying around: it is a false statement that somebody eventually
  * makes a decision on, and it is harder to clear out later than it is to never
@@ -15,7 +15,7 @@ import { getReports } from "../data";
  *
  * There are no charts here yet, on purpose. Two months of data drawn as a line
  * says less than two months of data written as a table, and it says it less
- * honestly — the eye reads a trend into a slope that is one order wide.
+ * honestly - the eye reads a trend into a slope that is one order wide.
  */
 // Without its own title a page falls back to the layout default, so seven
 // studio screens all read "Studio · Bam Studio" in the tab and a person with
@@ -42,7 +42,7 @@ export default async function ReportsPage() {
             </ButtonLink>
           </EmptyState>
           <p className="mx-auto max-w-[52ch] px-5 pb-12 text-center text-[13.5px] text-muted">
-            This page fills itself in the moment the shop takes one — from the website, or from
+            This page fills itself in the moment the shop takes one, from the website, or from
             a sale at a market typed in by hand. Until then there is deliberately nothing here
             to read, because a page of zeroes reads like a shop that is failing rather than a
             shop that has not opened.
@@ -52,7 +52,7 @@ export default async function ReportsPage() {
     );
   }
 
-  // Aliased so the null check narrows the value used below — profit is cents as
+  // Aliased so the null check narrows the value used below - profit is cents as
   // a float, and it is rounded once, here at the display boundary.
   const profit = reports.profit;
   const showProfit = profit !== null;
@@ -85,7 +85,7 @@ export default async function ReportsPage() {
         ) : (
           <Stat
             label="PROFIT"
-            value="—"
+            value="-"
             tone="warn"
             note="not one sold line carries a recorded cost, so this cannot be worked out"
           />
@@ -95,8 +95,8 @@ export default async function ReportsPage() {
       {!showProfit ? (
         <Alert tone="error">
           Profit is blank because no line on any order has a making cost recorded against it.
-          That happens when a product has never been given a print time or a filament recipe —
-          give it both on its product page and every sale from then on will carry its cost.
+          That happens when a product has never been given a print time or a filament recipe.
+          Give it both on its product page and every sale from then on will carry its cost.
           Revenue minus a card fee is not a profit, so it is not shown as one.
         </Alert>
       ) : reports.linesWithoutCost > 0 ? (
@@ -109,7 +109,7 @@ export default async function ReportsPage() {
 
       <Panel
         title="By month"
-        note="Oldest first. A month with no orders is simply absent — it is not drawn as a zero."
+        note="Oldest first. A month with no orders is simply absent, it is not drawn as a zero."
         padded={false}
       >
         <div className="overflow-x-auto">
@@ -139,7 +139,7 @@ export default async function ReportsPage() {
           </table>
         </div>
         <p className="border-t border-line px-5 py-3.5 text-[13px] text-faint">
-          Charts arrive once there are a few months to put on one — until then a table says
+          Charts arrive once there are a few months to put on one, until then a table says
           more.
         </p>
       </Panel>

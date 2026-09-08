@@ -9,15 +9,15 @@ import { DEFAULT_NEXT, safeNext } from "@/lib/safe-next";
  *
  * Defect this closes: the subtitle promised "Save baskets, track orders,
  * reorder favourites" directly above a form that now says plainly that
- * accounts aren't switched on — the contradiction sat in one card, two lines
+ * accounts aren't switched on - the contradiction sat in one card, two lines
  * apart. None of the three is possible with no accounts system behind the
  * shop, and there is no saved-basket code at all. Same class as WORKLOG §0.1:
  * a customer-facing claim not gated on the capability behind it.
  *
  * Safe in a server component, and guaranteed to agree with the client form
  * below: `isSupabaseConfigured()` reads only `NEXT_PUBLIC_SUPABASE_URL` and
- * `NEXT_PUBLIC_SUPABASE_ANON_KEY`. There is no secret here — the anon key is
- * public by design and Next inlines both into the client bundle — so server
+ * `NEXT_PUBLIC_SUPABASE_ANON_KEY`. There is no secret here - the anon key is
+ * public by design and Next inlines both into the client bundle - so server
  * and browser evaluate the same two values and cannot diverge. (The
  * server-only `isDatabaseConfigured()` would give the same answer here but not
  * in SignupForm, which is why both sides use this one helper.)
@@ -52,7 +52,7 @@ function one(value: string | string[] | undefined): string | undefined {
 }
 
 /**
- * Where somebody who arrived here under their own steam — no `next` — is sent
+ * Where somebody who arrived here under their own steam - no `next` - is sent
  * once the account exists.
  *
  * Passed to `safeNext()` explicitly rather than leaning on its built-in
@@ -70,14 +70,14 @@ const SIGNUP_FALLBACK = DEFAULT_NEXT;
  * Defect this closes: /admin/join?token=… is the route that turns a staff
  * invitation into studio access, and it needs an account. `proxy.ts` sends a
  * signed-out visitor to /login?next=/admin/join?token=…, and sign-in honours
- * that — but somebody invited who has no account yet clicks through to sign up,
+ * that - but somebody invited who has no account yet clicks through to sign up,
  * and this page ignored `next` entirely while `SignupForm` hardcoded
  * /account/orders. They finished signing up in the shop's account area, with
  * the invitation still sitting unopened in their messages, and had to go and
  * find the link a second time.
  *
- * `next` is now read here, validated once by `safeNext()` — never re-derived
- * further down — and handed to the form, which carries it through sign-up, the
+ * `next` is now read here, validated once by `safeNext()` - never re-derived
+ * further down - and handed to the form, which carries it through sign-up, the
  * confirmation email and /auth/callback. It also travels on the link across to
  * /login, because a round trip that survives the form and dies on a "Sign in"
  * link is still broken.
@@ -122,7 +122,7 @@ export default async function SignupPage({
             </>
           ) : (
             <>
-              Signing in isn&apos;t open yet either —{" "}
+              Signing in isn&apos;t open yet either, but you can{" "}
               <Link
                 href="/shop"
                 className="font-bold text-accent underline underline-offset-2 hover:text-accent-dark"

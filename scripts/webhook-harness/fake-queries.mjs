@@ -10,7 +10,7 @@
  * when `sellable` also folded in whether the pool could fill a scoop off the
  * shelf. It reads the same and no longer means the same: `sellable` is now
  * switched-on-and-priced and nothing more, so a fixture that empties the bowl
- * is NOT a refusal — scenario 8c in check-webhook.mjs exists to hold that line,
+ * is NOT a refusal - scenario 8c in check-webhook.mjs exists to hold that line,
  * because the shop prints to order (lib/scoop.ts).
  */
 

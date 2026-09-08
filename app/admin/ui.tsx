@@ -6,7 +6,7 @@ import { Icon, Pill, cx, type IconName } from "@/components/ui";
  * Small pieces the staff screens share.
  *
  * Deliberately thin. Everything here that could be a button, a pill, a field or
- * a pagination bar comes from components/ui — this file only adds the shapes
+ * a pagination bar comes from components/ui - this file only adds the shapes
  * that are specific to a back office (a page heading with actions, a table
  * shell, a row of statistics) and that would otherwise be copied into eight
  * screens with eight slightly different paddings.
@@ -69,7 +69,7 @@ export function Panel({
 /**
  * What a table says when it has no rows.
  *
- * Quiet on purpose — an empty table is a normal state for a shop that opened
+ * Quiet on purpose - an empty table is a normal state for a shop that opened
  * last week, not a failure. components/ui's EmptyState is the full-page version
  * with a 3xl heading; this is the one that sits inside a panel.
  */
@@ -82,7 +82,7 @@ export function NoRows({ children }: { children: ReactNode }) {
 /**
  * A number with a label. Only ever shows something counted.
  *
- * `value` is a string so the caller decides how a missing number reads — "—",
+ * `value` is a string so the caller decides how a missing number reads - "-",
  * never a 0 standing in for "we do not know".
  */
 export function Stat({

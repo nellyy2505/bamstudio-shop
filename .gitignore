@@ -30,7 +30,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files — never commit real secrets
+# env files - never commit real secrets
 .env*
 # ...but the template is meant to be shared
 !.env.example
@@ -42,5 +42,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# supabase CLI scratch — version-check cache, not project state
+# supabase CLI scratch - version-check cache, not project state
 supabase/.temp/

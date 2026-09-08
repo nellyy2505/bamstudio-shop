@@ -23,7 +23,7 @@ export const metadata: Metadata = {
  * The staff area shell.
  *
  * `requireStaff()` here redirects anyone who is not staff, which covers every
- * page nested under it. It does NOT cover route handlers — a file at
+ * page nested under it. It does NOT cover route handlers - a file at
  * `app/admin/**\/route.ts` is not wrapped by this layout, and neither is a
  * server action. Each of those calls `requireStaff()` itself. See the note at
  * the top of `lib/auth/staff.ts`.
@@ -49,7 +49,7 @@ const ALL_LINKS: (AdminLink & { capability: Capability | null })[] = [
    * Its own entry rather than a page under Products, because a tier is not a
    * product: its price starts null, its stock is a property of a pool of other
    * rows, and its cost is not knowable until somebody packs one. Guarded by
-   * "catalogue" for the same reason `saveScoopTier` is — a tier's price, piece
+   * "catalogue" for the same reason `saveScoopTier` is - a tier's price, piece
    * count and packed weight are the catalogue's kind of authority.
    */
   { href: "/admin/scoops", label: "Lucky Scoop", icon: "bag", capability: "catalogue" },

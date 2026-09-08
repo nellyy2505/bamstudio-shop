@@ -25,12 +25,12 @@ import {
  * file, and it is exempt because requiring staff there would be circular: it is
  * the action that MAKES somebody staff, so the only people who can legitimately
  * reach it are signed-in accounts that are not staff yet. It does not go
- * unguarded — it does its own equivalent check against the invitation row, and
+ * unguarded - it does its own equivalent check against the invitation row, and
  * the long comment above it explains exactly what stands in for the capability.
  * Do not add a second exception without the same treatment.
  *
  * A server action is an HTTP endpoint. Next.js gives it a generated id and
- * routes to it directly — it is NOT wrapped by app/admin/layout.tsx, and it does
+ * routes to it directly - it is NOT wrapped by app/admin/layout.tsx, and it does
  * not care which page imported it. Anyone who has ever loaded the shop can find
  * that id in the client bundle and POST to it. "Only the admin page calls this"
  * is not a check, it is a hope.
@@ -40,7 +40,7 @@ import {
  * ────────────────────────────────────────────────────────────────────────────
  *
  * Every action returns a FormState rather than throwing. A thrown error in a
- * server action reaches the user as a blank page with a digest — useless to
+ * server action reaches the user as a blank page with a digest - useless to
  * her, and it loses whatever she had typed.
  */
 
@@ -51,7 +51,7 @@ const fail = (message: string): FormState => ({ ok: false, message });
 
 /* ---------------------------------------------------------------- helpers */
 
-/** Trimmed string, or "" — never undefined, never a File. */
+/** Trimmed string, or "" - never undefined, never a File. */
 function text(form: FormData, key: string): string {
   const value = form.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -127,7 +127,7 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
     const sku = text(form, "sku");
     const slug = text(form, "slug");
     if (!name) return fail("A product needs a name.");
-    if (!sku) return fail("A product needs a SKU — it is how the spreadsheet finds it.");
+    if (!sku) return fail("A product needs a SKU, it is how the spreadsheet finds it.");
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
       return fail("The web address can only use lowercase letters, numbers and hyphens.");
     }
@@ -140,7 +140,7 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
 
     const weight = Number(text(form, "weight_grams"));
     if (!Number.isFinite(weight) || weight <= 0) {
-      return fail("Packed weight has to be more than zero — Australia Post prices on it.");
+      return fail("Packed weight has to be more than zero, Australia Post prices on it.");
     }
 
     const accessoryId = text(form, "accessory_id") || null;
@@ -199,7 +199,7 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
       const grams = Number(gramsList[i] ?? "");
       if (!colourId) continue;
       if (!Number.isFinite(grams) || grams <= 0) continue;
-      // Last one wins if a colour is listed twice — the composite primary key
+      // Last one wins if a colour is listed twice - the composite primary key
       // would otherwise reject the whole insert.
       const existing = recipe.findIndex((r) => r.colour_id === colourId);
       if (existing >= 0) recipe[existing].grams = grams;
@@ -233,17 +233,17 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
  * measuring is an inventory job. It is not. `setStock` and `setRolls` above
  * record an observation about a shelf: wrong today, right tomorrow, and nothing
  * downstream of them is a claim about money. This writes
- * `products.print_time_hours` and `product_filament` — the two inputs every
+ * `products.print_time_hours` and `product_filament` - the two inputs every
  * unit cost, margin and suggested price in the shop is derived from. They are
  * the same two fields `saveProduct` writes, and `saveProduct` is "catalogue".
  * One number typed here moves what the studio believes a piece earns.
  *
  * Today `owner` and `studio` both hold "inventory" and "catalogue", so the two
- * choices are indistinguishable on the live roles — which is exactly why it has
+ * choices are indistinguishable on the live roles - which is exactly why it has
  * to be argued rather than measured. The role that does not exist yet is the
  * one that decides it: a stocktake helper given "inventory" so she can count
  * boxes should not thereby be able to reprice the catalogue. `packing` is
- * irrelevant to the choice — it holds neither, and never sees a cost either
+ * irrelevant to the choice - it holds neither, and never sees a cost either
  * way, which is the rule in lib/auth/staff.ts.
  * ────────────────────────────────────────────────────────────────────────────
  *
@@ -266,8 +266,8 @@ export async function saveMeasurement(_prev: FormState, form: FormData): Promise
     const gramsList = form.getAll("filament_grams").map(String);
 
     /*
-     * The screen always submits every slot, blank ones included — a control
-     * inside a closed <details> is still part of the form — so a payload with
+     * The screen always submits every slot, blank ones included - a control
+     * inside a closed <details> is still part of the form - so a payload with
      * fewer is not this form. This matters because the recipe below is replaced
      * wholesale: without this check a POST that simply omitted the filament
      * fields would read as "this piece uses no colours" and wipe a recipe the
@@ -285,12 +285,12 @@ export async function saveMeasurement(_prev: FormState, form: FormData): Promise
       const colourId = colourIds[i].trim();
       const raw = gramsList[i].trim();
 
-      // An untouched slot. Not an error — most pieces are one colour.
+      // An untouched slot. Not an error - most pieces are one colour.
       if (!colourId && raw === "") continue;
 
       if (!colourId) {
-        // The workbook's own check on Filament!B42 — "grams typed with no
-        // colour chosen. Should be 0" — as a refusal rather than a number that
+        // The workbook's own check on Filament!B42 - "grams typed with no
+        // colour chosen. Should be 0" - as a refusal rather than a number that
         // disappears. saveProduct drops this line silently, which is tolerable
         // on a form with one product on it and not on a screen where somebody
         // is typing forty-four of them in a row.
@@ -304,7 +304,7 @@ export async function saveMeasurement(_prev: FormState, form: FormData): Promise
       if (!Number.isFinite(grams) || grams <= 0) {
         return fail(
           "Grams has to be a number above zero. Leave the whole line blank if the piece does " +
-            "not use that colour — zero grams of a colour is not the same as not using it.",
+            "not use that colour, zero grams of a colour is not the same as not using it.",
         );
       }
       if (recipe.some((r) => r.colour_id === colourId)) {
@@ -322,7 +322,7 @@ export async function saveMeasurement(_prev: FormState, form: FormData): Promise
      * The recipe is replaced by a delete followed by an insert, and PostgREST
      * gives no transaction across the two. So a colour id that fails the
      * foreign key would delete the old recipe and then fail to write the new
-     * one — a product measured last week comes back unmeasured because
+     * one - a product measured last week comes back unmeasured because
      * somebody's form carried a stale id. Failing here costs one query and
      * leaves the row exactly as it was.
      */
@@ -392,7 +392,7 @@ export async function saveMeasurement(_prev: FormState, form: FormData): Promise
 
     // Say what is still missing rather than a flat "Saved." A half-measured
     // product is a real state and the person needs to know she is not finished
-    // with this row — the same reading `missingCostInputs()` gives the screen.
+    // with this row - the same reading `missingCostInputs()` gives the screen.
     const stillMissing: string[] = [];
     if (printTime === null) stillMissing.push("no print time");
     if (recipe.length === 0) stillMissing.push("no filament grams");
@@ -404,7 +404,7 @@ export async function saveMeasurement(_prev: FormState, form: FormData): Promise
   });
 }
 
-/** Stock count from the inventory screen — one product, one number. */
+/** Stock count from the inventory screen - one product, one number. */
 export async function setStock(_prev: FormState, form: FormData): Promise<FormState> {
   return guard("inventory", async () => {
     const id = text(form, "id");
@@ -428,7 +428,7 @@ export async function setStock(_prev: FormState, form: FormData): Promise<FormSt
 
 /*
  * NOT exported. Every export from a "use server" file has to be an async
- * function — Next.js turns each one into an HTTP endpoint, and a string
+ * function - Next.js turns each one into an HTTP endpoint, and a string
  * constant cannot be one. Exporting this compiled and linted perfectly and
  * broke `next build`, taking every other export in the file down with it:
  * Turbopack reported actions.ts as having no exports at all, so eleven pages
@@ -442,7 +442,7 @@ const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
  * Upload photographs for a product.
  *
  * Files are checked here, on the server, not only by the `accept` attribute on
- * the input — that attribute is a convenience for the file picker and a browser
+ * the input - that attribute is a convenience for the file picker and a browser
  * is not obliged to honour it. The bucket has the same limits set on it as a
  * second line, because this is a publicly readable bucket and a staff area that
  * will store any bytes at any size is a file host.
@@ -469,7 +469,7 @@ export async function uploadPhotos(_prev: FormState, form: FormData): Promise<Fo
 
     for (const file of files) {
       if (!PHOTO_TYPES.includes(file.type)) {
-        return fail(`${file.name} is a ${file.type || "file"} — use a JPEG, PNG, WebP or AVIF.`);
+        return fail(`${file.name} is a ${file.type || "file"}, use a JPEG, PNG, WebP or AVIF.`);
       }
       if (file.size > MAX_PHOTO_BYTES) {
         return fail(`${file.name} is ${(file.size / 1048576).toFixed(1)} MB. The limit is 5 MB.`);
@@ -487,12 +487,12 @@ export async function uploadPhotos(_prev: FormState, form: FormData): Promise<Fo
       if (error) {
         return fail(
           error.message.toLowerCase().includes("not found")
-            ? "The product-photos bucket does not exist yet — run supabase/storage.sql in the SQL editor."
+            ? "The product-photos bucket does not exist yet, run supabase/storage.sql in the SQL editor."
             : friendly(error.message),
         );
       }
 
-      added.push({ path, alt: `${product.name} — photograph` });
+      added.push({ path, alt: `${product.name}, photograph` });
     }
 
     const { error } = await admin
@@ -531,13 +531,13 @@ export async function removePhoto(_prev: FormState, form: FormData): Promise<For
     //
     // `path` is a form field. It used to be passed straight to
     // `storage.remove()` on the SERVICE-ROLE client, which bypasses RLS and
-    // every storage policy — and the only thing the surrounding code checked
+    // every storage policy - and the only thing the surrounding code checked
     // was this product's own JSON array, which it merely filtered. So a POST to
     // this action's id with any other object's path deleted that object: every
     // photograph in the bucket was one request away from anyone holding a
     // `catalogue` capability, and staff invitations grant it. This is precisely
     // what lib/supabase/server.ts's own warning about the service-role client
-    // forbids — "never in anything a request body can steer".
+    // forbids - "never in anything a request body can steer".
     //
     // The product's stored photo list is the authority. Not a prefix check on
     // the path: `uploadPhotos` happens to write `<product id>/<random>.<ext>`,
@@ -726,7 +726,7 @@ export async function saveSettings(_prev: FormState, form: FormData): Promise<Fo
 /**
  * The statuses `setOrderStatus` will write.
  *
- * `shipped` is deliberately NOT here — see `markShipped` below. `pending` is
+ * `shipped` is deliberately NOT here - see `markShipped` below. `pending` is
  * not here either, so an order can never be pushed back into the unpaid state
  * the Stripe webhook uses as its compare-and-set.
  */
@@ -821,7 +821,7 @@ export async function setOrderStatus(_prev: FormState, form: FormData): Promise<
     ) {
       return fail(
         "This order is recorded as posted. Use “Undo this dispatch” to bring " +
-          "it back — that removes the tracking number too, which this would " +
+          "it back, that removes the tracking number too, which this would " +
           "leave behind on an order the customer is told is still being made.",
       );
     }
@@ -855,7 +855,7 @@ export async function setOrderStatus(_prev: FormState, form: FormData): Promise<
 /**
  * How a tracking number typed by a person is normalised before it is stored.
  *
- * Trim, and collapse any run of whitespace to one space — MyPost Business
+ * Trim, and collapse any run of whitespace to one space - MyPost Business
  * displays article ids in groups and they get pasted that way. Nothing else is
  * changed: the case is left as typed, because this string is shown to the
  * customer verbatim on /track and is what they will paste into Australia
@@ -870,7 +870,7 @@ function normaliseTracking(raw: string): string {
  *
  * Deliberately loose. Australia Post article and consignment numbers vary in
  * length and shape, and rejecting a real one is worse than storing an odd one
- * — the customer only ever sees it as text. So this rejects the mistakes that
+ * - the customer only ever sees it as text. So this rejects the mistakes that
  * are actually made: a pasted tracking *URL* (`:` and `/`), an email address
  * (`@`), and a stray keystroke with no digits in it at all.
  */
@@ -890,7 +890,7 @@ function looksLikeTracking(value: string): boolean {
  * "Advance the status" and "record the tracking number" are the same event and
  * are saved by the same submit. Splitting them leaves a real window in which
  * /track tells a customer their order has shipped and offers them nothing to
- * follow — and if the second half is never done (an interruption, a phone
+ * follow - and if the second half is never done (an interruption, a phone
  * call), the order rests forever in a state indistinguishable from a parcel
  * that was genuinely posted without tracking. One write, or none.
  *
@@ -900,7 +900,7 @@ function looksLikeTracking(value: string): boolean {
  * THE TRACKING QUESTION IS NOT OPTIONAL AND HAS NO DEFAULT ANSWER.
  *
  * Free standard post really does go as an untracked Large Letter here, so
- * "no number" is a correct outcome for a real parcel — but it is a different
+ * "no number" is a correct outcome for a real parcel - but it is a different
  * fact from "posted, number not written down", and neither may be inferred
  * from an empty box. `tracking_mode` therefore has to arrive as an explicit
  * `tracked` or `untracked`, and the two halves are cross-checked:
@@ -910,7 +910,7 @@ function looksLikeTracking(value: string): boolean {
  *   - `untracked` with something typed in the box is refused rather than
  *     silently dropping what was typed, which is how a number gets lost.
  *
- * `untracked` writes SQL NULL — explicitly, so a number recorded in error is
+ * `untracked` writes SQL NULL - explicitly, so a number recorded in error is
  * actually removed rather than left behind by an absent key.
  * ────────────────────────────────────────────────────────────────────────────
  *
@@ -937,12 +937,12 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
      * decided, so recording the pack is the only moment its stock comes off and
      * the only moment its cost is stamped. A parcel posted before that leaves
      * the shelf counts overstated for ever, the margin on that order unknowable,
-     * and the pieces themselves unrecorded — and by then the bag is sealed and
+     * and the pieces themselves unrecorded - and by then the bag is sealed and
      * in the post, so nobody can go back and look.
      *
      * SCOPED TO ORDERS THAT ARE NOT ALREADY POSTED. This form is also how a
      * wrong tracking number is corrected, and refusing to fix the number on a
-     * parcel that has already gone helps nobody — the transition this rule is
+     * parcel that has already gone helps nobody - the transition this rule is
      * about has already happened.
      *
      * A FAILED READ REFUSES. "We could not check" is not "there is nothing to
@@ -957,7 +957,7 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
     if (beforeError) {
       return fail(
         "This order could not be read, so it is not safe to mark it posted. " +
-          "Nothing has been changed — reload and try again.",
+          "Nothing has been changed, reload and try again.",
       );
     }
 
@@ -966,7 +966,7 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
       if (scoops.unreadable) {
         return fail(
           "The Lucky Scoops on this order could not be read, so it is not " +
-            "safe to mark it posted. Nothing has been changed — reload and try again.",
+            "safe to mark it posted. Nothing has been changed, reload and try again.",
         );
       }
       if (scoops.outstanding.length > 0) {
@@ -998,7 +998,7 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
     if (mode === "untracked" && typed) {
       return fail(
         "You have typed a tracking number but chosen “posted without " +
-          "tracking”. Pick one — nothing has been saved, so the number is " +
+          "tracking”. Pick one, nothing has been saved, so the number is " +
           "still in the box.",
       );
     }
@@ -1006,7 +1006,7 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
     if (mode === "tracked" && !looksLikeTracking(typed)) {
       return fail(
         "That does not look like an article number. Paste just the number " +
-          "from the label — not the whole tracking web address.",
+          "from the label, not the whole tracking web address.",
       );
     }
 
@@ -1014,14 +1014,14 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
 
     /*
      * Two parcels never share an article id, so the same number on two orders
-     * means one of them is the wrong order — the exact mistake this screen has
+     * means one of them is the wrong order - the exact mistake this screen has
      * to be hard to make. Refused rather than warned, and the other order is
      * named so it can be found and put right.
      */
     if (trackingNumber) {
       // `limit(1)`, not `maybeSingle()`: two rows already sharing a number is
       // precisely the state this guard exists for, and maybeSingle() answers
-      // that with a PGRST116 *error* and a null row — which would read as "no
+      // that with a PGRST116 *error* and a null row - which would read as "no
       // clash" and wave the write straight through.
       const { data: clashes } = await admin
         .from("orders")
@@ -1042,7 +1042,7 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
     /*
      * Compare-and-set on the postable statuses. A cancelled order must not be
      * posted, a delivered one has already arrived, and re-posting an order
-     * that is already `shipped` is a correction — which is allowed, and is why
+     * that is already `shipped` is a correction - which is allowed, and is why
      * `shipped` is in this list too. A form left open on a screen while
      * somebody else cancelled the order writes nothing at all.
      */
@@ -1061,7 +1061,7 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
 
     if (!data || data.length === 0) {
       return fail(
-        "This order is not in a state that can be posted — it has probably " +
+        "This order is not in a state that can be posted, it has probably " +
           "been cancelled or already marked delivered since this screen " +
           "loaded. Nothing has been changed; reload and look again.",
       );
@@ -1072,7 +1072,7 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
      *
      * This is where a "your parcel is on its way" email would be scheduled,
      * with `after()` from "next/server", gated on `isEmailConfigured()` from
-     * lib/email.ts and sent through `sendEmail` — copy
+     * lib/email.ts and sent through `sendEmail` - copy
      * `queueOrderConfirmation` in app/api/webhooks/stripe/route.ts, which is
      * the pattern and the only mail scheduler this project has. `after()` is
      * supported in a Server Function, so it belongs right here.
@@ -1080,23 +1080,23 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
      * IT IS NOT WIRED, ON PURPOSE, AND THE REASON IS NOT LAZINESS.
      *
      * Six files currently state as fact that the shop never sends one, and
-     * sending it without changing all six falsifies them — two are legal
+     * sending it without changing all six falsifies them - two are legal
      * documents, which is the round-10 defect exactly:
      *
      *   app/legal/terms/page.tsx          (~L179–180)  ← legal
      *   app/legal/privacy/page.tsx        (~L279, 291) ← legal
-     *   app/api/webhooks/stripe/route.ts  (~L853, 920) — the confirmation
+     *   app/api/webhooks/stripe/route.ts  (~L853, 920) - the confirmation
      *                                     email itself says we send no
      *                                     dispatch email
      *   app/order/confirmed/page.tsx      (~L285, 356)
      *   app/faq/page.tsx                  (~L99–105)
-     *   app/account/settings/EmailPreferences.tsx (~L191) — and this one is a
+     *   app/account/settings/EmailPreferences.tsx (~L191) - and this one is a
      *                                     customer-facing promise that
      *                                     tracking email is "never" sent
      *
      * So the mail and the six retractions have to ship in one change, by
      * somebody who owns those files. Until they do, the panel on the order
-     * screen says plainly that no email goes out and points at /track — which
+     * screen says plainly that no email goes out and points at /track - which
      * is true today and needs no gate to stay true.
      * ──────────────────────────────────────────────────────────────────────
      */
@@ -1116,14 +1116,14 @@ export async function markShipped(_prev: FormState, form: FormData): Promise<For
  * order.
  *
  * Every status move on this screen is reversible through the ladder, and this
- * is the one that is not — `setOrderStatus` cannot write `shipped`, so it
+ * is the one that is not - `setOrderStatus` cannot write `shipped`, so it
  * cannot take an order out of it either. Marking the wrong order shipped is
  * the mistake this whole screen is shaped around, so undoing it is one button
  * and no typing.
  *
  * It returns the order to `packed`, which is where a parcel that is boxed but
  * not posted actually is, and clears the tracking number to NULL. There is no
- * audit table in this project, so the number is genuinely gone — the button
+ * audit table in this project, so the number is genuinely gone - the button
  * says so, because the label is usually still on the bench.
  */
 export async function undoDispatch(_prev: FormState, form: FormData): Promise<FormState> {
@@ -1164,7 +1164,7 @@ export async function undoDispatch(_prev: FormState, form: FormData): Promise<Fo
 }
 
 /**
- * A sale that did not come through the website — a market stall, TikTok, a
+ * A sale that did not come through the website - a market stall, TikTok, a
  * friend at work.
  *
  * It goes in the same table as a website order because every report reads that
@@ -1205,7 +1205,7 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
     if (unitPrice === null) return fail("The price has to be a number, like 12.50.");
 
     // The cost at the time of sale, worked out the same way the product screen
-    // shows it. Null when the product has never been measured — an honest gap
+    // shows it. Null when the product has never been measured - an honest gap
     // that the reports then say out loud, rather than a zero that silently
     // becomes 100% margin.
     //
@@ -1250,7 +1250,7 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
 
     // THE DEFECT THIS CLOSES (defect 4): this used to return here and leave the
     // order row behind. That orphan is `status: 'delivered'` with a real total
-    // and no lines, and getReports() sums exactly those statuses — so a failed
+    // and no lines, and getReports() sums exactly those statuses - so a failed
     // line insert added revenue the shop never took, against nothing sold, for
     // ever. The webhook's staged path (savePendingOrder in
     // app/api/checkout/route.ts) already deletes on this failure and says why;
@@ -1282,14 +1282,14 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
     //
     // The error used to be discarded, so a failed allocation was
     // indistinguishable from a successful one and the sale simply had no
-    // reference. The sale itself is real and recorded either way — deleting it
-    // over a missing number would throw away the thing that actually happened —
+    // reference. The sale itself is real and recorded either way - deleting it
+    // over a missing number would throw away the thing that actually happened -
     // so this reports the gap instead of hiding it or undoing the sale.
     const { data: numbered, error: numberError } = await admin.rpc("next_order_number");
     let numberNote = "";
     if (numberError || !numbered) {
       console.error("[admin] Could not allocate an order number:", numberError?.message);
-      numberNote = " It has no order number yet — allocate one before it is posted.";
+      numberNote = " It has no order number yet, allocate one before it is posted.";
     } else {
       const { error: writeError } = await admin
         .from("orders")
@@ -1297,13 +1297,13 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
         .eq("id", order.id);
       if (writeError) {
         console.error("[admin] Could not store the order number:", writeError.message);
-        numberNote = " It has no order number yet — allocate one before it is posted.";
+        numberNote = " It has no order number yet, allocate one before it is posted.";
       }
     }
 
     // THE DEFECT THIS CLOSES (defect 3): this used to read `stock_on_hand` at
     // the top of the action and write back `Math.max(0, read - quantity)`,
-    // which silently discards any webhook decrement that lands in between —
+    // which silently discards any webhook decrement that lands in between -
     // the classic read-modify-write. The subtraction now happens inside
     // `decrement_stock`, under a row lock, in one statement, and it answers
     // with how many units the buffer did not have. The shop prints to order, so
@@ -1315,9 +1315,9 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
     let stockNote = "";
     if (stockError) {
       console.error("[admin] Could not move stock for a counter sale:", stockError.message);
-      stockNote = " The stock count did not move — check it on the inventory page.";
+      stockNote = " The stock count did not move, check it on the inventory page.";
     } else if (Number(shortfall ?? 0) > 0) {
-      stockNote = ` That was ${Number(shortfall)} more than the buffer had — print it first.`;
+      stockNote = ` That was ${Number(shortfall)} more than the buffer had, print it first.`;
     }
 
     revalidatePath("/admin/orders");
@@ -1334,7 +1334,7 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
  *
  * The webhook records a `payment_incidents` row when a cancelled order is paid
  * anyway; the studio overview shows every unresolved one. Refunding is done by
- * hand in Stripe — this only records that it has been, so the overview stops
+ * hand in Stripe - this only records that it has been, so the overview stops
  * asking. Nothing here can move money.
  */
 export async function resolveRefundIncident(
@@ -1380,7 +1380,7 @@ export async function resolveRefundIncident(
  * This action writes a PRICE, a piece count and a packed weight. Those are the
  * three numbers a tier is sold on: the first is what a customer is charged, the
  * second is what they are promised, and the third is what Australia Post prices
- * the parcel on — the studio wears the difference when it is set too low. They
+ * the parcel on - the studio wears the difference when it is set too low. They
  * are the same kind of fact as `products.price` and `products.weight_grams`,
  * which `saveProduct` writes under "catalogue", and `saveMeasurement` chose
  * "catalogue" over "inventory" for exactly this reason: counting a shelf is an
@@ -1390,7 +1390,7 @@ export async function resolveRefundIncident(
  * Adding a $9 pet bowl to a $12 scoop's pool changes what that scoop earns just
  * as surely as retyping its price does; a pool edit is a pricing decision
  * wearing a checkbox. Recording what went in a parcel is a different authority
- * again — see `recordScoopPack`, which is "orders" and which Packing holds.
+ * again - see `recordScoopPack`, which is "orders" and which Packing holds.
  * ────────────────────────────────────────────────────────────────────────────
  */
 export async function saveScoopTier(_prev: FormState, form: FormData): Promise<FormState> {
@@ -1400,7 +1400,7 @@ export async function saveScoopTier(_prev: FormState, form: FormData): Promise<F
 
     const name = text(form, "name");
     const slug = text(form, "slug");
-    if (!name) return fail("A tier needs a name — “Pet scoop, five pieces”.");
+    if (!name) return fail("A tier needs a name, “Pet scoop, five pieces”.");
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
       return fail("The web address can only use lowercase letters, numbers and hyphens.");
     }
@@ -1421,7 +1421,7 @@ export async function saveScoopTier(_prev: FormState, form: FormData): Promise<F
      * `optionalNumber` is not used here because the field is typed in dollars,
      * so it has to go through `dollarsToCents`. The two failure modes are
      * separated on purpose: "that is not a number" and "zero is not a price"
-     * are different mistakes and the second one is the dangerous one — the
+     * are different mistakes and the second one is the dangerous one - the
      * database refuses a 0, and if it ever stopped refusing it, a zero would
      * render on the shopfront as a free scoop.
      */
@@ -1432,7 +1432,7 @@ export async function saveScoopTier(_prev: FormState, form: FormData): Promise<F
       if (priceCents === null) return fail("The price has to be a number, like 12.50.");
       if (priceCents === 0) {
         return fail(
-          "A scoop cannot be priced at nothing — $0.00 reads as free. Leave the " +
+          "A scoop cannot be priced at nothing, $0.00 reads as free. Leave the " +
             "price empty until you have decided, which says “not priced yet”.",
         );
       }
@@ -1452,7 +1452,7 @@ export async function saveScoopTier(_prev: FormState, form: FormData): Promise<F
 
     /*
      * The pool arrives as one checkbox per product, and an unticked checkbox is
-     * simply absent from the payload — so "she cleared the pool" and "this POST
+     * simply absent from the payload - so "she cleared the pool" and "this POST
      * is not from that form" look identical. The sentinel is what tells them
      * apart, the same defence `saveMeasurement` makes by counting its slots: a
      * server action is a public HTTP endpoint, and without this a hand-made
@@ -1468,8 +1468,8 @@ export async function saveScoopTier(_prev: FormState, form: FormData): Promise<F
     /*
      * The three activation rules, asked in her words BEFORE the write.
      *
-     * 0007 enforces all three — two as a CHECK on the row, the third as a
-     * constraint trigger over the pool — but a constraint speaks Postgres. It
+     * 0007 enforces all three - two as a CHECK on the row, the third as a
+     * constraint trigger over the pool - but a constraint speaks Postgres. It
      * would reach this screen as "new row for relation "scoop_tiers" violates
      * check constraint "scoop_tiers_activation_check"", which tells the person
      * running the shop nothing about what to do next.
@@ -1481,7 +1481,7 @@ export async function saveScoopTier(_prev: FormState, form: FormData): Promise<F
       );
       if (blockers.length > 0) {
         return fail(
-          `This tier cannot be switched on yet — ${blockers.join(", and ")}. ` +
+          `This tier cannot be switched on yet, ${blockers.join(", and ")}. ` +
             "Nothing has been saved, so untick “listed in the shop” to keep it as a draft.",
         );
       }
@@ -1537,7 +1537,7 @@ export async function saveScoopTier(_prev: FormState, form: FormData): Promise<F
      *
      * `saveProduct` replaces a filament recipe wholesale and says why. That
      * cannot be done here: `scoop_tier_products_pool_guard` fires on DELETE, and
-     * a wholesale replace deletes every row first — which on an active tier is a
+     * a wholesale replace deletes every row first - which on an active tier is a
      * pool of zero at the moment the trigger looks, so it would refuse an edit
      * that ends up perfectly legal. The guard deliberately does NOT fire on
      * insert, so adding first and removing second means it only ever sees the
@@ -1632,7 +1632,7 @@ export async function saveScoopTier(_prev: FormState, form: FormData): Promise<F
  *
  * This is the same authority `recordSale` has, and for the same reason: it
  * RECORDS what physically happened to an order. It stamps a cost, but it does
- * not author one — the figure comes from `unitCostsAtSale`, the same helper the
+ * not author one - the figure comes from `unitCostsAtSale`, the same helper the
  * checkout and the webhook use, and nothing here can change what a piece costs.
  * It moves stock, but as a consequence of a parcel being packed rather than as
  * a count of a shelf.
@@ -1640,7 +1640,7 @@ export async function saveScoopTier(_prev: FormState, form: FormData): Promise<F
  * "orders" is also the capability Packing holds, and packing a scoop is
  * literally the job that role exists for. Guarding this with "catalogue" or
  * "inventory" would lock the packing helper out of the one screen she is there
- * to use — while `lib/auth/staff.ts`'s promise, that Packing never sees a cost
+ * to use - while `lib/auth/staff.ts`'s promise, that Packing never sees a cost
  * or a margin, is kept where it is actually kept: the panel does not RENDER a
  * cost to a role without "reports". The action reading one on the server is not
  * the same thing as showing it.
@@ -1651,7 +1651,7 @@ export async function saveScoopTier(_prev: FormState, form: FormData): Promise<F
  * and it is used the way `orders.stock_applied` is used in the Stripe webhook:
  * a compare-and-set taken BEFORE any decrement, and handed back only while
  * nothing has landed yet. Once the claim is spent this action will not touch
- * the pieces or the stock again — a second press saves the video link and says
+ * the pieces or the stock again - a second press saves the video link and says
  * so.
  */
 export async function recordScoopPack(_prev: FormState, form: FormData): Promise<FormState> {
@@ -1684,9 +1684,9 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
     /*
      * Not for a cancelled order, and not for an unpaid checkout.
      *
-     * Recording a pack takes real pieces off the shelf. On a cancelled order —
+     * Recording a pack takes real pieces off the shelf. On a cancelled order -
      * including the one the studio is told not to post because the payment
-     * cleared against it and is owed back — nothing is going in a bag, so the
+     * cleared against it and is owed back - nothing is going in a bag, so the
      * decrement would be pure drift in the stock count. `pending` is not an
      * order at all; it is a checkout somebody abandoned.
      */
@@ -1726,8 +1726,8 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
     if (existingError) return fail(friendly(existingError.message));
 
     /*
-     * Already recorded: the video link and the note are still hers to change —
-     * she films after the parcel is packed — but the pieces and the stock are
+     * Already recorded: the video link and the note are still hers to change -
+     * she films after the parcel is packed - but the pieces and the stock are
      * settled. Undoing a stock movement needs a compensating one, which nothing
      * in this shop has, so this refuses to pretend rather than quietly writing a
      * new piece list over a claim that has already been spent.
@@ -1747,7 +1747,7 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
     }
 
     /*
-     * The pieces, as parallel arrays — the shape the measuring screen uses. The
+     * The pieces, as parallel arrays - the shape the measuring screen uses. The
      * lengths are checked against each other rather than against a fixed count:
      * a pool is however big she made it, and the panel renders one row per pool
      * product plus a slot for something that was not in the pool at all.
@@ -1785,7 +1785,7 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
 
     if (pieces.size === 0) {
       return fail(
-        "Nothing has been recorded — put a number against at least one piece. " +
+        "Nothing has been recorded, put a number against at least one piece. " +
           "This is what takes the stock off and what makes the margin real.",
       );
     }
@@ -1803,7 +1803,7 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
     /*
      * The cost of each piece AT THIS MOMENT, stamped onto the row. Null for a
      * piece nobody has measured, which makes the whole scoop's cost unknown
-     * rather than cheap — `packCost` refuses a partial sum for the same reason
+     * rather than cheap - `packCost` refuses a partial sum for the same reason
      * the reports refuse one.
      *
      * A piece that is not in the tier's pool is NOT refused. The migration says
@@ -1870,7 +1870,7 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
     /*
      * THE CLAIM. Compare-and-set on `stock_applied`, taken before a single unit
      * moves, exactly as `claimStock` does in the Stripe webhook. Two presses
-     * race here and one of them updates no rows — that one decrements nothing.
+     * race here and one of them updates no rows - that one decrements nothing.
      */
     const { data: claimed, error: claimError } = await admin
       .from("scoop_packs")
@@ -1908,7 +1908,7 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
         if (applied === 0) {
           // Nothing has landed, so the claim can go back and the whole movement
           // can be attempted again cleanly. Once one decrement has gone through,
-          // releasing would let a retry double-count it — the webhook's rule.
+          // releasing would let a retry double-count it - the webhook's rule.
           await admin
             .from("scoop_packs")
             .update({ stock_applied: false })
@@ -1928,7 +1928,7 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
       }
 
       applied += 1;
-      // An oversell is not an error in this shop (0005) — it is a print-this-
+      // An oversell is not an error in this shop (0005) - it is a print-this-
       // first signal. For a scoop it is also the sentence that says the bowl was
       // emptier than the screen thought, which is worth knowing before the next
       // one is sold.
@@ -1941,7 +1941,7 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
      * Only written when EVERY scoop on the line has been recorded and every
      * piece in every one of them has a measured cost. A line of two scoops has
      * one `unit_cost_cents`, so the figure is the two packs' total divided by
-     * the two — exact arithmetic on real numbers, not an average standing in for
+     * the two - exact arithmetic on real numbers, not an average standing in for
      * a gap. Anything short of that leaves the column alone rather than writing
      * a total that understates itself.
      */
@@ -1987,7 +1987,7 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
 
     const oversoldNote =
       oversoldUnits > 0
-        ? ` ${oversoldUnits} of them went past what the shelf said was there — print those first.`
+        ? ` ${oversoldUnits} of them went past what the shelf said was there, print those first.`
         : "";
 
     /*
@@ -2001,7 +2001,7 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
 
     return ok(
       unmeasured > 0
-        ? `Recorded, and the stock is off the shelf. What it cost is still unknown — ` +
+        ? `Recorded, and the stock is off the shelf. What it cost is still unknown, ` +
             `${unmeasured} of the pieces that went in ${unmeasured === 1 ? "has" : "have"} ` +
             `never been measured.${oversoldNote}`
         : `Recorded. The stock is off the shelf and this scoop is costed.${oversoldNote}`,
@@ -2020,12 +2020,12 @@ export async function recordScoopPack(_prev: FormState, form: FormData): Promise
  * capability, which only the owner has.
  *
  * The link goes to /admin/join, which is the page that turns the invitation
- * into a staff row — see `acceptInvitation` below. That route deliberately
+ * into a staff row - see `acceptInvitation` below. That route deliberately
  * sits outside app/admin/, because app/admin/layout.tsx requires staff and an
  * invited person is not staff yet.
  *
  * The token is generated here, hashed, and only the hash is stored. A database
- * dump therefore contains no usable invitation — the same reason a password
+ * dump therefore contains no usable invitation - the same reason a password
  * table holds hashes. The plaintext is returned to the caller exactly once, to
  * be copied into a message; if she loses it, she revokes and re-invites.
  */
@@ -2118,8 +2118,8 @@ export async function removeStaff(_prev: FormState, form: FormData): Promise<For
  *
  * `guard()` starts with `requireStaff()`. Requiring staff here is circular:
  * this is the action that MAKES somebody staff. Everyone who legitimately
- * reaches it is a signed-in account with no row in `public.staff` — that is
- * what being invited means — so `requireStaff()` would redirect every single
+ * reaches it is a signed-in account with no row in `public.staff` - that is
+ * what being invited means - so `requireStaff()` would redirect every single
  * one of them to /login and no invitation could ever be accepted. It is the one
  * admin action a non-staff signed-in person is supposed to reach.
  *
@@ -2132,14 +2132,14 @@ export async function removeStaff(_prev: FormState, form: FormData): Promise<For
  *   • The signed-in email must equal the invited email. This is the real gate:
  *     it is not enough to hold the link, you have to be the person it was made
  *     for.
- *   • The invitation must be live — not accepted, not revoked, not expired.
+ *   • The invitation must be live - not accepted, not revoked, not expired.
  *
  * That is a narrower gate than any capability in this file. It grants exactly
  * what one row, written earlier by the owner, says it grants.
  *
  * DEFECT THIS CLOSES: `inviteStaff` has handed out links to /admin/join since
  * the day it was written and that route did not exist. Every invitation 404d,
- * so Studio and Packing access could not be given to anybody — the owner was
+ * so Studio and Packing access could not be given to anybody - the owner was
  * the only person who could ever be in the studio, because hers is the one row
  * placed by hand in the SQL editor.
  * ────────────────────────────────────────────────────────────────────────────
@@ -2170,7 +2170,7 @@ export async function acceptInvitation(_prev: FormState, form: FormData): Promis
 /**
  * The write half of accepting. Null means it worked.
  *
- * Split out so the redirect above can sit outside the try/catch. Not exported —
+ * Split out so the redirect above can sit outside the try/catch. Not exported -
  * every export from a "use server" file becomes an HTTP endpoint, and this one
  * has no business being one.
  */
@@ -2205,7 +2205,7 @@ async function joinWithInvitation(token: string): Promise<FormState> {
           "has been changed.",
       );
     case "already_staff":
-      return fail("You already have studio access — there is nothing to accept.");
+      return fail("You already have studio access, there is nothing to accept.");
     case "ready":
       break;
   }
@@ -2215,7 +2215,7 @@ async function joinWithInvitation(token: string): Promise<FormState> {
    * before anything is written.
    *
    * It never comes from the URL, the form or any other thing a request body can
-   * steer — the form carries a token and nothing else. `staff.role` accepts
+   * steer - the form carries a token and nothing else. `staff.role` accepts
    * 'owner'; `staff_invitations.role` does not, and neither does this. A row
    * that somehow said 'owner' would be refused rather than minting a second
    * owner who could then invite more owners.
@@ -2247,7 +2247,7 @@ async function joinWithInvitation(token: string): Promise<FormState> {
    * every other action in this file does.
    *
    * `friendly()` passes Postgres's own words through to the screen, and that is
-   * right for the owner — she can act on "another product already uses that
+   * right for the owner - she can act on "another product already uses that
    * SKU". The person reading this page is not staff and may not even be the
    * invitee; constraint names and column names are not theirs to see.
    */
@@ -2260,7 +2260,7 @@ async function joinWithInvitation(token: string): Promise<FormState> {
   }
 
   // insert, never upsert. An upsert keyed on user_id would OVERWRITE an
-  // existing role — the owner clicking an old Packing link would demote
+  // existing role - the owner clicking an old Packing link would demote
   // herself out of the access page and there would be no way back except the
   // SQL editor. A duplicate key here means they are already staff, which is
   // handled below rather than papered over.
@@ -2283,12 +2283,12 @@ async function joinWithInvitation(token: string): Promise<FormState> {
       .eq("accepted_by", state.userId);
 
     if (staffError.code === "23505") {
-      return fail("You already have studio access — there is nothing to accept.");
+      return fail("You already have studio access, there is nothing to accept.");
     }
     console.error("[admin] writing staff row", staffError.message);
     return fail(
       "We could not add you to the studio just now. Nothing has changed, and your " +
-        "invitation still works — please try again in a moment.",
+        "invitation still works, please try again in a moment.",
     );
   }
 
@@ -2302,7 +2302,7 @@ async function joinWithInvitation(token: string): Promise<FormState> {
  *
  * `/admin/enquiries` shows a customer's own words and the address they wrote
  * from. `orders` is the capability Packing holds, and Packing exists precisely
- * so the person helping post parcels sees the minimum — no costs, no margins,
+ * so the person helping post parcels sees the minimum - no costs, no margins,
  * no catalogue. Correspondence is squarely in that spirit: somebody packing a
  * box has no reason to read what a customer said about a fault, a wholesale
  * enquiry or a custom commission, and an address volunteered for a mailing list
@@ -2310,8 +2310,8 @@ async function joinWithInvitation(token: string): Promise<FormState> {
  *
  * `reports` is the closest existing fit: owner and studio hold it, Packing does
  * not, and it is already the line this codebase draws around the things only a
- * trusted insider sees. It is not a perfect name — reading a message is not
- * reporting — and the honest fix is a capability of its own. That belongs in
+ * trusted insider sees. It is not a perfect name - reading a message is not
+ * reporting - and the honest fix is a capability of its own. That belongs in
  * `lib/auth/staff.ts`, whose `Capability` union is the single list a page can
  * be filed under; adding `"enquiries"` there and granting it to owner and
  * studio would say what this screen is instead of borrowing a name. Until
@@ -2328,13 +2328,13 @@ async function joinWithInvitation(token: string): Promise<FormState> {
  * ────────────────────────────────────────────────────────────────────────────
  * WHAT "DEALT WITH" MEANS, AND WHY IT IS EXACTLY THIS.
  *
- * `0006_enquiries.sql` gives `contact_enquiries` three columns for it —
- * `handled_at`, `handled_by` and `handling_note` — and says what they are for:
+ * `0006_enquiries.sql` gives `contact_enquiries` three columns for it -
+ * `handled_at`, `handled_by` and `handling_note` - and says what they are for:
  * "Set by hand from the studio once the enquiry has been answered. Null is the
  * open state, and open enquiries are what an inbox screen shows." So this
  * writes those three and invents nothing.
  *
- * It is deliberately NOT "replied to". Nothing in this shop sends a reply — the
+ * It is deliberately NOT "replied to". Nothing in this shop sends a reply - the
  * customer's address is a `mailto:` link on the screen and the answer leaves
  * from the owner's own mail client, which this application never sees. So the
  * stamp records the only fact the studio can honestly assert: somebody looked
@@ -2418,7 +2418,7 @@ export async function setEnquiryHandled(
  * error.
  *
  * ────────────────────────────────────────────────────────────────────────────
- * IS AN UNSUBSCRIBE CONTROL HONEST WHEN NOTHING IS SENT? YES — THIS ONE IS.
+ * IS AN UNSUBSCRIBE CONTROL HONEST WHEN NOTHING IS SENT? YES - THIS ONE IS.
  *
  * There is no newsletter, no welcome email and no unsubscribe link, and no copy
  * on the site may promise one. None of that is what this button is. It does not
@@ -2426,7 +2426,7 @@ export async function setEnquiryHandled(
  * the studio writing down, on the row, that somebody asked to be taken off.
  *
  * It has to exist, and it has to be here. Requests to come off arrive by email
- * or by DM — there is nowhere else for them to arrive from — and
+ * or by DM - there is nowhere else for them to arrive from - and
  * `unsubscribed_at` is the column `0006_enquiries.sql` created for exactly that
  * answer, specifically so that a later sign-up through the footer cannot
  * silently undo it: the route's `on conflict do nothing` insert leaves this
@@ -2434,13 +2434,13 @@ export async function setEnquiryHandled(
  * deleting the row, which loses the record that the person ever asked and lets
  * the next footer submission put them straight back.
  *
- * The copy on the screen must therefore say what this is — a record — and must
+ * The copy on the screen must therefore say what this is - a record - and must
  * not say the person has been unsubscribed from something, because they have
  * not been receiving anything.
  *
  * WHY THE UNDO EXISTS TOO. The schema's stickiness is aimed at the automatic
  * path: a sign-up form must not clear the stamp. A deliberate correction by a
- * person, on a screen only staff can reach, is a different act — and it is the
+ * person, on a screen only staff can reach, is a different act - and it is the
  * only way to fix a mis-click, since nothing else in this application writes
  * that column. It is labelled as a correction rather than as re-subscribing.
  * ────────────────────────────────────────────────────────────────────────────
@@ -2451,7 +2451,7 @@ export async function setSignupSubscribed(
 ): Promise<FormState> {
   return guard("reports", async () => {
     // The address is the primary key, and the table's CHECK refuses anything
-    // that is not already lower-cased — the same normalisation /api/newsletter
+    // that is not already lower-cased - the same normalisation /api/newsletter
     // does on the way in. Doing it here too means a row can always be found.
     const email = text(form, "email").toLowerCase();
     const state = text(form, "state");
@@ -2510,7 +2510,7 @@ function friendly(message: string): string {
   if (lower.includes("products_sku_key")) return "Another product already uses that SKU.";
   if (lower.includes("products_slug_key")) return "Another product already uses that web address.";
   if (lower.includes("colours_name_key")) return "There is already a colour with that name.";
-  if (lower.includes("staff_invitations_token_hash_key")) return "Try again — that was a one-in-a-billion collision.";
+  if (lower.includes("staff_invitations_token_hash_key")) return "Try again, that was a one-in-a-billion collision.";
   if (lower.includes("scoop_tiers_slug_key")) return "Another scoop tier already uses that web address.";
   if (lower.includes("scoop_tiers_activation_check")) {
     return (

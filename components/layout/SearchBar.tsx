@@ -38,7 +38,7 @@ export function SearchBar({ initialQuery = "" }: { initialQuery?: string }) {
 
   // Debounced suggestion fetch, with in-flight cancellation. Every state
   // update happens inside the timer or the fetch, never synchronously in the
-  // effect body — a synchronous one would cascade an extra render per keypress.
+  // effect body - a synchronous one would cascade an extra render per keypress.
   useEffect(() => {
     const term = query.trim();
     if (term.length < 2) {
@@ -158,7 +158,7 @@ export function SearchBar({ initialQuery = "" }: { initialQuery?: string }) {
                     </span>
                     {/* This line used to read `{money(price)} · {review_count}
                         reviews` unconditionally, so every suggestion in the
-                        header search — the main navigation on a phone — said
+                        header search - the main navigation on a phone - said
                         "$9.00 · 0 reviews". No product has a review; the seed
                         emits review_count 0 and there is no review-submission
                         path at all, so that was a plausible-looking zero on

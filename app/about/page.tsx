@@ -11,11 +11,11 @@ export const metadata: Metadata = {
   ...selfCanonical("/about"),
   title: "Our story",
   description:
-    "Bam Studio is three family members and one 3D printer — designed together, printed to order in Wollongong, kept deliberately small.",
+    "Bam Studio is three family members and one 3D printer, designed together, printed to order in Wollongong, kept deliberately small.",
 };
 
 /*
- * `canReachStudio` and `hasSocialAccount` come from lib/contact.ts — the same
+ * `canReachStudio` and `hasSocialAccount` come from lib/contact.ts - the same
  * mailbox-or-social test /track, /contact and the legal pages use. The on-site
  * contact form is deliberately not counted: it delivers by emailing the studio
  * mailbox, so it is not a channel on its own.
@@ -51,7 +51,7 @@ const CARDS: {
   {
     icon: "box",
     title: "Printed to order",
-    body: `One FlashForge printer, PLA plastic, no warehouse. Your pieces go on the print bed after you order them — that is why we ask for ${PRINT_LEAD_TIME.label} before anything is dispatched. Every one comes off the bed, gets its edges checked and is packed by hand.`,
+    body: `One FlashForge printer, PLA plastic, no warehouse. Your pieces go on the print bed after you order them, that is why we ask for ${PRINT_LEAD_TIME.label} before anything is dispatched. Every one comes off the bed, gets its edges checked and is packed by hand.`,
     art: "matcha",
     tint: "sage",
   },
@@ -79,7 +79,7 @@ export default function AboutPage() {
           <p className="max-w-[520px] text-[17px] text-[#5C564C]">
             {SHOP.name} is a very small studio making fidget clickers, charms and
             desk pieces in {SHOP.city}. No factory, no licensing deals, no
-            minimum order of five hundred — just three people who could not stop
+            minimum order of five hundred, just three people who could not stop
             printing little things.
           </p>
         </div>
@@ -109,8 +109,8 @@ export default function AboutPage() {
           <div className="flex aspect-[4/3] flex-col items-center justify-center gap-4 rounded-[26px] border-2 border-dashed border-line2 bg-cream p-8 text-center">
             <Icon name="camera" size={34} className="text-faint" />
             {/* Was a bracketed [PHOTO: ...] placeholder rendered to customers.
-                The frame stays — there is no studio photo yet and inventing one
-                is not an option — but it now reads as a plain note rather than
+                The frame stays - there is no studio photo yet and inventing one
+                is not an option - but it now reads as a plain note rather than
                 unfilled copy someone forgot to replace. */}
             <p className="max-w-[34ch] text-[13.5px] font-extrabold text-muted">
               A photo of the printer mid-run goes here, with a bed of finished
@@ -129,7 +129,7 @@ export default function AboutPage() {
               <p>
                 Before there was a shop there was a saved-video collection: hours
                 of tiny printed things, quietly hoarded and re-watched. The first
-                real range was just that collection made physical — the pieces we
+                real range was just that collection made physical, the pieces we
                 had saved most often, redrawn in our own way so we could actually
                 print and sell them.
               </p>
@@ -141,8 +141,8 @@ export default function AboutPage() {
                 we kept doing it on purpose.
               </p>
               <p>
-                Every design is drawn by us. We do not print licensed characters
-                — not as a smaller version, not as a &quot;inspired by&quot;, not
+                Every design is drawn by us. We do not print licensed characters,
+               not as a smaller version, not as a &quot;inspired by&quot;, not
                 for a custom request. It is the one rule we have never bent, and
                 it is why the range looks the way it does.
               </p>
@@ -168,7 +168,7 @@ export default function AboutPage() {
             </h2>
             {/* "Next stall" was an unfilled [MARKET NAME AND DATE] placeholder.
                 Naming a market we have not booked is worse than naming none, so
-                this says only what holds — the same wording /faq and /contact
+                this says only what holds - the same wording /faq and /contact
                 settled on. Holding a piece aside needs somewhere to ask, so
                 that half is gated the way /track gates "message us". */}
             <p className="mb-7 max-w-[460px] text-[#BDB6AA]">
@@ -177,7 +177,7 @@ export default function AboutPage() {
               take it home the same afternoon. Dates move around and we do not
               have the next one confirmed here yet, so it is worth checking
               before you make the trip
-              {hasSocialAccount ? " — our social accounts have the latest" : ""}.
+              {hasSocialAccount ? ", our social accounts have the latest" : ""}.
               {canReachStudio
                 ? " Message us if you want us to hold something aside, or if you are after a custom design."
                 : ""}
@@ -190,7 +190,7 @@ export default function AboutPage() {
                 <Icon name="msg" size={18} />
                 {/* Same call as /track: with no mailbox and no social account
                     there is nothing to get in touch through, and the contact
-                    page says so — the button must not promise more than it. */}
+                    page says so - the button must not promise more than it. */}
                 {canReachStudio ? "Get in touch" : "How to reach us"}
               </ButtonLink>
               <ButtonLink

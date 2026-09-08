@@ -5,7 +5,7 @@ import { Panel, Unknown } from "../../ui";
 import type { OrderDetail, OrderScoops } from "../../data";
 
 /**
- * Recording a dispatch — the one moment an order picks up a tracking number.
+ * Recording a dispatch - the one moment an order picks up a tracking number.
  *
  * ────────────────────────────────────────────────────────────────────────────
  * WHY THIS IS ITS OWN PANEL AND ITS OWN BUTTON.
@@ -15,13 +15,13 @@ import type { OrderDetail, OrderScoops } from "../../data";
  * take back, and said many times a day. Posting a parcel is not one of those.
  * It is a one-way event in the physical world, it is the only transition that
  * publishes a new fact to the customer, and it is the only one where a second
- * piece of information — the article number — exists at that instant and at no
+ * piece of information - the article number - exists at that instant and at no
  * other. It had been the cheapest thing on the page to do by accident: one
  * mis-picked line of the status dropdown, on the control used for everything.
  *
  * So dispatch has its own panel, its own verb, and its own action. The status
  * dropdown next door no longer offers `shipped` at all, and `setOrderStatus`
- * refuses it even if the request is hand-made — a server action is a public
+ * refuses it even if the request is hand-made - a server action is a public
  * endpoint and a dropdown is not a check.
  *
  * NOTHING HERE SHOWS A COST OR A MARGIN. The "orders" capability is held by
@@ -45,8 +45,8 @@ function recipientName(order: OrderDetail): string | null {
  *
  * This is the honest starting point for the tracking question: a basket quoted
  * as a Large Letter was never going to get a number, and one quoted as a parcel
- * was. When the column is null — an order from before postage was quoted, or a
- * sale typed in at a market — it says so rather than picking a side. Nothing
+ * was. When the column is null - an order from before postage was quoted, or a
+ * sale typed in at a market - it says so rather than picking a side. Nothing
  * here is a default the form can act on by itself; `markShipped` still refuses
  * a dispatch whose tracking answer contradicts what was typed.
  */
@@ -120,7 +120,7 @@ function TrackingChoice({
  * is caught by the action rather than by an input that quietly went grey.
  *
  * `defaultTracked` only ever pre-selects a radio from something already
- * recorded — the service the postage was quoted for on a first dispatch, or
+ * recorded - the service the postage was quoted for on a first dispatch, or
  * what is actually saved when correcting one. `null` leaves both unanswered,
  * and `markShipped` refuses a submission with no answer rather than reading a
  * blank as "untracked".
@@ -148,13 +148,13 @@ function DispatchForm({
         </legend>
         <TrackingChoice
           value="tracked"
-          label="Yes — here is the number"
+          label="Yes, here is the number"
           detail="From the Australia Post label. Paste just the number."
           defaultChecked={defaultTracked === true}
         />
         <TrackingChoice
           value="untracked"
-          label="No — posted without tracking"
+          label="No, posted without tracking"
           detail="Nothing to follow. The customer is told that, rather than shown a blank."
           defaultChecked={defaultTracked === false}
         />
@@ -206,7 +206,7 @@ function DispatchForm({
  * and "posted, but the number was never written down" are the same value in
  * the database. Nothing in the schema tells them apart. What keeps them apart
  * is `markShipped`, which is the only thing that writes this column and which
- * refuses to record a tracked dispatch with an empty box — so a `shipped` row
+ * refuses to record a tracked dispatch with an empty box - so a `shipped` row
  * with no number can only have got there by somebody deliberately answering
  * "posted without tracking". That is an application invariant, not a
  * constraint: a hand edit in the Supabase table editor still breaks it.
@@ -234,7 +234,7 @@ function RecordedDispatch({ order }: { order: OrderDetail }) {
         </span>
       ) : (
         <span className="text-[14px] text-muted">
-          Posted without tracking — there is no number to follow.
+          Posted without tracking, there is no number to follow.
         </span>
       )}
     </div>
@@ -247,7 +247,7 @@ function RecordedDispatch({ order }: { order: OrderDetail }) {
  * ────────────────────────────────────────────────────────────────────────────
  * WHY THE FORM IS REPLACED RATHER THAN LEFT WITH A WARNING ABOVE IT.
  *
- * `markShipped` refuses this outright — it is the real guard, and it has to be,
+ * `markShipped` refuses this outright - it is the real guard, and it has to be,
  * because a server action is a public endpoint and a panel is markup. But a
  * button that is always going to be refused is a button that gets pressed, and
  * the tracking number is typed in before it is. So the form is not drawn at all
@@ -257,7 +257,7 @@ function RecordedDispatch({ order }: { order: OrderDetail }) {
  * WHY THE RULE EXISTS AT ALL, in her words rather than the schema's: a scoop is
  * sold before anyone knows what is in it, so packing it is the only moment its
  * stock comes off and the only moment its cost is known. Post it first and the
- * shelf counts are wrong for ever and the margin on that order is unknowable —
+ * shelf counts are wrong for ever and the margin on that order is unknowable -
  * and by then the bag is sealed and in the post.
  * ────────────────────────────────────────────────────────────────────────────
  */
@@ -265,8 +265,8 @@ function ScoopsFirst({ scoops }: { scoops: OrderScoops }) {
   if (scoops.unreadable) {
     return (
       <Alert tone="error">
-        The Lucky Scoops on this order could not be read, so it is not safe to mark it posted —
-        &ldquo;we could not check&rdquo; is not the same as &ldquo;there is nothing to check&rdquo;.
+        The Lucky Scoops on this order could not be read, so it is not safe to mark it posted.
+        &ldquo;We could not check&rdquo; is not the same as &ldquo;there is nothing to check&rdquo;.
         Reload the page.
       </Alert>
     );
@@ -339,12 +339,12 @@ export function DispatchPanel({
             <h3 className="text-[14px] font-extrabold">Wrong number?</h3>
             <p className="mt-1 mb-3 text-[13px] text-muted">
               Record it again. Answer the tracking question the same way you
-              would the first time — this replaces what is saved.
+              would the first time, this replaces what is saved.
             </p>
             <DispatchForm
               order={order}
               // Correcting: start from what is actually on the row, not from
-              // what the postage was sold as. The two can legitimately differ —
+              // what the postage was sold as. The two can legitimately differ -
               // a letter-quoted basket that grew and went as a parcel.
               defaultTracked={order.trackingNumber !== null}
               submitLabel="Replace what is recorded"
@@ -356,7 +356,7 @@ export function DispatchPanel({
             <h3 className="text-[14px] font-extrabold">Not posted after all?</h3>
             <p className="mt-1 mb-3 text-[13px] text-muted">
               Puts it back to packed and removes the tracking number. There is no
-              history kept, so the number is gone — keep the label until you are
+              history kept, so the number is gone, keep the label until you are
               sure.
             </p>
             <AdminForm action={undoDispatch}>
@@ -376,7 +376,7 @@ export function DispatchPanel({
   /*
    * Scoped to the transition this rule is about. The `shipped` branch above is
    * how a wrong tracking number is corrected, and refusing to fix the number on
-   * a parcel that has already gone helps nobody — `markShipped` scopes its own
+   * a parcel that has already gone helps nobody - `markShipped` scopes its own
    * guard the same way, so the two cannot disagree.
    */
   if (scoops.unreadable || scoops.outstanding.length > 0) {
@@ -385,8 +385,8 @@ export function DispatchPanel({
         title="Post this parcel"
         note={
           scoops.unreadable
-            ? "Not yet — the scoops on this order could not be read."
-            : "Not yet — there is a scoop on this order whose contents nobody has written down."
+            ? "Not yet, the scoops on this order could not be read."
+            : "Not yet, there is a scoop on this order whose contents nobody has written down."
         }
       >
         <ScoopsFirst scoops={scoops} />
@@ -405,7 +405,7 @@ export function DispatchPanel({
         order={order}
         defaultTracked={order.soldAsTracked}
         submitLabel="Post this parcel"
-        caption={`Marks ${order.orderNumber ?? "this order"}${name ? ` — ${name}` : ""} as posted.`}
+        caption={`Marks ${order.orderNumber ?? "this order"}${name ? `, ${name}` : ""} as posted.`}
       />
     </Panel>
   );

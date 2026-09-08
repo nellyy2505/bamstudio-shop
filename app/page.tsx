@@ -63,8 +63,8 @@ const CATEGORY_TILES: { label: string; art: ArtKey; tint: Tint; href: string }[]
   ];
 
 /**
- * §0.10: free postage is the standard rate only — shippingCost() charges
- * express at every basket size — so nothing here may promise "free shipping"
+ * §0.10: free postage is the standard rate only - shippingCost() charges
+ * express at every basket size - so nothing here may promise "free shipping"
  * flat. Which method goes free (and which stay paid) is asked of
  * shippingCost() rather than named here, so the copy tracks the pricing.
  */
@@ -95,19 +95,19 @@ const HERO_FACTS = [
   { icon: "sparkle" as const, label: "Original designs only" },
 ];
 
-/** Carrier transit for standard post — quoted separately from printing. */
+/** Carrier transit for standard post - quoted separately from printing. */
 const [STANDARD_MIN, STANDARD_MAX] = transitDays("standard");
 
 /**
- * Print lead time and carrier transit stay separate here — "2–4 business days"
- * is printing only — and the free rate is named for the method it applies to.
+ * Print lead time and carrier transit stay separate here - "2–4 business days"
+ * is printing only - and the free rate is named for the method it applies to.
  */
 const DELIVERY_PROMISE = FREE_RATE_METHOD
-  ? `That's printing time, not delivery — ${FREE_RATE_METHOD.label.toLowerCase()} post adds ${FREE_RATE_METHOD.transitDays[0]}–${FREE_RATE_METHOD.transitDays[1]} business days, is half-price from ${money(SHIPPING.subsidyThreshold)} and free from ${money(SHIPPING.freeThreshold)}` +
+  ? `That's printing time, not delivery. ${FREE_RATE_METHOD.label.toLowerCase()} post adds ${FREE_RATE_METHOD.transitDays[0]}–${FREE_RATE_METHOD.transitDays[1]} business days, is half-price from ${money(SHIPPING.subsidyThreshold)} and free from ${money(SHIPPING.freeThreshold)}` +
     (PAID_METHOD_COUNT > 0
       ? `; ${PAID_METHOD_LABELS} ${PAID_METHOD_COUNT === 1 ? "is" : "are"} always charged.`
       : ".")
-  : `That's printing time, not delivery — standard post adds ${STANDARD_MIN}–${STANDARD_MAX} business days.`;
+  : `That's printing time, not delivery. standard post adds ${STANDARD_MIN}–${STANDARD_MAX} business days.`;
 
 const PROMISES = [
   {
@@ -123,7 +123,7 @@ const PROMISES = [
   {
     icon: "shield" as const,
     title: "Secure checkout",
-    body: "Payments run through Stripe — your card details never touch us.",
+    body: "Payments run through Stripe. Your card details never touch us.",
   },
   {
     icon: "gift" as const,
@@ -157,14 +157,14 @@ export default async function HomePage() {
    * job she does before packing, never a reason to stop offering a paid
    * product. A scoop follows the same rule as everything else in the catalogue.
    * If you are about to filter this strip on `scoopsAvailable` because a
-   * comment somewhere still describes the old behaviour — don't; that number is
+   * comment somewhere still describes the old behaviour - don't; that number is
    * studio information and lib/scoop.ts records the correction at length.
    * ("Unweighed" has gone from the list for a different reason: a packed weight
    * is required to ACTIVATE a tier, 0007_lucky_scoop.sql, so it sits upstream
    * of `sellable` rather than inside it.)
    *
    * Nothing is seeded, so this is empty on every
-   * environment right now and the section below simply does not render — which
+   * environment right now and the section below simply does not render - which
    * is the honest answer, not a placeholder. `/scoop` itself stays a real page
    * either way; it is just not promoted from here until it has something to
    * sell.
@@ -189,7 +189,7 @@ export default async function HomePage() {
             </h1>
             <p className="mb-7 max-w-[460px] text-[17px] text-[#5C564C]">
               Fidget clickers, name charms and desk pieces, 3D-printed just for
-              you — from matcha sets to macarons.
+              you, from matcha sets to macarons.
             </p>
             <div className="flex flex-wrap gap-3.5">
               <ButtonLink href="/shop" size="lg">
@@ -300,8 +300,8 @@ export default async function HomePage() {
         Design your own above: one card, one idea, one way in.
 
         What it may NOT do is sell the surprise on its own. The line that earns
-        the click here is the same line that makes the sale honest — every bowl
-        lists what it can draw — so it is in the card rather than saved for the
+        the click here is the same line that makes the sale honest - every bowl
+        lists what it can draw - so it is in the card rather than saved for the
         page. Rendered only when `scoopTiers` has something sellable in it; see
         the gate above.
       */}

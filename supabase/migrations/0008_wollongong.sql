@@ -1,4 +1,4 @@
--- 0008_wollongong.sql — the studio moved from Sydney to Wollongong
+-- 0008_wollongong.sql - the studio moved from Sydney to Wollongong
 --
 -- Apply after 0007_lucky_scoop.sql.
 --
@@ -7,7 +7,7 @@
 -- `supabase/seed.sql` was updated in the same commit, but a seed only runs
 -- into an empty database. Every product row on the live shop was inserted
 -- weeks ago and carries the old sentence, so the seed edit alone would leave
--- the deployed catalogue naming a city the studio no longer prints in — and
+-- the deployed catalogue naming a city the studio no longer prints in - and
 -- the origin postcode used to price postage (`lib/shipping/dimensions.ts`,
 -- now 2500) would disagree with the description on the page next to it.
 --
@@ -18,9 +18,9 @@
 -- thirty-four never mentioned a city at all.
 --
 -- It does NOT touch:
---   * `price` — prices are the Studio's to set, and a migration that quietly
+--   * `price` - prices are the Studio's to set, and a migration that quietly
 --     repriced a product would be a number nobody could trace to a decision.
---   * anything on `orders` — an order placed while the studio was in Sydney
+--   * anything on `orders` - an order placed while the studio was in Sydney
 --     was fulfilled from Sydney. Rewriting history to match today's address
 --     would falsify a record a customer may still be holding.
 --   * the privacy page's "Fly.io ... Sydney region", which is in code and is

@@ -14,7 +14,7 @@ const TOPICS = [
 ];
 
 /**
- * Nothing persists an enquiry — the email to the studio IS the delivery — so
+ * Nothing persists an enquiry - the email to the studio IS the delivery - so
  * "sent" may only be claimed when /api/contact reports `delivered: true`.
  * `undelivered` is a 200 whose enquiry reached nobody: the form stays on
  * screen with the customer's words intact, because telling someone to write to
@@ -70,7 +70,7 @@ export function ContactForm() {
       setStatus("undelivered");
     } catch {
       setError(
-        "We could not reach the studio — check your connection and try again.",
+        "We could not reach the studio. Check your connection and try again.",
       );
       setStatus("error");
     }
@@ -89,9 +89,9 @@ export function ContactForm() {
             The clock is gone. Nothing in this codebase measures or guarantees a
             turnaround, /contact says exactly that a few lines up, and the same
             promise was removed from the product page and /order/confirmed on
-            that principle — leaving it here made the site contradict itself. */}
+            that principle - leaving it here made the site contradict itself. */}
         <p className="mt-2 max-w-[48ch] text-[15px] text-muted">
-          Thank you — it has landed in our inbox. One of us reads every message
+          Thank you. It has landed in our inbox. One of us reads every message
           personally and answers between print runs and market weekends.
         </p>
         <Button
@@ -161,7 +161,7 @@ export function ContactForm() {
           <Field
             label="Order number"
             htmlFor="contact-order"
-            hint="Optional — it looks like BS-1042-9F3A."
+            hint="Optional. It looks like BS-1042-9F3A."
           >
             <input
               id="contact-order"
@@ -186,7 +186,7 @@ export function ContactForm() {
             minLength={10}
             maxLength={2000}
             rows={6}
-            placeholder="Tell us what you need — colours, quantities, dates, anything that helps."
+            placeholder="Tell us what you need: colours, quantities, dates, anything that helps."
             className="w-full rounded-xl border border-line2 bg-surface px-4 py-3 text-[15px] text-ink placeholder:text-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
           />
         </Field>
@@ -197,10 +197,10 @@ export function ContactForm() {
 
         {status === "undelivered" ? (
           <Alert tone="error">
-            We could not get that to the studio, so nobody has read it — please
+            We could not get that to the studio, so nobody has read it, so please
             do not wait on a reply. Your message is still here.{" "}
             {/* Built from NEXT_PUBLIC_ config only, so it is identical on the
-                server and in the browser — safe in a client component. Whether
+                server and in the browser - safe in a client component. Whether
                 the form DELIVERS is decided by the server page, which renders
                 this component only when it does. */}
             {hasStudioMailbox ? (

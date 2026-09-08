@@ -11,7 +11,7 @@ import type { Accessory, ColourRow, ProductDetail } from "../data";
  *
  * A client component for one reason only: the filament recipe is a list of rows
  * a person adds to and removes from, and that is state. Everything else here is
- * a plain input inside a plain form — the values come in as props from the
+ * a plain input inside a plain form - the values come in as props from the
  * server and go back out through `saveProduct`, which re-validates all of them.
  *
  * Nothing on this page is trusted. The form can be edited in a browser's
@@ -73,7 +73,7 @@ export function ProductForm({
 
       <Panel
         title="What it costs to make"
-        note="These two are what every price in the studio is worked out from. Leave one blank and the piece has no cost — which is honest, not broken."
+        note="These two are what every price in the studio is worked out from. Leave one blank and the piece has no cost, which is honest, not broken."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
@@ -98,7 +98,7 @@ export function ProductForm({
               {accessories.map((accessory) => (
                 <option key={accessory.id} value={accessory.id}>
                   {accessory.name}
-                  {accessory.costCents > 0 ? ` — ${accessory.costCents}c` : " — not costed yet"}
+                  {accessory.costCents > 0 ? `, ${accessory.costCents}c` : ", not costed yet"}
                 </option>
               ))}
             </select>
@@ -187,8 +187,8 @@ export function ProductForm({
         <div className="grid gap-4 sm:grid-cols-3">
           {/* The hint used to read "In dollars, GST included." The shop is under
               the $75,000 threshold and is not registered (SHOP.gstRegistered), so no
-              page may show or claim GST — including a form hint only she reads. */}
-          <Field label="Price" htmlFor="price" hint="In dollars — what a customer pays.">
+              page may show or claim GST - including a form hint only she reads. */}
+          <Field label="Price" htmlFor="price" hint="In dollars, what a customer pays.">
             <input
               id="price"
               name="price"
@@ -264,7 +264,7 @@ export function ProductForm({
  * A panel, duplicated from app/admin/ui.tsx rather than imported.
  *
  * ui.tsx is a server component file; importing it into this "use client" module
- * would drag it — and everything it imports — into the browser bundle. Two
+ * would drag it - and everything it imports - into the browser bundle. Two
  * small copies of a bordered box is the cheaper mistake.
  */
 function Panel({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {

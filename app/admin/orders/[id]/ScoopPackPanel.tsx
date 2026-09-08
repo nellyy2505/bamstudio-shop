@@ -18,8 +18,8 @@ import type {
  *
  * Every other line on this order was costed before it sold: the piece has a
  * recipe, `unitCostsAtSale()` reads it, and `order_items.unit_cost_cents` is
- * stamped at checkout. A scoop is sold FIRST and decided AFTERWARDS — at the
- * moment money changed hands nobody knew what was going in the bag — so there
+ * stamped at checkout. A scoop is sold FIRST and decided AFTERWARDS - at the
+ * moment money changed hands nobody knew what was going in the bag - so there
  * was nothing to cost it from and nothing to take off the shelf.
  *
  * Both of those happen here. Recording a pack decrements the stock of every
@@ -29,13 +29,13 @@ import type {
  * and in the post, nobody can go back and look.
  *
  * SAFE TO PRESS TWICE. `scoop_packs.stock_applied` is a claim flag, taken by a
- * compare-and-set before a single unit moves — the same shape
+ * compare-and-set before a single unit moves - the same shape
  * `orders.stock_applied` uses in the Stripe webhook. A second press does not
  * re-record and does not decrement again; it saves the video link and says so.
  *
  * WHAT PACKING SEES. `showCosts` is the order page's own gate, held by roles
- * with "reports". A packing helper records what went in and moves the stock —
- * the action is guarded by "orders", which she holds — and never sees a cost.
+ * with "reports". A packing helper records what went in and moves the stock -
+ * the action is guarded by "orders", which she holds - and never sees a cost.
  * The shelf counts are shown to everyone, because they are what the job needs.
  * ────────────────────────────────────────────────────────────────────────────
  */
@@ -51,7 +51,7 @@ export function ScoopPackPanel({
   catalogue: PoolCandidate[];
   /**
    * The order's own status. Recording a pack takes real pieces off the shelf,
-   * so a cancelled order — or an abandoned checkout — has nothing to pack, and
+   * so a cancelled order - or an abandoned checkout - has nothing to pack, and
    * `recordScoopPack` refuses both. What was already packed still shows: a
    * cancelled order can be one that was packed and then called off, and what
    * went in it is still a fact.
@@ -63,7 +63,7 @@ export function ScoopPackPanel({
       <Panel title="What went in the scoop">
         <Alert tone="error">
           The Lucky Scoops on this order could not be read just now, so nothing about them can be
-          shown or recorded — and the order cannot be marked posted until it can. Reload the page.
+          shown or recorded, and the order cannot be marked posted until it can. Reload the page.
         </Alert>
       </Panel>
     );
@@ -107,13 +107,13 @@ function ScoopLinePanel({
     <Panel
       title={
         line.quantity > 1
-          ? `${line.tierName} — ${pluralise(line.quantity, "scoop")}`
+          ? `${line.tierName}, ${pluralise(line.quantity, "scoop")}`
           : line.tierName
       }
       note={`${pluralise(line.pieceCount, "piece")} promised, drawn from ${pluralise(
         line.pool.length,
         "product",
-      )} — ${drawable} of them with something on the shelf.`}
+      )}, ${drawable} of them with something on the shelf.`}
       padded={false}
     >
       <div className="divide-y divide-line">
@@ -132,7 +132,7 @@ function ScoopLinePanel({
             ) : (
               <p className="text-[14px] text-muted">
                 Nothing was packed for this scoop, and this order is not one that can be
-                packed — nothing is going in a bag, so no pieces come off the shelf for it.
+                packed, nothing is going in a bag, so no pieces come off the shelf for it.
               </p>
             )}
           </div>
@@ -162,7 +162,7 @@ function Recorded({
         <Pill tone="good">Packed</Pill>
         <span className="text-[13px] text-muted">
           {pluralise(pack.recordedPieces, "piece")} recorded
-          {short ? ` — the tier promised ${pack.pieceCount}` : ""}
+          {short ? `, the tier promised ${pack.pieceCount}` : ""}
           {pack.packedAt ? ` · ${formatDate(pack.packedAt)}` : ""}
         </span>
         {pack.stockApplied ? null : (
@@ -184,7 +184,7 @@ function Recorded({
               {item.offPool ? (
                 /* Not a rule violation. A pool is a policy that gets edited; what
                    went in a parcel is a fact. Noted so she can see it, never
-                   refused — 0007 says so in as many words. */
+                   refused - 0007 says so in as many words. */
                 <span className="ml-2 text-[12.5px] text-muted">not in the pool now</span>
               ) : null}
             </span>
@@ -284,7 +284,7 @@ function RecordForm({
 }) {
   const poolIds = new Set(line.pool.map((piece) => piece.productId));
   // The "something else" list deliberately excludes the pool, which is already
-  // above it — a second copy of twelve products is twelve rows of payload buying
+  // above it - a second copy of twelve products is twelve rows of payload buying
   // nothing.
   const others = catalogue.filter((product) => !poolIds.has(product.productId));
 
@@ -358,7 +358,7 @@ function RecordForm({
         <fieldset className="border-t border-line pt-4">
           <legend className="mb-1 text-[13.5px] font-extrabold">Something else went in</legend>
           <p className="mb-3 text-[13px] text-muted">
-            A charm broke, or the last one had already gone. Record what she actually posted — the
+            A charm broke, or the last one had already gone. Record what she actually posted, the
             pool is a policy, this is a fact.
           </p>
           <div className="grid grid-cols-[minmax(0,1fr)_88px] items-center gap-3">
@@ -371,7 +371,7 @@ function RecordForm({
               <option value="">Nothing else</option>
               {others.map((product) => (
                 <option key={product.productId} value={product.productId}>
-                  {product.name} — {product.sku}
+                  {product.name}, {product.sku}
                 </option>
               ))}
             </select>

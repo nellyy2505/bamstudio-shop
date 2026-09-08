@@ -13,7 +13,7 @@ export async function createClient() {
   if (!url || !anonKey) {
     throw new Error(
       "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and " +
-        "NEXT_PUBLIC_SUPABASE_ANON_KEY — see SETUP.md.",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY, see SETUP.md.",
     );
   }
 
@@ -31,7 +31,7 @@ export async function createClient() {
               cookieStore.set(name, value, options),
             );
           } catch {
-            // Called from a Server Component — the middleware refreshes the
+            // Called from a Server Component - the middleware refreshes the
             // session instead, so this is safe to swallow.
           }
         },
@@ -41,7 +41,7 @@ export async function createClient() {
 }
 
 /**
- * Service-role client. Bypasses RLS — only ever use it in trusted server
+ * Service-role client. Bypasses RLS - only ever use it in trusted server
  * paths (the Stripe webhook writing orders), never in anything a request
  * body can steer.
  */
@@ -49,7 +49,7 @@ export function createAdminClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!key) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is not set — required for order writes.",
+      "SUPABASE_SERVICE_ROLE_KEY is not set, required for order writes.",
     );
   }
 

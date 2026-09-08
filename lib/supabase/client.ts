@@ -10,7 +10,7 @@ export function isSupabaseConfigured(): boolean {
 
 /**
  * Browser-side Supabase client (anon key, RLS enforced).
- * Throws when unconfigured — callers that must survive that (favourites,
+ * Throws when unconfigured - callers that must survive that (favourites,
  * for instance) should check `isSupabaseConfigured()` first.
  */
 export function createClient() {
@@ -19,7 +19,7 @@ export function createClient() {
   if (!url || !anonKey) {
     throw new Error(
       "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and " +
-        "NEXT_PUBLIC_SUPABASE_ANON_KEY — see SETUP.md.",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY, see SETUP.md.",
     );
   }
   return createBrowserClient(url, anonKey);

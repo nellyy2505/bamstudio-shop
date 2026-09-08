@@ -23,8 +23,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * Does the shop email the order number as well as showing it? Server component,
- * so this reads the same secrets the Stripe webhook does. `canReachStudio` —
- * is there a mailbox or a social account behind "message us" — comes from
+ * so this reads the same secrets the Stripe webhook does. `canReachStudio` -
+ * is there a mailbox or a social account behind "message us" - comes from
  * lib/contact.ts, shared with /contact, /about and the legal pages.
  */
 const SENDS_CONFIRMATION = sendsOrderConfirmation(isEmailConfigured());
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   ...selfCanonical("/track"),
   title: "Track your order",
   description:
-    "Check where your Bam Studio order is — confirmed, printing, packed or shipped — with your order number and email. No account needed.",
+    "Check where your Bam Studio order is, whether confirmed, printing, packed or shipped, with your order number and email. No account needed.",
 };
 
 const NOTES = [
@@ -46,7 +46,7 @@ const NOTES = [
     icon: "truck" as const,
     title: "Then the post",
     // Postage is quoted per basket from Australia Post, so no fixed price
-    // belongs on this page — and tracking depends on the service the quote
+    // belongs on this page - and tracking depends on the service the quote
     // picks, which a general explainer cannot know. Transit ranges only.
     body: `Postage is worked out from the weight of your basket at Australia Post's current rates and shown before you pay. After dispatch, standard post takes ${transitRangeLabel("standard")} and express takes ${transitRangeLabel("express")}.`,
   },
@@ -67,7 +67,7 @@ export default function TrackPage() {
       <div className="mb-9 max-w-2xl">
         <h1 className="mb-2.5 text-3xl md:text-4xl">Where is my order?</h1>
         <p className="text-muted">
-          Every order goes through the same four stages — confirmed, printing,
+          Every order goes through the same four stages: confirmed, printing,
           packed, shipped. Put in your order number and email to see which one
           yours is on.
         </p>
@@ -90,7 +90,7 @@ export default function TrackPage() {
           {/* Leads with the confirmation page, which shows the order number on
               screen in every configuration. The confirmation email carries it
               too, but only while the Resend secrets are set, and it is queued
-              after the response and can fail — so it is named as a second place
+              after the response and can fail - so it is named as a second place
               to look rather than the place, and only when one is actually
               sent. */}
           <p className="px-1 text-[13px] text-muted">
@@ -106,7 +106,7 @@ export default function TrackPage() {
             >
               {canReachStudio ? "message us" : "see how to reach us"}
             </Link>
-            {canReachStudio ? " — we can look it up from our side." : "."}
+            {canReachStudio ? ". We can look it up from our side." : "."}
           </p>
         </aside>
       </div>

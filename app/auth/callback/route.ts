@@ -10,7 +10,7 @@ const RECOVERY_NEXT = "/reset-password";
 
 /**
  * Only these codes reach the sign-in page. The provider's own
- * `error_description` is attacker-controllable via a crafted callback URL —
+ * `error_description` is attacker-controllable via a crafted callback URL -
  * reflecting it would let anyone put convincing text ("call support on…") on
  * the real login screen.
  */
@@ -26,15 +26,15 @@ function loginWithError(code: AuthErrorCode, detail?: string) {
  *
  * **Every redirect out of this route is built on `siteUrl()`, never on
  * `url.origin`.** `request.url` is assembled from the address the *server* is
- * listening on, and on Fly that is the container's own bind address — so
+ * listening on, and on Fly that is the container's own bind address - so
  * `url.origin` was `http://0.0.0.0:8080` in production and every successful
  * Google sign-in ended on `ERR_ADDRESS_INVALID`. The session cookie was set
  * correctly on the way past, which is why pressing Back showed the user signed
  * in: the authentication worked and only the redirect was thrown away. Email
  * confirmation and password-reset links landed in the same dead end.
  *
- * This is the round-8 defect exactly — `siteUrl()` silently returning
- * localhost, so a customer was charged and then sent to their own machine —
+ * This is the round-8 defect exactly - `siteUrl()` silently returning
+ * localhost, so a customer was charged and then sent to their own machine -
  * found in `lib/stripe.ts` and fixed there, and missed here.
  *
  * Do not "fix" this with `x-forwarded-host` instead. That would be a second
@@ -44,12 +44,12 @@ function loginWithError(code: AuthErrorCode, detail?: string) {
  * screen. One source of truth: `NEXT_PUBLIC_SITE_URL`, baked in at build.
  */
 export async function GET(request: Request) {
-  // Path and query off request.url are fine — only its ORIGIN is wrong here.
+  // Path and query off request.url are fine - only its ORIGIN is wrong here.
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   // Sign-in, sign-up and the confirmation email all put `next` on this URL, so
   // by the time we are here it is the only record of where the person was
-  // headed — there is no state on our side to fall back on. The customer
+  // headed - there is no state on our side to fall back on. The customer
   // default is stated rather than inherited, and it is genuinely a guess: if
   // Supabase declined the redirect it was handed (the callback URL, query
   // string and all, has to be on the project's Redirect URLs list) then `next`
@@ -90,7 +90,7 @@ export async function GET(request: Request) {
   // /reset-password waives the current-password check only when it sees it.
   //
   // Deliberately narrow: httpOnly (script can't forge or read it), path-scoped
-  // to /reset-password (never sent anywhere else), and 15 minutes — long
+  // to /reset-password (never sent anywhere else), and 15 minutes - long
   // enough to pick a password, too short to be a standing bypass.
   if (next === RECOVERY_NEXT) {
     response.cookies.set("bs_pw_recovery", "1", {

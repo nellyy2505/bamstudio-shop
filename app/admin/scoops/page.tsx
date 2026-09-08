@@ -9,7 +9,7 @@ import { SCOOP_THEMES } from "@/lib/types";
 export const metadata = { title: "Lucky Scoop · Studio" };
 
 /**
- * The tiers — the thing a customer actually buys.
+ * The tiers - the thing a customer actually buys.
  *
  * WHAT THIS SCREEN IS FOR. A scoop is the one product in this shop that is sold
  * before anybody knows what is in it, so everything that makes it honest has to
@@ -24,7 +24,7 @@ export const metadata = { title: "Lucky Scoop · Studio" };
  * "CAN FILL" IS A PRINT SIGNAL, NOT A GATE, and that is the one thing to keep
  * straight on this screen. It used to be both: a tier whose pool could not fill
  * a scoop off the shelf stopped being offered to customers at all. That was
- * wrong — the shop prints to order, so a short bowl is topped up before packing
+ * wrong - the shop prints to order, so a short bowl is topped up before packing
  * (`lib/scoop.ts` records the correction). The number is still here because it
  * is worth acting on: a bowl down to its last scoop or two is a print job. It
  * decides nothing.
@@ -41,8 +41,8 @@ export default async function ScoopsPage() {
 
   const onSale = tiers.filter((tier) => tier.availability.sellable).length;
   const unpriced = tiers.filter((tier) => tier.priceCents === null).length;
-  // A bowl that cannot fill one scoop off the shelf. NOT a sales problem — the
-  // tier keeps selling and she prints before packing — but it is the row to
+  // A bowl that cannot fill one scoop off the shelf. NOT a sales problem - the
+  // tier keeps selling and she prints before packing - but it is the row to
   // look at first, so it is counted where she will see it.
   const needPrinting = tiers.filter(
     (tier) => tier.availability.sellable && tier.availability.scoopsAvailable === 0,
@@ -52,7 +52,7 @@ export default async function ScoopsPage() {
     <div>
       <PageHead
         title="Lucky Scoop"
-        subtitle="A tier is what a customer buys — “Pet scoop, five pieces”. The pieces are drawn from the pool you set here."
+        subtitle="A tier is what a customer buys, “Pet scoop, five pieces”. The pieces are drawn from the pool you set here."
         actions={
           <ButtonLink href="/admin/scoops/new" size="md">
             <Icon name="plus" size={18} />
@@ -66,7 +66,7 @@ export default async function ScoopsPage() {
         <Stat
           label="FOR SALE NOW"
           value={String(onSale)}
-          note="switched on and priced — the shop is offering these"
+          note="switched on and priced, the shop is offering these"
         />
         <Stat
           label="NOT PRICED"
@@ -77,7 +77,7 @@ export default async function ScoopsPage() {
         <Stat
           label="NEED A PRINT"
           value={String(needPrinting)}
-          note="still selling — but the bowl can't fill one without printing first"
+          note="still selling, but the bowl can't fill one without printing first"
           tone={needPrinting > 0 ? "warn" : undefined}
         />
       </div>
@@ -88,8 +88,8 @@ export default async function ScoopsPage() {
             No scoop tiers yet.{" "}
             <Link href="/admin/scoops/new" className="font-bold text-accent">
               Add the first one
-            </Link>{" "}
-            — it stays a draft until you have priced and weighed it.
+            </Link>,{" "}
+           it stays a draft until you have priced and weighed it.
           </NoRows>
         ) : (
           <div className="overflow-x-auto">
@@ -115,7 +115,7 @@ export default async function ScoopsPage() {
 
       <p className="mt-4 text-[13px] text-muted">
         A tier is offered to customers whenever it is switched on and priced. “Can fill” is what the
-        bowl holds right now without printing anything — a number to print against, not a reason to
+        bowl holds right now without printing anything, a number to print against, not a reason to
         stop selling. Everything here is printed to order, a scoop included: if the bowl is short
         when you come to pack, print the rest and scoop.
       </p>
@@ -149,7 +149,7 @@ function TierRow({ tier }: { tier: ScoopTierRow }) {
       <td className="px-5 py-3.5 text-right tabular-nums">{tier.pieceCount}</td>
 
       <td className="px-5 py-3.5 text-right tabular-nums">
-        {/* Null is "not priced yet", which is a fact. It is never $0.00 — a zero
+        {/* Null is "not priced yet", which is a fact. It is never $0.00 - a zero
             here would read as a free scoop, and the column refuses to hold one. */}
         {tier.priceCents === null ? (
           <Unknown what="Not priced yet" />
@@ -174,7 +174,7 @@ function TierRow({ tier }: { tier: ScoopTierRow }) {
         {/*
           Two independent facts, and they are shown as two things because that
           is what they are. Whether the shop is offering the tier, and how much
-          the bowl holds. A tier can be selling briskly with an empty bowl —
+          the bowl holds. A tier can be selling briskly with an empty bowl -
           that is not a fault, it is a print job.
         */}
         {tier.availability.sellable ? (
@@ -184,7 +184,7 @@ function TierRow({ tier }: { tier: ScoopTierRow }) {
             </span>
           ) : (
             <span className="text-[13.5px] text-warn">
-              Selling — print before the next one is packed
+              Selling, print before the next one is packed
             </span>
           )
         ) : (

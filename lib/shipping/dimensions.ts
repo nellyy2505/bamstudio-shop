@@ -14,7 +14,7 @@
  * dimensions round up, limits are pulled *in* from the carrier's real maximum,
  * and anything unknown is assumed to be the expensive case.
  *
- * All weights are grams, all lengths millimetres. Money is not in this file —
+ * All weights are grams, all lengths millimetres. Money is not in this file -
  * see `fallback.ts`.
  */
 
@@ -39,7 +39,7 @@ export const ORIGIN_POSTCODE = "2500";
  *
  * **We never ask the customer where they live in order to price postage.**
  * Domestic parcel price was verified constant across eight destinations from
- * 3000 (Melbourne CBD) to 6798 (Christmas Island) — postcode affects which
+ * 3000 (Melbourne CBD) to 6798 (Christmas Island) - postcode affects which
  * services are *available*, never what they cost. NSW → Melbourne is the
  * densest, most-serviced lane in the country, so it is the destination least
  * likely to have a service missing from the list. Quoting before the address
@@ -51,7 +51,7 @@ export const PROBE_POSTCODE = "3000";
  * Australia Post's real limits, and the margins we hold back from them
  * ---------------------------------------------------------------------- */
 
-/** The carrier's published Large Letter maximums. Do not edit — these are facts. */
+/** The carrier's published Large Letter maximums. Do not edit - these are facts. */
 export const LETTER_LIMITS = {
   /** Large Letter is 260 mm × 360 mm. */
   lengthMm: 260,
@@ -66,16 +66,16 @@ export const LETTER_LIMITS = {
  * The margin is not timidity, it is the difference between a number we
  * calculated and a number a Post Office scale will read. A heavier mailer than
  * the one modelled here, a card insert the studio adds by hand, a charm that
- * came off the printer denser than the estimate — each is a few grams or a
+ * came off the printer denser than the estimate - each is a few grams or a
  * millimetre, and each of them alone can push a "letter" over the counter's
  * limit. At that point the studio pays parcel rates on a letter's postage.
  */
 export const LETTER_MARGIN = {
   /** 20 mm off each of the two footprint dimensions. */
   edgeMm: 20,
-  /** 4 mm off thickness — one extra fold of bubble wrap. */
+  /** 4 mm off thickness - one extra fold of bubble wrap. */
   thicknessMm: 4,
-  /** 15 g off weight — a thank-you card and a sticker. */
+  /** 15 g off weight - a thank-you card and a sticker. */
   weightGrams: 15,
 } as const;
 
@@ -126,7 +126,7 @@ export type ItemDimensions = {
  *
  * Keys are `Product.category` values as they appear in the catalogue. Once the
  * `products` table carries real per-product measurements, those win and these
- * only cover rows nobody has measured yet — which is exactly why they are
+ * only cover rows nobody has measured yet - which is exactly why they are
  * generous. Measure a product and the guess stops applying to it.
  *
  * `DEFAULT_DIMENSIONS` catches a category nobody has added here. It is the
@@ -136,7 +136,7 @@ export type ItemDimensions = {
 export const CATEGORY_DEFAULTS: Record<string, ItemDimensions> = {
   /**
    * A clicker keychain has a steel spring mechanism inside a printed shell.
-   * 22 mm thick is what kills letter eligibility for these, and correctly so —
+   * 22 mm thick is what kills letter eligibility for these, and correctly so -
    * you cannot post a spring-loaded clicker flat under a 20 mm gauge.
    */
   "Clicker keychain": {
@@ -145,7 +145,7 @@ export const CATEGORY_DEFAULTS: Record<string, ItemDimensions> = {
     widthMm: 60,
     thicknessMm: 22,
   },
-  /** Phone stands, popsockets, strap charms — small but three-dimensional. */
+  /** Phone stands, popsockets, strap charms - small but three-dimensional. */
   "Phone & bag": {
     weightGrams: 30,
     lengthMm: 90,
@@ -210,7 +210,7 @@ export function attachmentWeightGrams(id: string | null | undefined): number {
  *
  *   base + letters.length × perLetter + (with_charm ? charm : 0) + attachment
  *
- * `baseGrams` is the hardware that exists regardless of name length — the
+ * `baseGrams` is the hardware that exists regardless of name length - the
  * split ring, the jump rings joining the caps, the cord tail. `perLetterGrams`
  * is one printed keycap letter (measured around 1.2 g in PLA, rounded up).
  * `charmGrams` is the little dangling food charm, included by default.
@@ -227,7 +227,7 @@ export const BUILDER_WEIGHT = {
  * end and the hanging charm at the other.
  *
  * 12 mm thick is a keycap on its side. With the mailer's 3 mm that is 15 mm,
- * inside the 16 mm working limit with a millimetre to spare — deliberately not
+ * inside the 16 mm working limit with a millimetre to spare - deliberately not
  * exactly on the line, because a value sitting exactly on a limit fails the
  * first time anything changes.
  */
@@ -244,7 +244,7 @@ export const BUILDER_DIMENSIONS = {
 
 /**
  * What the studio wraps an order in. Every one of these is added to the
- * basket weight — the carrier weighs the package, not the contents.
+ * basket weight - the carrier weighs the package, not the contents.
  */
 export const PACKAGING = {
   /** Rigid-backed C5 letter mailer. Weighed at 10 g, carried at 12. */
@@ -288,7 +288,7 @@ export const WEIGHT_ROUNDING_GRAMS = 5;
  *
  * Coarser than the quote itself on purpose: it collapses the long tail of
  * near-identical baskets onto a handful of keys. Rounding up means the cached
- * price is the price of a slightly heavier basket — never a lighter one.
+ * price is the price of a slightly heavier basket - never a lighter one.
  */
 export const CACHE_WEIGHT_BAND_GRAMS = 50;
 

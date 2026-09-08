@@ -37,9 +37,9 @@ const dayMonthFmt = new Intl.DateTimeFormat("en-AU", {
  * outage.
  */
 export function formatDate(value: string | Date | null | undefined): string {
-  if (value === null || value === undefined) return "—";
+  if (value === null || value === undefined) return "-";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : dateFmt.format(date);
+  return Number.isNaN(date.getTime()) ? "-" : dateFmt.format(date);
 }
 
 function addBusinessDays(from: Date, days: number): Date {
@@ -72,9 +72,9 @@ export function deliveryWindow(
 
 /** "2 weeks ago" / "3 months ago" for review timestamps. */
 export function relativeTime(value: string | Date | null | undefined): string {
-  if (value === null || value === undefined) return "—";
+  if (value === null || value === undefined) return "-";
   const then = new Date(value).getTime();
-  if (Number.isNaN(then)) return "—";
+  if (Number.isNaN(then)) return "-";
   const days = Math.floor((Date.now() - then) / 86_400_000);
   if (days < 1) return "today";
   if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;

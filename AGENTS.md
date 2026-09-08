@@ -2,9 +2,9 @@
 
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+This version has breaking changes - APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+This block is written and re-added by `next dev` - verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
 
@@ -20,8 +20,8 @@ they are the ones an agent gets wrong from memory rather than from reading:
   handler and server action under `/admin`.** It cannot be hoisted into
   `proxy.ts` (anon client only) or into a layout (not a security boundary for a
   route handler). **The single documented exception is `acceptInvitation` in
-  `app/admin/actions.ts`** — the action that makes somebody staff cannot require
-  them to be staff already — and it does its own equivalent check in
+  `app/admin/actions.ts`** - the action that makes somebody staff cannot require
+  them to be staff already - and it does its own equivalent check in
   `resolveJoin()`: signed in, live invitation token, and the signed-in email
   equal to the invited email. Adding `requireStaff()` there breaks every
   invitation. Do not add a second exception.
@@ -31,45 +31,45 @@ they are the ones an agent gets wrong from memory rather than from reading:
   instead of $10.20 tracked parcels, at the studio's expense. Do not flip it back
   in a "tidy-up".
 - **The check list is `npx tsc --noEmit`, `npm run lint`, `npm run build`.**
-  `tsc` and `eslint` have both passed on a tree that could not compile — only
+  `tsc` and `eslint` have both passed on a tree that could not compile - only
   `next build` sees the server-action boundary and proves a route group resolves
   to the URL you expect.
 - **`./scripts/verify-sql.sh` applies every file in `supabase/migrations/`**, not
   a list, and `supabase/verify.sql` is one table of **126** rows that must all
-  print `t`. Count the rows as well as the ticks — 24 → 29 → 50 → 52 → 65
+  print `t`. Count the rows as well as the ticks - 24 → 29 → 50 → 52 → 65
   (`0005_sale_integrity.sql`) → 86 (`0006_enquiries.sql`) → **126**
-  (`0007_lucky_scoop.sql`) — so a shorter
+  (`0007_lucky_scoop.sql`) - so a shorter
   table is an older copy of the file, and an older copy is a green result that
   never looked at part of the schema. **A missing migration does not shorten the
   table, it aborts the run**: the first assertion naming an object that is not
   there raises. There are **seven** migrations as this was written:
   `0001_init.sql`, `0002_shipping.sql`, `0003_admin.sql`,
   `0004_letter_eligible_default.sql`, `0005_sale_integrity.sql`,
-  `0006_enquiries.sql`, `0007_lucky_scoop.sql` — but this file has fallen behind
+  `0006_enquiries.sql`, `0007_lucky_scoop.sql` - but this file has fallen behind
   the directory before, so trust `ls supabase/migrations/` over this list.
   **126/126 has been observed** against a real local PostgreSQL 16, and so have
   `node scripts/check-costing.mjs`, `node scripts/check-scoop.mjs` (34
   assertions) and `node scripts/check-webhook.mjs` (91 assertions across 12
-  scenarios). The line these docs used to carry — "the count has never been
-  observed above 50" — is no longer true; do not reinstate it.
+  scenarios). The line these docs used to carry - "the count has never been
+  observed above 50" - is no longer true; do not reinstate it.
 - **`decrement_stock(uuid, integer)` returns the SHORTFALL, not void.** Since
   `0005_sale_integrity.sql` it takes `for update` on the product row, then
-  returns how many units were sold that the ready-to-ship buffer did not have —
+  returns how many units were sold that the ready-to-ship buffer did not have -
   `0` ordinarily, `null` for a product id that does not exist. The same number
   accumulates on `products.oversold_units`. **An oversell is deliberate and is
   not an error**: this shop prints to order, and stock only moves in the webhook
   *after* payment, so refusing the sale would refuse a customer who has already
   been charged. Callers log it and the studio overview shows it. Do not "fix"
   this into a rejection, do not clamp at zero, and do not decrement
-  `oversold_units` automatically — the owner clears it when the backlog is
+  `oversold_units` automatically - the owner clears it when the backlog is
   printed. New in the same migration: `orders.confirmation_email_sent_at` (the
   stamp that makes a lost confirmation email recoverable on a Stripe
-  redelivery — the webhook writes it with `.is(..., null)` so a redelivery
+  redelivery - the webhook writes it with `.is(..., null)` so a redelivery
   cannot send twice) and `public.payment_incidents` (a payment that cleared for
   an order somebody had already cancelled; RLS on with no policy plus an
   explicit revoke, `service_role` only, `stripe_session_id` unique so recording
   is idempotent). `order_items.unit_cost_cents` is now stamped for **web** sales
-  as well as market sales, from one helper — `unitCostsAtSale()` in
+  as well as market sales, from one helper - `unitCostsAtSale()` in
   `app/admin/data.ts`. It is a record of what the piece cost *when it sold*;
   never derive it at read time, and leave it **null** for a product nobody has
   measured rather than writing a packaging-only figure.
@@ -80,30 +80,30 @@ they are the ones an agent gets wrong from memory rather than from reading:
     line.** At the moment money changes hands nobody knows which products go in
     it, so there is nothing to decrement and no recipe to cost from. Stock moves
     later, in the studio's pack panel, one `decrement_stock` per piece, guarded
-    by `scoop_packs.stock_applied` — the compare-and-set shape
+    by `scoop_packs.stock_applied` - the compare-and-set shape
     `orders.stock_applied` uses. **The missing decrement in the webhook is the
     design, not a bug**; scoop lines are structurally excluded from stock
     claiming there. Do not "fix" it, and do not write a zero into the cost.
   - **The overselling rule above does NOT apply to scoops, and both rules are
     true at once.** Overselling is right for printed items because a shortfall
     can be reprinted. A scoop's promise is "these exist now", so a tier simply
-    **stops being offered** when its pool cannot fill it — a listing decision
+    **stops being offered** when its pool cannot fill it - a listing decision
     asked at read time in `lib/scoop.ts` (`tierAvailability`, `scoopsAvailable`),
     never a refused decrement. Nothing in the scoop path rejects a sale after
     payment.
   - **`lib/scoop.ts` contains no randomiser and must not.** A person picks the
     pieces out of a bowl, on camera. There is no draw in the schema either. Do
     not add one until the owner asks.
-  - **Four new tables and one column**: `scoop_tiers` (the tier is the product —
+  - **Four new tables and one column**: `scoop_tiers` (the tier is the product -
     deliberately *not* a `products` row, because a tier's price starts null, its
     stock is a property of other rows, its cost is unknowable until packed and
     its weight is a chosen worst case), `scoop_tier_products` (the eligible pool
-    as **explicit rows, never a category filter** — a filter silently admits a
+    as **explicit rows, never a category filter** - a filter silently admits a
     pet bowl the day somebody renames a category, and the visible pool is what
     makes "five pieces drawn from these twelve" a true description),
     `scoop_packs`, `scoop_pack_items`, and `order_items.scoop_tier_id`
     (mutually exclusive with `product_id` by CHECK).
-  - **The basket line is a discriminated union** — `ProductBasketLine |
+  - **The basket line is a discriminated union** - `ProductBasketLine |
     ScoopBasketLine` in `components/cart/CartProvider.tsx`, each carrying the
     other's discriminant as `never`, narrowed only by `isScoopLine` /
     `isProductLine`. **Widening it into one type with an optional
@@ -115,16 +115,16 @@ they are the ones an agent gets wrong from memory rather than from reading:
     CHECK in front of the compiler.
 - **`/contact` and `/newsletter` write a row BEFORE they attempt an email**
   (`0006_enquiries.sql`). `/api/contact` used to hand the message to Resend and
-  store it nowhere — on a failed send the customer's words existed only in the
+  store it nowhere - on a failed send the customer's words existed only in the
   HTTP request and were gone. Three ordinary configurations lost them outright:
   no `RESEND_API_KEY`/`EMAIL_FROM`, no `NEXT_PUBLIC_SUPPORT_EMAIL`, or Resend
   answering 4xx/5xx. **The row is the delivery now; the email is a notification
   about a row that already exists.** Do not reorder those two. Two tables, not
-  one: `contact_enquiries` is a piece of *work* (repeatable — a follow-up is a
-  second thing said — ends in a reply, carries `handled_at`/`handled_by`), and
+  one: `contact_enquiries` is a piece of *work* (repeatable - a follow-up is a
+  second thing said - ends in a reply, carries `handled_at`/`handled_by`), and
   `newsletter_signups` is a *membership* (the lower-cased address is the primary
   key, asking twice is idempotent, ends in an unsubscribe that a later sign-up
-  must not silently undo). Both are **`service_role` only, in and out** — there
+  must not silently undo). Both are **`service_role` only, in and out** - there
   is deliberately no anon insert grant even though strangers write to them, because
   the anon key ships in the browser and such a grant is a public PostgREST
   endpoint that walks past the route's validation, its rate limiter and its
@@ -133,9 +133,9 @@ they are the ones an agent gets wrong from memory rather than from reading:
   no unsubscribe link, so **no copy on the site may promise one.**
 - **The basket limits live in `lib/config.ts` (`BASKET_LIMITS`, line 222), and
   there is now only one copy.** `maxLineQuantity` is 20 and `maxLines` is 40.
-  They used to be three copies — four hand-written literals across the Zod
+  They used to be three copies - four hand-written literals across the Zod
   schemas in `app/api/checkout/route.ts` and `app/api/shipping/quote/route.ts`,
-  plus a stopgap `components/cart/limits.ts` — with nothing making them agree.
+  plus a stopgap `components/cart/limits.ts` - with nothing making them agree.
   That file is deleted; both route schemas and `components/cart/CartProvider.tsx`
   import the constant. Change the number in `lib/config.ts` and nowhere else,
   and do not put a literal back into a schema.
@@ -143,7 +143,7 @@ they are the ones an agent gets wrong from memory rather than from reading:
   'unsafe-inline'` on purpose.** Next streams the RSC payload through inline
   `<script>self.__next_f.push(...)` tags on every response, and the only
   supported way to drop `'unsafe-inline'` is a per-request nonce generated in
-  `proxy.ts`, which forces every page to render dynamically — a real bill on one
+  `proxy.ts`, which forces every page to render dynamically - a real bill on one
   always-on 512 MB Fly machine. Removing it without doing the nonce work breaks
   every page including checkout. `form-action 'self'` is likewise correct as
   written: checkout reaches Stripe by a top-level navigation, not a

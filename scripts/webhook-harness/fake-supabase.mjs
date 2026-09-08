@@ -5,7 +5,7 @@
  * route to run against real data, in memory, with every call recorded. It is
  * NOT a Postgres: it does not enforce constraints and it does not pretend to.
  * The schema's own guarantees are proved by supabase/verify.sql against a real
- * PostgreSQL 16; what this proves is the thing that file cannot — which calls
+ * PostgreSQL 16; what this proves is the thing that file cannot - which calls
  * the route makes, in which order, and what status it returns.
  *
  * One deliberate exception: the mutual-exclusion rule on `order_items` IS
@@ -50,7 +50,7 @@ const nextId = (prefix) => `${prefix}-${++idSeq}`;
  * webhook's stock claim is a compare-and-set on exactly that value:
  * `.eq("stock_applied", false)`. Without the default an inserted row carries
  * `undefined` there, the claim matches nothing, and the rebuild path silently
- * moves no stock at all — a fake reporting a defect the schema does not have.
+ * moves no stock at all - a fake reporting a defect the schema does not have.
  */
 const DEFAULTS = {
   orders: {
@@ -62,7 +62,7 @@ const DEFAULTS = {
   order_items: { variant_label: "" },
 };
 
-/** `select("a, b, c")` — plus the embedded `order_items(...)` PostgREST form. */
+/** `select("a, b, c")` - plus the embedded `order_items(...)` PostgREST form. */
 function parseColumns(columns) {
   if (!columns || columns === "*") return { fields: null, embeds: [] };
   const embeds = [];

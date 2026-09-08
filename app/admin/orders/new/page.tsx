@@ -14,14 +14,14 @@ import { listProducts, type ProductRow } from "../../data";
  * wrong about.
  */
 
-/** Everything except the website — the website records its own sales. */
+/** Everything except the website - the website records its own sales. */
 const CHANNELS = ["market_stall", "tiktok", "shopee", "other"] as const;
 
 /**
  * How many pages of the catalogue this will fetch before giving up.
  *
  * `listProducts` pages at PAGE_SIZE (25) rows, so the whole catalogue has to be
- * walked to build a select that can offer every product — a picker that only
+ * walked to build a select that can offer every product - a picker that only
  * lists the first 25 is a picker that cannot record half the sales made at a
  * stall. The loop is capped so a runaway catalogue cannot turn one page load
  * into an unbounded number of queries; at 25 a page that is 500 products, and
@@ -79,7 +79,7 @@ export default async function RecordSalePage() {
           <p>
             This records a sale that did not come through the website. It is written as an
             ordinary order, so it counts in the reports exactly the same as one somebody paid
-            for online — the same revenue, the same units, the same top-products list.
+            for online, the same revenue, the same units, the same top-products list.
           </p>
           <p>
             <b className="text-ink">Stock comes off.</b> The piece you choose has its stock on
@@ -117,7 +117,7 @@ export default async function RecordSalePage() {
             <Field
               label="What was sold"
               htmlFor="product_id"
-              hint={`${pluralise(products.length, "product")} in the catalogue, hidden ones included — a stall sells things the shop does not list.`}
+              hint={`${pluralise(products.length, "product")} in the catalogue, hidden ones included, a stall sells things the shop does not list.`}
             >
               <select id="product_id" name="product_id" defaultValue="" className={inputClass}>
                 <option value="" disabled>

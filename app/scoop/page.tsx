@@ -33,12 +33,12 @@ const STEPS = [
   {
     n: "1",
     title: "Pick a bowl",
-    body: "Each bowl has a theme and a piece count. Everything it can draw from is listed on its page — all of it, not a sample.",
+    body: "Each bowl has a theme and a piece count. Everything it can draw from is listed on its page: all of it, not a sample.",
   },
   {
     n: "2",
     title: "We draw it by hand",
-    body: "One of us tips the bowl out and picks your pieces when your order comes through. No randomiser, no algorithm — a person at a table.",
+    body: "One of us tips the bowl out and picks your pieces when your order comes through. No randomiser, no algorithm, just a person at a table.",
   },
   {
     n: "3",
@@ -51,8 +51,8 @@ const STEPS = [
  * One bowl on the landing page.
  *
  * EVERY PUBLISHED TIER IS OFFERED. This card used to check
- * `availability.sellable` — which then included whether the pool could fill a
- * scoop off the shelf — and downgrade a low bowl to "not being drawn right
+ * `availability.sellable` - which then included whether the pool could fill a
+ * scoop off the shelf - and downgrade a low bowl to "not being drawn right
  * now". That is gone. The shop prints to order: a bowl that is short when she
  * comes to pack is topped up first, so a shelf count is no reason to stop
  * offering a tier (`lib/scoop.ts`). RLS has already refused a draft or unpriced
@@ -122,7 +122,7 @@ export default async function ScoopPage() {
             The Lucky Scoop
           </h1>
           <p className="mx-auto max-w-2xl text-[#4F5A63] md:text-base">
-            A bowl of small printed pieces — clickers, keyrings, magnets. You
+            A bowl of small printed pieces: clickers, keyrings, magnets. You
             choose the bowl and how many pieces come out of it. We choose which
             ones, by hand, when your order is packed.
           </p>
@@ -150,7 +150,7 @@ export default async function ScoopPage() {
          *
          * `getScoopTiers()` returns [] both when Supabase is unconfigured and
          * when nothing has been published, and it deliberately carries no
-         * sample tier — a fallback bowl would need an invented price. So there
+         * sample tier - a fallback bowl would need an invented price. So there
          * is nothing to advertise, and this says so instead of rendering an
          * empty grid under a "Choose your bowl" heading. The how-it-works and
          * the promise below still render: the page explains a real thing that
@@ -160,7 +160,7 @@ export default async function ScoopPage() {
           <EmptyState
             icon={<ScoopArt size={110} />}
             title="The scoops aren’t open yet"
-            body="There is no bowl to buy today. A bowl only goes up once it has a price, a piece count and a full list of the pieces it draws from — so there is nothing here until all three are true."
+            body="There is no bowl to buy today. A bowl only goes up once it has a price, a piece count and a full list of the pieces it draws from, so there is nothing here until all three are true."
           >
             <ButtonLink href="/shop">Shop everything</ButtonLink>
             <ButtonLink href="/builder" variant="ghost">
@@ -207,7 +207,7 @@ export default async function ScoopPage() {
                 <Icon name="check" size={17} className="mt-0.5 shrink-0 text-good" />
                 <span>
                   <b className="text-ink">How many pieces you get.</b> That
-                  number is the bowl — it is not a range and it does not vary.
+                  number is the bowl. It is not a range and it does not vary.
                 </span>
               </li>
               <li className="flex items-start gap-2.5">
@@ -223,7 +223,7 @@ export default async function ScoopPage() {
                 <span>
                   <b className="text-ink">Who picks.</b> We do, by hand. You
                   cannot choose your pieces and we cannot take requests for
-                  particular ones — that is what makes it a scoop.
+                  particular ones. That is what makes it a scoop.
                 </span>
               </li>
             </ul>
@@ -241,7 +241,7 @@ export default async function ScoopPage() {
                 order" on a shopfront is a term of sale: a week she cannot film
                 becomes a failure to deliver as described, over a video nobody
                 was charged for. So this promises no video, no platform and no
-                timing — and the social links are only named when an account
+                timing - and the social links are only named when an account
                 actually exists (lib/contact.ts).
               */}
               Most scoops get filmed while they are drawn and packed
@@ -262,7 +262,7 @@ export default async function ScoopPage() {
                 </>
               ) : null}
               . It is something we do because it is the best part of the day,
-              not part of what you are buying — we cannot promise your scoop
+              not part of what you are buying, so we cannot promise your scoop
               will be filmed or that a video of it will be shared.
             </p>
             <p className="mt-3 text-[13px] text-muted">

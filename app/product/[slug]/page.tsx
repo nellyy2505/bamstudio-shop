@@ -26,7 +26,7 @@ import { SITE_OPEN_GRAPH } from "../../seo";
 export const revalidate = 300;
 
 /*
- * `canReachStudio` comes from lib/contact.ts — the same mailbox-or-social test
+ * `canReachStudio` comes from lib/contact.ts - the same mailbox-or-social test
  * /track and the legal pages use. The on-site contact form is deliberately not
  * counted: it delivers by emailing the studio mailbox, so it needs both that
  * mailbox and the Resend secrets before it is a channel at all.
@@ -46,15 +46,15 @@ export async function generateMetadata({
   /*
    * One address per product, declared.
    *
-   * A product link is the thing people actually share — out of Instagram, out
-   * of a newsletter, off a market QR code — and every one of those hangs a
+   * A product link is the thing people actually share - out of Instagram, out
+   * of a newsletter, off a market QR code - and every one of those hangs a
    * tracking parameter on it. With no canonical, `/product/x?utm_source=ig`
    * was a second product page carrying identical copy. The path is relative:
    * `metadataBase` in app/layout.tsx supplies the origin from `siteUrl()`, so
    * attaching the custom domain stays a rebuild. See `app/seo.ts`.
    *
    * `SITE_OPEN_GRAPH` is spread rather than `type` being retyped, because an
-   * `openGraph` key REPLACES the root layout's wholesale — which is what the
+   * `openGraph` key REPLACES the root layout's wholesale - which is what the
    * previous version of this block was silently doing, losing `siteName` and
    * `locale` on every product page in the shop.
    */
@@ -86,7 +86,7 @@ export default async function ProductPage({ params }: { params: Params }) {
   const readyToShip = product.stock_on_hand > 0;
 
   /*
-   * Nothing is warehoused by default — anything not already printed is made
+   * Nothing is warehoused by default - anything not already printed is made
    * to order, which is PreOrder, not OutOfStock. This is the same
    * `readyToShip` the visible stock line below is drawn from, deliberately:
    * Google requires the structured data to state what the page states, and
@@ -104,7 +104,7 @@ export default async function ProductPage({ params }: { params: Params }) {
    * `price: product.price` for every product, including the two priced by
    * name length. The headline on this very page renders "From $4.00" for
    * those (see the `personalisation_mode === "builder"` branch below), while
-   * the structured data told Google the price simply WAS $4.00 — so a search
+   * the structured data told Google the price simply WAS $4.00 - so a search
    * result could advertise $4.00 for a four-letter name that costs $7.00.
    * That is a price representation the page itself contradicts, made to a
    * consumer, by an Australian trader; the same reason `supabase/seed.sql`
@@ -114,8 +114,8 @@ export default async function ProductPage({ params }: { params: Params }) {
    *
    * `lowPrice` is `product.price` because that is the figure the page prints
    * after the word "From". `highPrice` is the dearest bundle in
-   * BUILDER_PRICING — the single source the builder itself prices from
-   * (lib/config.ts) — floored at `product.price` so the range can never come
+   * BUILDER_PRICING - the single source the builder itself prices from
+   * (lib/config.ts) - floored at `product.price` so the range can never come
    * out inverted if the two ever drift.
    */
   const priced =
@@ -147,7 +147,7 @@ export default async function ProductPage({ params }: { params: Params }) {
      * and this stays absent. Keep the guard: an `aggregateRating` on a
      * product with no reviews is a fabricated rating in a search result and
      * a breach of Google's own structured-data policy, and `public.products`
-     * still defaults `rating` to 5.0 — so dropping the condition would print
+     * still defaults `rating` to 5.0 - so dropping the condition would print
      * five stars for the whole catalogue.
      */
     aggregateRating:
@@ -227,7 +227,7 @@ export default async function ProductPage({ params }: { params: Params }) {
           <div className="flex flex-wrap items-baseline gap-3">
             <b className="text-3xl">
               {/* Builder charms are priced by letter count, so the headline is
-                  a "from" figure — matching the grid card. */}
+                  a "from" figure - matching the grid card. */}
               {product.personalisation_mode === "builder" ? "From " : ""}
               {money(product.price)}
             </b>
@@ -244,7 +244,7 @@ export default async function ProductPage({ params }: { params: Params }) {
             {readyToShip ? (
               <>
                 <Icon name="check" size={14} className="inline" /> Only{" "}
-                {product.stock_on_hand} ready to ship — then printed to order
+                {product.stock_on_hand} ready to ship, then printed to order
               </>
             ) : (
               <>
@@ -263,11 +263,11 @@ export default async function ProductPage({ params }: { params: Params }) {
                 <b>Estimated delivery {deliveryWindow(...transitDays("standard"))}</b> ·{" "}
                 {/* Postage is priced per basket by weight, so no per-product
                     figure can be right. The two thresholds are the shop's own
-                    promotion and are true on every product page — but they are
+                    promotion and are true on every product page - but they are
                     read off the basket subtotal, not off this product, so the
                     sentence names the amounts and never claims this item
                     reaches them. */}
-                Standard post by weight — we pay half from{" "}
+                Standard post by weight. We pay half from{" "}
                 {money(SHIPPING.subsidyThreshold)}, all of it from{" "}
                 {money(SHIPPING.freeThreshold)}
               </span>
@@ -275,7 +275,7 @@ export default async function ProductPage({ params }: { params: Params }) {
             <p className="flex items-start gap-2.5">
               <Icon name="box" size={18} className="mt-0.5 shrink-0" />
               <span>
-                Printed fresh for your order — dispatched in{" "}
+                Printed fresh for your order, dispatched in{" "}
                 {PRINT_LEAD_TIME.label}
               </span>
             </p>

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   ...selfCanonical("/collections"),
   title: "Colourway collections",
   description:
-    "Six colourways for the DIY name charm — cap, letter and cord colours with a matching food charm.",
+    "Six colourways for the DIY name charm, cap, letter and cord colours with a matching food charm.",
 };
 
 const TINT_BG: Record<Tint, string> = {
@@ -40,7 +40,7 @@ export default async function CollectionsPage() {
       <h1 className="mb-2 text-3xl md:text-4xl">The colourway collections</h1>
       <p className="mb-8 max-w-2xl text-muted">
         Every collection pairs a cap colour, a letter colour and a holder cord
-        with a matching food charm. Same price in every colourway — just pick
+        with a matching food charm. Same price in every colourway, just pick
         the one that feels like them.
       </p>
 

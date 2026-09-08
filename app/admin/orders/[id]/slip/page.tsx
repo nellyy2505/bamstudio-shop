@@ -21,7 +21,7 @@ import {
  * screen and copied onto the parcel by hand. This shop sells custom name
  * charms: a letter transposed between the screen and the label is not a typo,
  * it is a remake, the filament and the postage both paid twice. So the
- * personalisation appears here EXACTLY as the customer typed it —
+ * personalisation appears here EXACTLY as the customer typed it -
  * `describePersonalisationText` in data.ts is the one function that renders it,
  * shared with the pick list, because two screens formatting the same value two
  * ways is how the mistake gets made anyway.
@@ -29,15 +29,15 @@ import {
  * WHAT IS DELIBERATELY NOT ON IT.
  *
  *   * No money. Not the unit price, not the postage, not the total paid.
- *     Partly the obvious reason — a cost or a margin must never leave the
- *     studio, and `orders` is a capability Packing holds — but mostly two
+ *     Partly the obvious reason - a cost or a margin must never leave the
+ *     studio, and `orders` is a capability Packing holds - but mostly two
  *     others. A great many of these parcels are gifts (the order carries a
  *     gift-note field), and a price list in a gift is a small unkindness the
  *     shop cannot take back. And a document listing goods and prices reads as a
  *     receipt: this shop is not GST-registered and has no ABN set, so a slip
  *     that looks like a tax invoice while being nothing of the sort is worse
- *     than a slip with no prices at all. There is a real trade — a customer who
- *     wants a receipt has to ask — and the footer says so where there is a
+ *     than a slip with no prices at all. There is a real trade - a customer who
+ *     wants a receipt has to ask - and the footer says so where there is a
  *     mailbox to ask at.
  *   * No email address, no phone number, no payment reference. The parcel is
  *     addressed with a postal address; the rest is contact and payment data
@@ -56,7 +56,7 @@ import {
  * same words either way.
  * ────────────────────────────────────────────────────────────────────────────
  *
- * Capability is `orders`, which Packing holds — packing a parcel is exactly
+ * Capability is `orders`, which Packing holds - packing a parcel is exactly
  * the job this page is for, and there is nothing on it a packer may not see.
  */
 
@@ -75,7 +75,7 @@ export default async function PackingSlipPage({
 
   /*
    * Two states that are not parcels. `pending` is a checkout somebody started
-   * and never paid for — not an order at all — and a cancelled order is one
+   * and never paid for - not an order at all - and a cancelled order is one
    * nobody should be packing. Checked here rather than only on the link that
    * got here, because a URL is typed as easily as it is clicked.
    */
@@ -136,9 +136,9 @@ export default async function PackingSlipPage({
               {/* The order number is what every later conversation about this
                   parcel will be keyed on, so it is the largest thing on the
                   page after the shop's name. Null on an order the webhook never
-                  numbered — a dash, never an invented number. */}
+                  numbered - a dash, never an invented number. */}
               <p className="font-mono text-[20px] font-semibold">
-                {order.orderNumber ?? "—"}
+                {order.orderNumber ?? "-"}
               </p>
               <p className="text-[13px] text-muted">
                 Ordered {formatDate(order.createdAt)}
@@ -191,7 +191,7 @@ export default async function PackingSlipPage({
                         ) : null}
                         {personalisation ? (
                           /*
-                            * Boxed, monospaced and left exactly as typed —
+                            * Boxed, monospaced and left exactly as typed -
                             * including the capitals, the spacing and anything
                             * that looks like a mistake. It is not this page's
                             * job to tidy somebody's name, and "correcting" one
@@ -214,7 +214,7 @@ export default async function PackingSlipPage({
           {order.giftNote ? (
             <section className="mt-7 break-inside-avoid">
               <h2 className="text-[11.5px] font-extrabold tracking-[0.08em] text-faint">
-                GIFT NOTE — COPY THIS ONTO THE CARD
+                GIFT NOTE, COPY THIS ONTO THE CARD
               </h2>
               <p className="mt-2 border border-line2 px-4 py-3 text-[14.5px] break-words whitespace-pre-wrap">
                 {order.giftNote}
@@ -226,12 +226,12 @@ export default async function PackingSlipPage({
             <p>
               Everything on this slip is what {SHOP.name} recorded for order{" "}
               {order.orderNumber ?? "this order"}. If a piece is missing or the
-              spelling is wrong, keep this slip — it is the quickest way for us to
+              spelling is wrong, keep this slip, it is the quickest way for us to
               find the order.
             </p>
             {/* Prices are deliberately absent; see the note at the top of this
                 file. The offer of a receipt is only made where there is an
-                address to make it at — `SHOP.supportEmail` renders a bracketed
+                address to make it at - `SHOP.supportEmail` renders a bracketed
                 placeholder when unset and must never be printed without this
                 check. */}
             {SHOP.hasSupportEmail ? (
@@ -250,7 +250,7 @@ export default async function PackingSlipPage({
 }
 
 /**
- * The address, read defensively — the same shape as the order screen's block
+ * The address, read defensively - the same shape as the order screen's block
  * and for the same reason: a sale typed in at a market has no address at all
  * and carries a note instead, and five blank lines on a printed page look like
  * a printer fault rather than a fact.
@@ -273,7 +273,7 @@ function SlipAddress({ order }: { order: OrderDetail }) {
   if (lines.length === 0) {
     return (
       <p className="mt-2 text-[14.5px]">
-        No address was collected for this order — it was handed over in person.
+        No address was collected for this order, it was handed over in person.
       </p>
     );
   }
@@ -297,7 +297,7 @@ function SlipAddress({ order }: { order: OrderDetail }) {
  * A scoop is sold before anybody knows what is in it, so the line above says
  * "Pet scoop, five pieces" and this is the only place that can say which five.
  * Where nothing has been recorded yet the slip says so in words rather than
- * printing a promise it cannot keep — and `markShipped` refuses the dispatch
+ * printing a promise it cannot keep - and `markShipped` refuses the dispatch
  * anyway, so this is the earlier of the two warnings, not a substitute for it.
  *
  * Costs are absent here as everywhere else on this page, even though
@@ -328,11 +328,11 @@ function ScoopContents({ scoops }: { scoops: OrderScoops }) {
             <div key={`${line.orderItemId}-${pack.packIndex}`} className="break-inside-avoid">
               <p className="text-[14px] font-semibold">
                 {line.tierName}
-                {line.packs.length > 1 ? ` — scoop ${pack.packIndex} of ${line.packs.length}` : ""}
+                {line.packs.length > 1 ? `, scoop ${pack.packIndex} of ${line.packs.length}` : ""}
               </p>
               {pack.items.length === 0 ? (
                 <p className="mt-1 text-[13.5px]">
-                  Nothing recorded yet. Record what went in on the order screen —
+                  Nothing recorded yet. Record what went in on the order screen;
                   this order cannot be marked posted until you do.
                 </p>
               ) : (

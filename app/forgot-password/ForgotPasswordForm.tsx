@@ -7,8 +7,8 @@ import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 /**
  * Whether the browser holds the keys it needs to reach Supabase Auth.
  *
- * Defect this closes: with no Supabase env vars — the shop's state today, and
- * a supported mode of this app — `createClient()` threw inside `onSubmit`.
+ * Defect this closes: with no Supabase env vars - the shop's state today, and
+ * a supported mode of this app - `createClient()` threw inside `onSubmit`.
  * The rejection was unhandled, `setPending(false)` never ran and the button
  * sat on "Sending…" forever, while the page had already told the customer the
  * link expires in 30 minutes and to go and check their spam folder for an
@@ -33,17 +33,17 @@ import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
  * secret and the two could disagree. These two variables are not a mirror of
  * anything: the anon key is public by design and the browser genuinely needs
  * both to talk to Supabase at all, so this reads the browser's own capability
- * directly — the one fact, in the one place, checked by the one helper.
+ * directly - the one fact, in the one place, checked by the one helper.
  */
 const CAN_RESET = isSupabaseConfigured();
 
 /**
  * Shown when the shop has no accounts system behind it. Plain, in the shop's
  * voice, and it never names an env var, prints an exception or blames the
- * address the customer typed — none of that is theirs to fix.
+ * address the customer typed - none of that is theirs to fix.
  */
 const UNAVAILABLE =
-  "Password resets aren't switched on yet — this shop isn't connected to its accounts system, so we can't send you a reset link. Nothing you type here would reach us. Please try again later.";
+  "Password resets aren't switched on yet, this shop isn't connected to its accounts system, so we can't send you a reset link. Nothing you type here would reach us. Please try again later.";
 
 const OFFLINE =
   "We couldn't reach the shop just now. Check your connection and try again.";
@@ -57,7 +57,7 @@ function isOffline(error: { name?: string; status?: number }): boolean {
 }
 
 /**
- * Never render Supabase's own text — "Failed to fetch" and friends are
+ * Never render Supabase's own text - "Failed to fetch" and friends are
  * developer strings, not shop copy.
  */
 function resetMessage(error: { name?: string; status?: number }): string {
@@ -78,7 +78,7 @@ export function ForgotPasswordForm() {
     setError(null);
 
     // Defence in depth: the field and button below are disabled while
-    // unconfigured, so a submit should not be reachable — but if one arrives
+    // unconfigured, so a submit should not be reachable - but if one arrives
     // it must say something true rather than throw into a dead promise.
     if (!CAN_RESET) {
       setError(UNAVAILABLE);
@@ -103,8 +103,8 @@ export function ForgotPasswordForm() {
 
       setSent(true);
     } catch {
-      // Anything that throws on the way out — a client that refuses to build,
-      // a blocked request — still has to land as copy the customer can act on.
+      // Anything that throws on the way out - a client that refuses to build,
+      // a blocked request - still has to land as copy the customer can act on.
       // The exception itself is never shown.
       setError(CAN_RESET ? OFFLINE : UNAVAILABLE);
     } finally {
@@ -164,7 +164,7 @@ export function ForgotPasswordForm() {
       </form>
 
       {/* Supabase Auth's reset email is real and genuinely sends once the
-          project is connected, so this wording stays exactly as it was — only
+          project is connected, so this wording stays exactly as it was - only
           gated, never softened. Without a project it is a promise of mail that
           nothing can send. */}
       {CAN_RESET ? (

@@ -93,7 +93,7 @@ export default async function EditProductPage({
                 <Unknown what={`No ${costed.cost.missing.join(" and no ")} recorded`} />
                 <p className="text-[13.5px] text-muted">
                   Until both are filled in there is no unit cost, so there is no margin and no
-                  suggested price. The parts below are what is known so far — they are not a
+                  suggested price. The parts below are what is known so far, they are not a
                   total.
                 </p>
                 <CostLines settings={settings} costed={costed} partial />
@@ -123,8 +123,8 @@ export default async function EditProductPage({
                 {product.price > 0 ? (
                   <Row label="Your price" value={money(product.price)} />
                 ) : null}
-                <Row label="Profit each" value="—" />
-                <Row label="Actual margin" value="—" />
+                <Row label="Profit each" value="-" />
+                <Row label="Actual margin" value="-" />
                 <p className="mt-1 text-[13.5px] text-muted">
                   A suggested price, a profit and a margin all need a unit cost. Fill in the
                   print time and at least one filament colour and they appear here.
@@ -153,12 +153,12 @@ export default async function EditProductPage({
                             product.price) *
                             100,
                         )}%`
-                      : "—"
+                      : "-"
                   }
                 />
                 {product.price > 0 && product.price < costed.suggested ? (
                   <p className="mt-1 rounded-lg bg-warn-soft px-3 py-2 text-[12.5px] text-warn">
-                    Priced below the suggestion. That is a decision, not a mistake — but it is
+                    Priced below the suggestion. That is a decision, not a mistake, but it is
                     worth being a deliberate one.
                   </p>
                 ) : null}
@@ -214,7 +214,7 @@ function CostLines({
   partial?: boolean;
 }) {
   const { cost } = costed;
-  // Costs are fractional cents — a keyring is 9.5c and packaging is 13c. They
+  // Costs are fractional cents - a keyring is 9.5c and packaging is 13c. They
   // are shown to two decimal places of a cent rather than rounded to the nearest
   // cent, because rounding four parts and then adding them does not give the
   // total the shop actually uses.
@@ -224,11 +224,11 @@ function CostLines({
     <dl className="flex flex-col gap-2 text-[13.5px]">
       <Row
         label="Filament"
-        value={partial && costed.cost.missing.includes("filament weight") ? "—" : cents(cost.filament)}
+        value={partial && costed.cost.missing.includes("filament weight") ? "-" : cents(cost.filament)}
       />
       <Row
         label="Machine + power"
-        value={partial && costed.cost.missing.includes("print time") ? "—" : cents(cost.machineAndPower)}
+        value={partial && costed.cost.missing.includes("print time") ? "-" : cents(cost.machineAndPower)}
       />
       <Row
         label={costed.accessoryName ?? "Accessory"}
@@ -236,7 +236,7 @@ function CostLines({
       />
       <Row label="Packaging" value={cents(cost.packaging)} />
       <p className="text-[12px] text-faint">
-        At {settings.filamentPerKgCents / 100 > 0 ? money(settings.filamentPerKgCents) : "—"} a
+        At {settings.filamentPerKgCents / 100 > 0 ? money(settings.filamentPerKgCents) : "-"} a
         kilo and {(
           settings.printerPriceCents / Math.max(1, settings.printerLifeHours) +
           (settings.powerDrawWatts / 1000) * settings.electricityPerKwhCents

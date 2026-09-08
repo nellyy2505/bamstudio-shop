@@ -3,15 +3,15 @@
 -- Run this in the Supabase SQL editor after applying every file in
 -- supabase/migrations/ in order and then seed.sql. It returns ONE table of 126
 -- rows and every `pass` must be `t`. These are the guarantees that only fail
--- in production — a missing grant here means paid orders are never recorded,
+-- in production - a missing grant here means paid orders are never recorded,
 -- and you would first hear about it from a customer.
 --
--- Count the rows as well as the ticks. This file has grown with the schema —
+-- Count the rows as well as the ticks. This file has grown with the schema -
 -- 24 assertions, then 29 with shipping, 50 with the staff area, 52 with the
 -- letter_eligible default, 65 with 0005 (the confirmation-email stamp, the
 -- observable stock clamp and the refund register), 86 with 0006 (the enquiry
 -- and sign-up tables), 126 with 0007 (the Lucky Scoop tiers, their pools and
--- what went into a packed scoop) — so a shorter table than 126 means an older
+-- what went into a packed scoop) - so a shorter table than 126 means an older
 -- copy of this file, and an older copy is a green result that never looked at
 -- part of the schema. That reads like a pass and is not one.
 --
@@ -23,7 +23,7 @@
 -- It writes six throwaway orders (three with order items), six throwaway
 -- products, one throwaway payment incident, one throwaway enquiry, one
 -- throwaway newsletter sign-up, and a handful of throwaway scoop tiers with one
--- packed scoop, inside a transaction it rolls back — so it is safe to run
+-- packed scoop, inside a transaction it rolls back - so it is safe to run
 -- against a live database, though quiet hours are still kinder.
 --
 -- One thing it does that the others do not: the scoop block briefly SETs ROLE
@@ -75,7 +75,7 @@ select 'no client review inserts',         count(*) = 0 from pg_policies
          where schemaname = 'public' and tablename = 'reviews' and cmd = 'INSERT'
 union all
 -- Postage is quoted from Australia Post on weight, so a product with no
--- weight — or one whose default was edited to 0 in the table editor — is a
+-- weight - or one whose default was edited to 0 in the table editor - is a
 -- product that cannot be priced for posting at checkout.
 select 'every product has a weight',       count(*) filter (
          where weight_grams is null or weight_grams <= 0) = 0                    from public.products
@@ -100,7 +100,7 @@ union all
 select 'shoppers cannot allocate order numbers',
        not has_function_privilege('anon', 'public.next_order_number()', 'execute')
 union all
--- lookup_order returns shipping_address — line1, line2 and phone. It was
+-- lookup_order returns shipping_address - line1, line2 and phone. It was
 -- granted to anon, so PostgREST would run it for anyone holding the public
 -- anon key and the /api/track rate limit protected nothing. These three rows
 -- are the proof that blocker is closed and stays closed.
@@ -121,7 +121,7 @@ union all
 select 'confirmed page can read its summary',
        has_function_privilege('service_role', 'public.order_confirmation_summary(text)', 'execute')
 union all
--- shipping_rate_cache is internal pricing data — what postage costs the studio
+-- shipping_rate_cache is internal pricing data - what postage costs the studio
 -- and when we last asked. Supabase grants every new table in `public` to anon
 -- and authenticated by default privilege as it is created, so the revoke in
 -- 0002_shipping.sql is the only thing standing between it and anyone holding
@@ -146,7 +146,7 @@ values
 
 -- Two UPDATEs in one statement share a snapshot, so putting both claims in a
 -- single WITH would have the second skipped by same-statement semantics
--- rather than by the `stock_applied = false` predicate — it would print `t`
+-- rather than by the `stock_applied = false` predicate - it would print `t`
 -- without testing anything. Run them as separate statements so the second
 -- genuinely re-reads the row the first committed.
 update public.orders set stock_applied = true
@@ -180,7 +180,7 @@ select 'wrong email finds nothing',
        (select count(*) from public.lookup_order('BS-VERIFY-0001', 'someone@else.test')) = 0;
 
 -- The confirmed page's own lookup, keyed on the Stripe session id the guest
--- already holds. The row above is deliberately still 'pending' — a shopper
+-- already holds. The row above is deliberately still 'pending' - a shopper
 -- who has paid arrives ahead of the webhook, and the page must be able to say
 -- "paid, order number on its way" rather than "no such session", so unlike
 -- lookup_order this one must find it.
@@ -191,7 +191,7 @@ union all
 select 'unknown session finds nothing',
        (select count(*) from public.order_confirmation_summary('cs_not_a_session')) = 0
 union all
--- The returned column list is the security boundary — no email, address,
+-- The returned column list is the security boundary - no email, address,
 -- phone or total. Widening it must break this row, not slip through review.
 select 'confirmation summary returns 2 columns',
        pg_get_function_result(p.oid) = 'TABLE(order_number text, status text)'
@@ -200,7 +200,7 @@ select 'confirmation summary returns 2 columns',
  where n.nspname = 'public' and p.proname = 'order_confirmation_summary';
 
 -- §0.7: the one-time stock_applied backfill must not touch a *stranded* order
--- — confirmed, but with no order number and no items, because an earlier
+-- - confirmed, but with no order number and no items, because an earlier
 -- webhook delivery died mid-confirm. Its stock genuinely never moved, and it
 -- is the repair branch's input; marking it applied makes claimStock return
 -- false forever and the stock is never moved at all.
@@ -209,7 +209,7 @@ insert into public.orders
 values
   ('verify@example.test', 'confirmed', 1500, 0, 1500, '{}'::jsonb, 'cs_verify_stranded');
 
--- ...while an order that demonstrably finished — numbered, with line items —
+-- ...while an order that demonstrably finished - numbered, with line items -
 -- must still be marked, or a Stripe redelivery double-decrements its stock.
 insert into public.orders
   (order_number, email, status, subtotal, shipping, total, shipping_address, stripe_session_id)
@@ -244,7 +244,7 @@ select 'backfill marks a finished order',
            and exists (select 1 from public.order_items oi where oi.order_id = o.id)) = 1;
 
 -- 0003_admin.sql. `role` is not a column on `profiles` because 0001 grants every
--- signed-in account UPDATE on its own profile row across all columns — a role
+-- signed-in account UPDATE on its own profile row across all columns - a role
 -- there would be self-assignable over PostgREST with the anon key that ships in
 -- the browser. These four rows are the proof that authority lives somewhere the
 -- public key cannot reach, and stays there.
@@ -326,7 +326,7 @@ select 'anon cannot read filament recipes',
        not has_table_privilege('anon', 'public.product_filament', 'select')
 union all
 -- The workbook needs a whole check row for this ("grams typed with no colour
--- chosen — should be 0") because there, grams and colour are separate cells.
+-- chosen - should be 0") because there, grams and colour are separate cells.
 -- Here the primary key makes the pair inseparable, so the condition it checks
 -- for cannot be represented at all. This asserts the structure that makes it
 -- impossible, not the absence of bad rows.
@@ -356,8 +356,8 @@ select 'a colour in use cannot be deleted',
 --
 -- Two assertions rather than one because they fail for different reasons. The
 -- first reads the declared default, so it catches a migration that changes it.
--- The second inserts a row the way the table editor does — every shipping
--- column left alone — so it catches a trigger, a rule or a rewritten column
+-- The second inserts a row the way the table editor does - every shipping
+-- column left alone - so it catches a trigger, a rule or a rewritten column
 -- that produces `true` while the catalogue still says `false`.
 insert into public.products
   (slug, sku, name, short_name, category, theme, art, tint, price, rating)
@@ -384,7 +384,7 @@ select 'a hand-added product is not letter-eligible',
 -- The mail used to get exactly one attempt, queued from inside the branch of
 -- assignOrderNumber that only the delivery which *allocated* the number can
 -- reach. Every Stripe redelivery therefore skipped it, and nothing recorded
--- whether it had ever gone out — a lost send was lost with the process that
+-- whether it had ever gone out - a lost send was lost with the process that
 -- dropped it, leaving a paid customer with no order number and /track needing
 -- one. The column below is what makes a retry able to tell.
 --
@@ -413,7 +413,7 @@ select 'a new order has no mail stamp',
 -- returning void, so selling the last one twice succeeded twice in silence;
 -- recordSale was worse, reading the count in JavaScript and writing back
 -- `Math.max(0, read - qty)`, which discards any decrement that lands in
--- between. The clamp stays — a shelf cannot hold minus one — but the shortfall
+-- between. The clamp stays - a shelf cannot hold minus one - but the shortfall
 -- is now returned to the caller and accumulated on the row, because this shop
 -- prints to order and an oversell is a print-this-first signal, not an error.
 insert into public.products
@@ -514,7 +514,7 @@ union all
 -- Open means unresolved, and unresolved is what the studio overview shows.
 -- Phrased as a NOT EXISTS rather than reading the column out of a subquery:
 -- if the unique constraint above were dropped there would be two rows here,
--- and a scalar subquery would raise — aborting the run instead of letting the
+-- and a scalar subquery would raise - aborting the run instead of letting the
 -- row above print the `f` it is there to print.
 select 'a new incident is unresolved',
        not exists (select 1 from public.payment_incidents
@@ -532,8 +532,8 @@ select 'the webhook can record an incident',
 
 -- 0006_enquiries.sql: the customer's message is a row before it is an email.
 --
--- /api/contact used to hand the enquiry to Resend and store it nowhere — its
--- own comment said "the email IS the delivery" — and answered
+-- /api/contact used to hand the enquiry to Resend and store it nowhere - its
+-- own comment said "the email IS the delivery" - and answered
 -- `{ ok: true, delivered: false }` when the send failed. An unset
 -- RESEND_API_KEY, an unset NEXT_PUBLIC_SUPPORT_EMAIL, a provider 5xx or an
 -- 8-second timeout each destroyed the only copy of what the customer typed.
@@ -613,7 +613,7 @@ end $$;
 
 -- Who may reach it. A name, an email address and free text a stranger typed:
 -- service_role only, in and out. The four `not has_table_privilege` rows are
--- the insert-path decision made testable — the browser writes nothing directly,
+-- the insert-path decision made testable - the browser writes nothing directly,
 -- the route writes it server-side after validating and rate-limiting it. Adding
 -- `grant insert to anon` to make a client-side submit "easier" turns this table
 -- into a public PostgREST endpoint and takes two of these rows red with it.
@@ -640,8 +640,8 @@ select 'the studio can read enquiries',
 
 -- 0006, the other half: a sign-up is a membership, not a message.
 --
--- Its own table because the rules differ. An address is unique — asking twice
--- is one fact stated twice — while an enquiry repeats freely, and folding them
+-- Its own table because the rules differ. An address is unique - asking twice
+-- is one fact stated twice - while an enquiry repeats freely, and folding them
 -- together would leave half the columns null for half the rows and make
 -- clearing out answered enquiries delete the mailing list. Note what is NOT
 -- asserted anywhere, because it does not exist: a newsletter, a welcome email
@@ -668,7 +668,7 @@ select 'a new sign-up has no notify stamp',
 -- An address that has been taken off must stay off. `on conflict do nothing`
 -- is what guarantees it: an upsert that overwrote the row would silently
 -- resurrect an unsubscribed address the next time anybody typed it into the
--- footer box — including anybody who is not its owner.
+-- footer box - including anybody who is not its owner.
 update public.newsletter_signups
    set unsubscribed_at = now()
  where email = 'verify@example.test';
@@ -768,7 +768,7 @@ values
 -- three below therefore ends this section with a pool that can fill it.
 --
 -- The probe the "default" assertions read. Priced, weighed and fillable, so the
--- only thing keeping it inactive is the column default — which is the point: if
+-- only thing keeping it inactive is the column default - which is the point: if
 -- that default is ever flipped, this row goes live and the two assertions below
 -- go red, rather than the file falling over somewhere unrelated.
 insert into public.scoop_tiers
@@ -808,7 +808,7 @@ select t.id, p.id
 
 -- THE POOL GUARD IS A DEFERRED CONSTRAINT TRIGGER, so this line is not
 -- optional. Deferred constraints fire at COMMIT, and this file ends in a
--- rollback — without forcing the mode, every assertion about that trigger would
+-- rollback - without forcing the mode, every assertion about that trigger would
 -- print `t` having never run it, which is exactly the shape of green result
 -- this file exists to refuse. It also settles the three tiers above: from here
 -- on the guard runs on the statement that breaks the rule, which is how a
@@ -831,7 +831,7 @@ select 'a hand-added tier is not active',
        (select active from public.scoop_tiers where slug = 'verify-scoop-default') = false
 union all
 -- Nothing is priced in code and nothing is priced by a default. Null is "she
--- has not priced it yet" — a fact — and it is what the studio shows as "not
+-- has not priced it yet" - a fact - and it is what the studio shows as "not
 -- priced yet", in the language it already uses for anything unmeasured. The
 -- column is omitted from the insert above on purpose, so a default appearing
 -- here is what this row catches.
@@ -855,7 +855,7 @@ begin
 end $$;
 
 -- The theme enum is the studio's dropdown, copied. A value the dropdown cannot
--- produce did not come from the studio — the argument contact_enquiries.topic
+-- produce did not come from the studio - the argument contact_enquiries.topic
 -- makes in 0006.
 do $$
 begin
@@ -874,12 +874,12 @@ end $$;
 --
 -- A price, because a live tier without one is a product page with no number on
 -- it. A packed weight, because a scoop has no product row to take one from and
--- postage is quoted on weight alone — an active tier with no weight is a basket
+-- postage is quoted on weight alone - an active tier with no weight is a basket
 -- that cannot be posted. And a pool that can fill it, which is the pair after
 -- these two.
 --
--- Both are built the honest way round — entered inactive, pooled, then switched
--- on — so that the only thing that can refuse the switch is the rule being
+-- Both are built the honest way round - entered inactive, pooled, then switched
+-- on - so that the only thing that can refuse the switch is the rule being
 -- asserted. Inserting them active with an empty pool would be refused by the
 -- POOL guard instead, and the row would print `t` while testing the wrong
 -- constraint.
@@ -944,8 +944,8 @@ end $$;
 
 -- ...and refused the moment that tier is switched on. This is the half of "a
 -- pool that can fill it" the database can enforce: pool membership is a fact
--- about rows and never changes on its own. The stock half — whether those
--- products have anything on the shelf today — changes with every sale, so it is
+-- about rows and never changes on its own. The stock half - whether those
+-- products have anything on the shelf today - changes with every sale, so it is
 -- asked at read time by lib/scoop.ts and is deliberately not a constraint.
 do $$
 begin
@@ -1013,8 +1013,8 @@ begin
   end;
 end $$;
 
--- THE SALE. A scoop line points at a tier, not at a product — there is no
--- product row for it to point at — and that column is what marks the line as a
+-- THE SALE. A scoop line points at a tier, not at a product - there is no
+-- product row for it to point at - and that column is what marks the line as a
 -- scoop for the pack panel and for the reports.
 insert into public.order_items
   (order_id, product_name, art, tint, unit_price, quantity, scoop_tier_id)
@@ -1053,8 +1053,8 @@ begin
 end $$;
 
 -- THE PACK: what actually went in, recorded after the sale, which is the only
--- moment it is knowable. One row per physical scoop — a line of quantity 2 has
--- two, numbered by pack_index — so recording is idempotent and "is this order
+-- moment it is knowable. One row per physical scoop - a line of quantity 2 has
+-- two, numbered by pack_index - so recording is idempotent and "is this order
 -- fully packed" is a count rather than a guess.
 insert into public.scoop_packs (order_item_id, pack_index, piece_count)
 select oi.id, 1, 2
@@ -1092,7 +1092,7 @@ union all
 -- Stock for a scoop moves when the pack is recorded, not in the webhook, so a
 -- re-saved pack panel is the thing that would decrement twice. `stock_applied`
 -- is the compare-and-set claim that stops it, in the shape orders.stock_applied
--- uses — and a `true` default here would mean every pack is born already
+-- uses - and a `true` default here would mean every pack is born already
 -- claimed and no stock ever moves at all.
 select 'a new pack has not moved stock',
        not exists (select 1 from public.scoop_packs where stock_applied)
@@ -1101,7 +1101,7 @@ select 'a pack records every piece that went in',
        (select count(*) from public.scoop_pack_items) = 2
 union all
 -- The cost of a pack is the SUM of those rows and is deliberately stored
--- nowhere, so there is no second number to disagree with them — the trap
+-- nowhere, so there is no second number to disagree with them - the trap
 -- product_filament avoids in 0003 by having no "total grams" column.
 select 'a pack cost is a sum, not a stored column',
        not exists (select 1 from information_schema.columns
@@ -1149,7 +1149,7 @@ end $$;
 -- They say nothing about WHICH rows come back, and that is the whole question:
 -- an inactive tier is next month's range and an unpriced one has no number to
 -- render. So this block switches to the `anon` role and counts, which is the
--- only way to make the RLS policies themselves testable — the postgres role
+-- only way to make the RLS policies themselves testable - the postgres role
 -- bypasses RLS and would report every draft as public without noticing.
 --
 -- Written into its own temp table rather than straight into _checks, because
@@ -1162,7 +1162,7 @@ set local role anon;
 
 -- Wrapped so that a MISSING grant reddens rows instead of stopping the run.
 -- Without the handler, revoking anon's select on either table raises
--- insufficient_privilege here and the file aborts before printing anything —
+-- insufficient_privilege here and the file aborts before printing anything -
 -- and a run that stops is not a run that failed. Caught, the counts stay null
 -- and the four assertions below go red alongside the grant rows.
 do $$
@@ -1194,7 +1194,7 @@ end $$;
 reset role;
 
 -- coalesce, and it is not decoration. scripts/verify-sql.sh matches assertion
--- rows on `label|t` or `label|f`, so a NULL `pass` is not a red row — it is a
+-- rows on `label|t` or `label|f`, so a NULL `pass` is not a red row - it is a
 -- row that DISAPPEARS from the table, which reads as a pass to anyone who does
 -- not also count. Every one of these four reads a count that is genuinely
 -- absent when the anon grant is missing, so each is floored to a value that
@@ -1216,7 +1216,7 @@ select 'the shop cannot see a draft tier''s pool',
 
 -- Who may reach it, at the grant level. The shopfront reads tiers and pools
 -- with the anon key that ships in the browser bundle, so those two are readable
--- — and nothing more. There is no anon INSERT anywhere in 0007_lucky_scoop.sql
+-- - and nothing more. There is no anon INSERT anywhere in 0007_lucky_scoop.sql
 -- and there must never be: such a grant is a public PostgREST endpoint
 -- accepting arbitrary rows, which here would mean anyone inventing a $1 tier or
 -- adding a lamp to a clicker scoop's pool.

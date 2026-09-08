@@ -12,7 +12,7 @@ import {
 import { money } from "@/lib/format";
 
 /**
- * The costing constants — the workbook's Settings sheet.
+ * The costing constants - the workbook's Settings sheet.
  *
  * Every panel below is inside ONE form, on purpose. `saveSettings` writes the
  * whole row in a single update and reads every field out of the payload, so a
@@ -105,7 +105,7 @@ export default async function SettingsPage() {
               <Field
                 label="Electricity ($ per kWh)"
                 htmlFor="electricity_per_kwh"
-                hint="Off your power bill, in dollars — 0.327 for 32.7c."
+                hint="Off your power bill, in dollars, 0.327 for 32.7c."
               >
                 <input
                   id="electricity_per_kwh"
@@ -157,7 +157,7 @@ export default async function SettingsPage() {
             <Field
               label="Card fee (%)"
               htmlFor="card_fee_rate"
-              hint="What Stripe keeps out of every payment — 1.75 for 1.75 per cent."
+              hint="What Stripe keeps out of every payment, 1.75 for 1.75 per cent."
             >
               <input
                 id="card_fee_rate"
@@ -206,8 +206,8 @@ export default async function SettingsPage() {
             workbook does it: a piece is priced at its cost divided by{" "}
             <span className="tabular-nums">
               1 − {percent(settings.targetMargin)}% − {percent(settings.cardFeeRate)}%
-            </span>
-            , then rounded up. They cannot add up to 100 per cent — there would
+            </span>,
+            then rounded up. They cannot add up to 100 per cent, there would
             be no price that satisfied both.
           </p>
         </Panel>
@@ -236,7 +236,7 @@ export default async function SettingsPage() {
             <Field
               label="Mailer per order (cents)"
               htmlFor="mailer_per_order_cents"
-              hint={`The satchel an order goes out in — once per parcel, not per piece. ${describeCents(settings.mailerPerOrderCents)}`}
+              hint={`The satchel an order goes out in, once per parcel, not per piece. ${describeCents(settings.mailerPerOrderCents)}`}
             >
               <input
                 id="mailer_per_order_cents"
@@ -261,7 +261,7 @@ export default async function SettingsPage() {
 
       <Panel
         title="Accessories"
-        note="Keyrings, chains and clasps. Priced in cents each, to four decimal places — a keyring bought at $9.50 per hundred is 9.5 cents, not 10."
+        note="Keyrings, chains and clasps. Priced in cents each, to four decimal places, a keyring bought at $9.50 per hundred is 9.5 cents, not 10."
         padded={false}
       >
         {accessories.length === 0 ? (
@@ -287,7 +287,7 @@ export default async function SettingsPage() {
  * Settings!C12, spelled out.
  *
  * This one number multiplies the print time of every product in the catalogue,
- * so it is shown with its arithmetic rather than as a total — if it looks wrong
+ * so it is shown with its arithmetic rather than as a total - if it looks wrong
  * she can see which of the four inputs above put it there.
  *
  * Each half reads as Unknown rather than as zero when its inputs are blank. A
@@ -361,7 +361,7 @@ function PerHour({ settings }: { settings: Settings }) {
       <p className="mt-3.5 text-[13px] text-muted">
         This is the number the workbook calls Settings!C12. A product&rsquo;s
         making cost is its print time multiplied by it, plus filament, plus an
-        accessory, plus packaging — so a wrong figure here is wrong on every
+        accessory, plus packaging, so a wrong figure here is wrong on every
         piece in the shop at once.
       </p>
     </div>

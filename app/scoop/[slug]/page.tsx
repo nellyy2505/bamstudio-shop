@@ -77,7 +77,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
    * PRINTS TO ORDER, so a piece with none on the shelf is one she prints before
    * packing, and a scoop is no different (`lib/scoop.ts`). The split told a
    * customer a piece was off the table when it was not, and made the tier's
-   * description — which is exactly this list — move around from day to day.
+   * description - which is exactly this list - move around from day to day.
    */
 
   /*
@@ -146,7 +146,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
           ) : null}
 
           {/* An unpriced tier cannot be sellable, so no price line is printed
-              for one — a "$0.00" here would read as a free scoop, which is the
+              for one - a "$0.00" here would read as a free scoop, which is the
               exact reason `price_cents` is nullable and never zero (0007). */}
           {tier.price_cents !== null ? (
             <div className="flex flex-wrap items-baseline gap-3">
@@ -160,7 +160,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
 
           <p className="mt-1.5 mb-5 text-[13px] font-extrabold text-muted">
             {/* Drawn by hand from the pool below. No claim either way about
-                which pieces were already printed — like everything else here,
+                which pieces were already printed - like everything else here,
                 what is short is printed before the order goes out. */}
             <Icon name="box" size={14} className="inline" /> Drawn by hand from
             the {pluralise(tier.pool.length, "design")} below
@@ -171,8 +171,8 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
               shelf, so a low bowl replaced the buy control with a "not being
               drawn" notice. The shop prints to order and a scoop is no
               exception (`lib/scoop.ts`), so there is nothing here to gate on.
-              `ScoopBuy` handles the one remaining case — a tier with no price,
-              which RLS never publishes anyway — on its own. */}
+              `ScoopBuy` handles the one remaining case - a tier with no price,
+              which RLS never publishes anyway - on its own. */}
           <ScoopBuy tier={tier} />
 
           {/*
@@ -181,7 +181,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
 
             Deliberately silent on whether the same piece can come out twice.
             That is an unsettled owner decision, and a sentence here in either
-            direction would settle it — "no duplicates" is a promise the packing
+            direction would settle it - "no duplicates" is a promise the packing
             table would have to keep, "duplicates possible" is a warning that
             might never be true.
           */}
@@ -190,7 +190,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
               <Icon name="box" size={18} className="mt-0.5 shrink-0" />
               <span>
                 <b>{pluralise(tier.piece_count, "piece")} in the bag.</b> That
-                number is the bowl — it does not vary with what we have in.
+                number is the bowl. It does not vary with what we have in.
               </span>
             </p>
             <p className="flex items-start gap-2.5">
@@ -221,7 +221,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
             <p className="flex items-start gap-2.5">
               <Icon name="shield" size={18} className="mt-0.5 shrink-0" />
               <span>
-                A scoop is not a personalised item —{" "}
+                A scoop is not a personalised item:{" "}
                 <Link
                   href="/legal/refunds"
                   className="text-accent underline underline-offset-2"
@@ -236,8 +236,8 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
 
       {/* --------------------------------------------------------- the pool */}
       {/*
-        THE POOL IS THE DESCRIPTION, so it is rendered as the real catalogue —
-        actual product cards linking to actual product pages — and not as a
+        THE POOL IS THE DESCRIPTION, so it is rendered as the real catalogue -
+        actual product cards linking to actual product pages - and not as a
         drawn-up sample. "Five pieces from these twelve" is a promise this shop
         can keep; "a scoop" is not one at all, and goods have to match their
         description whether or not the sale is called lucky.
@@ -249,7 +249,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
       <section className="mt-16">
         <h2 className="text-2xl md:text-[27px]">What can be in it</h2>
         <p className="mt-2 mb-6 max-w-2xl text-[14.5px] text-muted">
-          This is the whole pool — all{" "}
+          This is the whole pool: all{" "}
           {pluralise(tier.pool.length, "design")}, not a selection of them. Your{" "}
           {tier.piece_count} pieces come out of this list and nowhere else.
         </p>
@@ -266,7 +266,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
             <h2 className="mb-3 text-xl">How your scoop is chosen</h2>
             <p className="text-[14.5px] text-muted">
               By hand, at the packing table, from the bowl above. We do not run
-              a randomiser and you do not get a picker at checkout — a person
+              a randomiser and you do not get a picker at checkout, just a person
               takes {tier.piece_count} out and bags them.
             </p>
             <p className="mt-3 text-[14.5px] text-muted">
@@ -274,7 +274,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
                 Filming is worded as a habit, not a term of sale. "We film every
                 order" printed beside a price becomes part of what was bought,
                 and a week she cannot film becomes a failure to deliver as
-                described — over a video nobody was charged for. So: no promise
+                described - over a video nobody was charged for. So: no promise
                 of a video, no platform, no timing, and the accounts are only
                 named where one exists (lib/contact.ts).
               */}
@@ -295,7 +295,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
                   ))}
                 </>
               ) : null}
-              . It is something we do, not part of what you are buying — we
+              . It is something we do, not part of what you are buying, so we
               cannot promise your scoop will be filmed or that a video of it
               will be shared.
             </p>

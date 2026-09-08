@@ -1,25 +1,25 @@
 # syntax=docker/dockerfile:1
 
 # ---------------------------------------------------------------------------
-# Bam Studio shop — the image Fly runs.
+# Bam Studio shop - the image Fly runs.
 #
 # `next build` peaks around 1.6 GB RSS, and the app machine is 512 MB. So the
 # build NEVER happens on the app VM: it runs on Fly's remote builder (which is
 # what `fly deploy` uses by default) or in CI, and the machine only ever runs
-# the finished server — ~150 MB RSS steady state, comfortable in 512 MB.
+# the finished server - ~150 MB RSS steady state, comfortable in 512 MB.
 #
 # Stages: deps (npm ci) → build (next build) → runtime (node server.js).
 #
 # There is deliberately no HEALTHCHECK instruction. Fly Machines do not read
-# Docker's health status — the checks that actually gate a rolling deploy and
+# Docker's health status - the checks that actually gate a rolling deploy and
 # route traffic are the ones in fly.toml, so a HEALTHCHECK here would be a
 # second timer burning cycles in a 512 MB VM that nothing consumes. One
 # health check, defined in one place: see [[http_service.checks]] in fly.toml.
 # ---------------------------------------------------------------------------
 
 # node:22-slim (Debian bookworm, glibc) rather than -alpine. Next's prebuilt
-# native binaries — the SWC compiler the build stage leans on, and anything
-# traced into the standalone tree — target glibc first-class; musl has its own
+# native binaries - the SWC compiler the build stage leans on, and anything
+# traced into the standalone tree - target glibc first-class; musl has its own
 # separate failure modes for them. The ~25 MB slim costs over alpine is noise
 # next to a 512 MB VM, and having both stages on one libc means whatever the
 # build traced is guaranteed to load at runtime.
@@ -28,12 +28,12 @@ FROM node:22-slim AS base
 
 # --- deps ------------------------------------------------------------------
 # Its own stage so only a package.json/lockfile change busts the install layer.
-# `npm ci` (not `npm install`) — it installs exactly what package-lock.json
+# `npm ci` (not `npm install`) - it installs exactly what package-lock.json
 # pins and fails rather than silently updating it.
 #
 # Dev dependencies are included on purpose: typescript, tailwind and
 # eslint-config-next are all needed by `next build`. None of them reach the
-# runtime stage — nothing is copied from here except into `build`.
+# runtime stage - nothing is copied from here except into `build`.
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -79,7 +79,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # siteUrl() (lib/stripe.ts) is called at module scope by app/layout.tsx's
 # `metadataBase`, and it throws when NEXT_PUBLIC_SITE_URL is unset.
 #
-# The build does fail without this guard — measured, it exits 1 with
+# The build does fail without this guard - measured, it exits 1 with
 # "Failed to collect page data for /_not-found" and the real reason attached
 # as a [cause]. So this is not the only thing standing between us and a bad
 # image; it buys two specific things:
@@ -92,8 +92,8 @@ RUN test -n "$NEXT_PUBLIC_SITE_URL" || { \
       echo "ERROR: NEXT_PUBLIC_SITE_URL is empty."; \
       echo "  Pass it as a build arg, e.g."; \
       echo "    --build-arg NEXT_PUBLIC_SITE_URL=https://bamstudioshop.com"; \
-      echo "  Next bakes it into the bundles at build time — verified, the"; \
-      echo "  literal ends up inside .next/server/chunks/lib_stripe_ts_*.js —"; \
+      echo "  Next bakes it into the bundles at build time - verified, the"; \
+      echo "  literal ends up inside .next/server/chunks/lib_stripe_ts_*.js -"; \
       echo "  so a Fly secret set after the build is too late to help."; \
       exit 1; \
     }
@@ -120,14 +120,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Only these three. `output: "standalone"` traces the ~72 MB the server
 # actually needs and writes its own minimal node_modules inside
-# .next/standalone — copying the 629 MB real node_modules would be pure waste.
+# .next/standalone - copying the 629 MB real node_modules would be pure waste.
 # .next/static and public/ are not traced (they are served, not imported), so
 # they have to be placed by hand next to server.js.
 #
 # What each one is load-bearing for, confirmed by assembling this exact tree
 # and dropping one line at a time: without .next/static every /_next/static
 # chunk and every self-hosted font 404s while the page HTML still returns 200
-# — a break a health check cannot see. Without public/ the files in it 404
+# - a break a health check cannot see. Without public/ the files in it 404
 # (app/favicon.ico survives, it is compiled into the route tree, so that is
 # not a usable canary either).
 #
@@ -139,17 +139,17 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 
-# The stock `node` user (uid 1000) ships with the base image — no reason to
+# The stock `node` user (uid 1000) ships with the base image - no reason to
 # invent another. .next/cache is the one path that must be writable after the
 # drop: everything above is root-owned, so if Next ever goes to write its
 # fetch/ISR cache it would hit EACCES on a lazy mkdir. Pre-create it, and give
-# it to node — this is the only chown in the stage, and that is the point.
+# it to node - this is the only chown in the stage, and that is the point.
 RUN mkdir -p .next/cache && chown -R node:node .next/cache
 USER node
 
 EXPOSE 8080
 
-# `node server.js`, not `next start` — Next 16 warns that `next start` does not
+# `node server.js`, not `next start` - Next 16 warns that `next start` does not
 # work with output: standalone, and it is right: the standalone tree has no
 # `next` CLI in it. server.js is the entrypoint the build generated.
 CMD ["node", "server.js"]

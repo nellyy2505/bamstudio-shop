@@ -45,8 +45,8 @@ export const dynamic = "force-dynamic";
 /**
  * Whether the shop can send at all. Server component, so this reads the same
  * `RESEND_API_KEY` / `EMAIL_FROM` secrets the Stripe webhook does.
- * `hasStudioMailbox` — is `SHOP.supportEmail` a real address rather than the
- * `[HELLO@YOURDOMAIN]` placeholder — comes from lib/contact.ts.
+ * `hasStudioMailbox` - is `SHOP.supportEmail` a real address rather than the
+ * `[HELLO@YOURDOMAIN]` placeholder - comes from lib/contact.ts.
  */
 const SENDS_CONFIRMATION = sendsOrderConfirmation(isEmailConfigured());
 
@@ -74,7 +74,7 @@ const CATEGORIES: {
   {
     icon: "sparkle",
     title: "Custom & personalised",
-    body: "Name charms, colour swaps and one-off design requests — what we can and cannot make.",
+    body: "Name charms, colour swaps and one-off design requests: what we can and cannot make.",
     href: "#custom",
     linkText: "Custom requests",
   },
@@ -97,13 +97,13 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
           >
             your order
           </Link>{" "}
-          from the moment it is posted — order number and the email you ordered
+          from the moment it is posted, using the order number and the email you ordered
           with is all you need.{" "}
           {/* This used to say "the tracking number appears on your order as
               soon as it is posted", flat, with no condition on it. Not every
               parcel has one: quoteBasket() returns `tracked: false` for a Large
               Letter, and the studio's dispatch panel has an explicit "posted
-              without tracking — there is no number to follow" answer that
+              without tracking - there is no number to follow" answer that
               writes SQL NULL. /track now words that step off the order's own
               tracking_number, and this page must not promise what that page
               cannot deliver. */}
@@ -116,14 +116,14 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
               the confirmation email is where the order number comes from when
               one is sent, which is worth saying because /track needs it. */}
           {SENDS_CONFIRMATION
-            ? "We email you an order confirmation with that number when you pay, but we do not email dispatch or tracking notices — anything there is to follow shows up on your order here instead."
+            ? "We email you an order confirmation with that number when you pay, but we do not email dispatch or tracking notices. Anything there is to follow shows up on your order here instead."
             : "We do not email order confirmations, dispatch notices or tracking numbers, so this page is where to look."}
         </p>
         <p>
           {/* No flat price and no tracking claim here on purpose. Postage is
               quoted per basket from Australia Post (lib/shipping/), so a fixed
               figure on this page would be wrong for most baskets, and whether a
-              parcel is tracked depends on the service the quote picks — which
+              parcel is tracked depends on the service the quote picks - which
               this page has no basket to ask about. The free threshold below is
               the shop's own promotion and is a fact this page does know. */}
           After dispatch: {standard.label.toLowerCase()} post takes{" "}
@@ -133,7 +133,7 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
           full before you pay. Below {money(SHIPPING.subsidyThreshold)} that postage is yours; from{" "}
           {money(SHIPPING.subsidyThreshold)} we pay half of it, and from{" "}
           {money(SHIPPING.freeThreshold)} we pay all of it. The half and the
-          whole apply to {standard.label.toLowerCase()} post only — express
+          whole apply to {standard.label.toLowerCase()} post only. Express
           speeds up the post, not the printing, and is charged in full at every
           basket size.
         </p>
@@ -153,7 +153,7 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
         </p>
         <p>
           <strong className="text-ink">
-            Personalised items — anything with a name or letters you chose — can
+            Personalised items, anything with a name or letters you chose, can
             only be returned if they are faulty.
           </strong>{" "}
           They are printed for you specifically and cannot be resold, so please
@@ -175,7 +175,7 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
     question: "What are your pieces made of?",
     answer: (
       <p>
-        PLA plastic, and only PLA. It is a hard, matte, plant-derived filament —
+        PLA plastic, and only PLA. It is a hard, matte, plant-derived filament,
         it holds fine detail, takes colour well and does not smell. Clicker
         mechanisms, charms and stands are all printed from it; keyrings, cords
         and phone straps are the only metal or fabric parts. We do not print in
@@ -209,7 +209,7 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
             Get in touch
           </Link>
         )}{" "}
-        with your order number as soon as you can — colour swaps, address fixes
+        with your order number as soon as you can: colour swaps, address fixes
         and cancellations are all easy before a piece goes on the bed. Once
         printing has started we cannot un-print it, and personalised pieces
         usually start first.
@@ -228,7 +228,7 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
           easy; a brand new shape needs modelling time and a test print or two.
         </p>
         <p>
-          The one thing we will always say no to is licensed characters — no
+          The one thing we will always say no to is licensed characters. No
           cartoon, film, game or brand characters, even as a &quot;close
           enough&quot; version. Every design we sell is our own, and we would
           like to keep it that way.
@@ -265,7 +265,7 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
     answer: (
       <>
         <p>
-          Wipe it with a damp cloth and let it dry — no dishwasher, no boiling
+          Wipe it with a damp cloth and let it dry. No dishwasher, no boiling
           water, no soaking. PLA softens in real heat, so the worst place for a
           clicker or a phone stand is a car dashboard or a sunny windowsill in
           summer.
@@ -273,7 +273,7 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
         <p>
           Clickers are meant to be clicked and will loosen slightly with use;
           that is the mechanism wearing in, not breaking. If one ever stops
-          clicking properly, tell us — we would rather fix it than have it sit in
+          clicking properly, tell us. We would rather fix it than have it sit in
           a drawer.
         </p>
       </>
@@ -286,12 +286,12 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
  *
  * A help centre answers questions people are actually in a position to ask.
  * Nothing is seeded, `getScoopTiers()` carries no sample tier, and this page is
- * already `force-dynamic` — so the entry is added only when a bowl exists, and
+ * already `force-dynamic` - so the entry is added only when a bowl exists, and
  * on a shop with no scoops the question simply is not there rather than
  * describing a product that cannot be bought.
  *
  * What it does not say is as deliberate as what it does. Nothing about whether
- * the same design can come out twice (an unsettled owner decision — a sentence
+ * the same design can come out twice (an unsettled owner decision - a sentence
  * either way would settle it), and nothing about the filming, which is a habit
  * rather than a term of sale and has no business in an answer about what you
  * are buying.
@@ -310,7 +310,7 @@ const SCOOP_FAQ: { id?: string; question: string; answer: ReactNode } = {
         >
           Lucky Scoop page
         </Link>{" "}
-        says how many pieces it holds and shows the whole pool it draws from —
+        says how many pieces it holds and shows the whole pool it draws from,
         all of it, as ordinary product cards you can click into. Your pieces
         come out of that list and nowhere else.
       </p>
@@ -319,7 +319,7 @@ const SCOOP_FAQ: { id?: string; question: string; answer: ReactNode } = {
         the bowl by hand when the order is packed; there is no randomiser, there
         is nothing to select at checkout, and we cannot take requests for
         particular pieces. If a bag ever arrives short, or with something that
-        was not in that bowl&rsquo;s list, that is not what you ordered — see
+        was not in that bowl&rsquo;s list, that is not what you ordered. See
         the{" "}
         <Link
           href="/legal/refunds"
@@ -337,7 +337,7 @@ export default async function FaqPage() {
   /*
    * One read, one decision: is there a bowl to answer questions about? The
    * `sellable` gate the home page and the sitemap use is deliberately NOT
-   * applied — a published tier is something a reader can see on the shop and
+   * applied - a published tier is something a reader can see on the shop and
    * ask about, and a help centre answers the questions people can ask, not the
    * ones they can act on.
    *
@@ -371,14 +371,14 @@ export default async function FaqPage() {
           market stall every single weekend.
         </p>
 
-        {/* Decorative only — the real search lives in the header. */}
+        {/* Decorative only. The real search lives in the header. */}
         <div
           aria-hidden="true"
           className="mx-auto mt-7 flex h-[52px] max-w-xl items-center gap-3 rounded-full border-2 border-line2 bg-surface px-5"
         >
           <Icon name="search" size={20} className="shrink-0 text-faint" />
           <span className="truncate text-[15px] text-faint">
-            Search the help centre — coming soon
+            Search the help centre: coming soon
           </span>
         </div>
       </div>
@@ -432,7 +432,7 @@ export default async function FaqPage() {
           <div>
             <h2 className="text-xl">Still stuck?</h2>
             {/* The reply promise only holds if a message can reach the studio
-                mailbox at all — without one there is nobody to read it. The
+                mailbox at all - without one there is nobody to read it. The
                 "usually within a couple of days" clock is gone: nothing here
                 measures or guarantees a turnaround, /contact says so outright,
                 and the same claim was removed from the product page, the

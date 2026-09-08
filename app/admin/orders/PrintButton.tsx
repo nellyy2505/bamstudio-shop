@@ -7,7 +7,7 @@ import { Button, Icon } from "@/components/ui";
  *
  * A client component for one reason: `window.print()`. Everything else on the
  * packing slip and the pick list is server-rendered, and both pages work
- * without this button — Ctrl+P prints exactly the same thing, which is what
+ * without this button - Ctrl+P prints exactly the same thing, which is what
  * makes it safe for the button to be missing if JavaScript has not loaded.
  *
  * It carries `no-print` like every other control, so it does not appear on the

@@ -9,7 +9,7 @@
  *
  * Both modules are built on the same promise: **inert without configuration,
  * live the day one variable is set.** A promise like that has exactly two ways
- * to be broken, and both are silent —
+ * to be broken, and both are silent -
  *
  *   1. it is not actually inert (a deploy with no DSN makes a network call, or
  *      slows down, or throws), and nobody notices because nothing visible
@@ -29,7 +29,7 @@
  *
  * The REAL modules and the REAL /api/track and /api/health route handlers,
  * loaded through jiti so the TypeScript and the `@/` aliases resolve as Next
- * resolves them — the same approach as scripts/check-webhook.mjs, and for the
+ * resolves them - the same approach as scripts/check-webhook.mjs, and for the
  * same reason: a test that asserts against a copy of the code is a test that
  * passes after the original is broken.
  *
@@ -43,7 +43,7 @@
  *     wrappers around the same two functions proved here.
  *   * `instrumentation.ts`. `onRequestError` is invoked by the Next runtime,
  *     which this harness does not boot. Its body is four lines over
- *     `captureException`, and `stripQuery` — the part of it that matters — is
+ *     `captureException`, and `stripQuery` - the part of it that matters - is
  *     asserted directly.
  *   * Real Upstash and real Sentry. Both are asserted at the wire: the URL,
  *     the headers and the exact bytes of the body.
@@ -84,7 +84,7 @@ function check(label, condition, detail) {
     console.log(`  ok   ${label}`);
     return;
   }
-  failures.push(`${scenario} — ${label}${detail ? `\n         ${detail}` : ""}`);
+  failures.push(`${scenario}, ${label}${detail ? `\n         ${detail}` : ""}`);
   console.log(`  FAIL ${label}${detail ? `  (${detail})` : ""}`);
 }
 
@@ -399,7 +399,7 @@ begin("No customer PII reaches a Sentry payload");
   check("no mobile number", !body.includes("0412") && !body.includes("61412345678"));
   check("no card-length digit run", !body.includes("4242424242424242"));
   check(
-    "no Stripe session id — that URL reads back a customer's address",
+    "no Stripe session id, that URL reads back a customer's address",
     !body.includes("cs_test_a1b2c3d4"),
     body,
   );
@@ -617,7 +617,7 @@ begin("A configured store is asked in exactly one round trip");
     JSON.parse(sent.body)[0][1].startsWith("rl:"),
   );
   check(
-    "fetch is told not to cache — Next patches fetch and caches by default",
+    "fetch is told not to cache, Next patches fetch and caches by default",
     sent.init.cache === "no-store",
     String(sent.init.cache),
   );
@@ -665,12 +665,12 @@ begin("An unreachable store degrades to the in-process limiter, not to open");
 
   check("nothing threw", decisions.length === 12);
   check(
-    "it did NOT fail open — the 11th is still refused",
+    "it did NOT fail open, the 11th is still refused",
     decisions[9].ok === true && decisions[10].ok === false,
     JSON.stringify(decisions.map((d) => d.ok)),
   );
   check(
-    "it did NOT fail closed — the first ten are allowed",
+    "it did NOT fail closed, the first ten are allowed",
     decisions.slice(0, 10).every((d) => d.ok === true),
   );
   check(
@@ -838,7 +838,7 @@ begin("/api/health stays a cheap liveness answer");
     JSON.stringify(body),
   );
   check(
-    "it leaks no configuration — no DSN, no store, no build",
+    "it leaks no configuration, no DSN, no store, no build",
     !("reporting" in body) &&
       !("rateLimitStore" in body) &&
       !("release" in body) &&
@@ -868,7 +868,7 @@ begin("/api/track behaves exactly as before on an unconfigured deploy");
   const body = await response.json();
   check("200 with a miss", response.status === 200 && body.found === false);
   check(
-    "and nothing but the miss — no reason leaked to the caller",
+    "and nothing but the miss, no reason leaked to the caller",
     Object.keys(body).length === 1,
     JSON.stringify(body),
   );
@@ -955,7 +955,7 @@ begin("A bad request is still refused before anything else happens");
   process.env.SENTRY_DSN = DSN;
   const response = await track.POST(trackRequest({ orderNumber: "x" }));
   check("400", response.status === 400);
-  check("nothing reported — a typo is not an incident", requests.length === 0);
+  check("nothing reported, a typo is not an incident", requests.length === 0);
   check("no database call", supabase.store.rpc.length === 0);
 }
 

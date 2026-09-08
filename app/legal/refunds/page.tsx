@@ -29,8 +29,8 @@ export const metadata: Metadata = {
  * that answer is frozen into the HTML at build: an owner who adds the two
  * secrets to the host without triggering a rebuild gets order-confirmation
  * emails going out from the Stripe webhook while this page still says none
- * are sent. A stale bake would turn a term of the contract — and the remedy
- * it points a charged customer at — into a false statement. A legal document
+ * are sent. A stale bake would turn a term of the contract - and the remedy
+ * it points a charged customer at - into a false statement. A legal document
  * nobody loads in bulk can afford the render.
  */
 export const dynamic = "force-dynamic";
@@ -38,7 +38,7 @@ export const dynamic = "force-dynamic";
 /**
  * Whether the shop can send at all, read once from the server-side secrets.
  * This is a server component, so `isEmailConfigured()` is safe here and is the
- * same condition the senders themselves check — no public mirror to drift.
+ * same condition the senders themselves check - no public mirror to drift.
  */
 const CAN_SEND_EMAIL = isEmailConfigured();
 
@@ -120,8 +120,8 @@ const NO_CHANNEL = (
     this online. Any channel we open will be listed on our{" "}
     <Link href="/contact" className={LINK}>
       contact page
-    </Link>
-    , and your rights under the Australian Consumer Law are unaffected in the
+    </Link>,
+    and your rights under the Australian Consumer Law are unaffected in the
     meantime.
   </>
 );
@@ -151,7 +151,7 @@ export default function RefundsPage() {
         policy we offer on top of them.
       </p>
 
-      <h2>Change of mind — 30 days</h2>
+      <h2>Change of mind: 30 days</h2>
       <p>
         We will accept a return on a stock design within 30 days of delivery,
         provided it is unused, undamaged and comes back in its original
@@ -171,7 +171,7 @@ export default function RefundsPage() {
         </li>
       </ul>
 
-      <h2>Personalised items — the exception</h2>
+      <h2>Personalised items: the exception</h2>
       <p>
         <strong>
           Personalised items cannot be returned or exchanged for change of mind.
@@ -182,7 +182,7 @@ export default function RefundsPage() {
       </p>
       <p>
         Personalised items <strong>can</strong> be returned if they are faulty,
-        damaged in transit, or not what you ordered — for example if we printed a
+        damaged in transit, or not what you ordered, for example if we printed a
         different name or colour than your order shows. Your Australian Consumer
         Law rights apply to personalised items in full.
       </p>
@@ -193,7 +193,7 @@ export default function RefundsPage() {
           to look rather than as the place to look. */}
       <p>
         Because a misspelling cannot be undone, please check the spelling and
-        colour in your basket before you pay — and again in{" "}
+        colour in your basket before you pay, and again in{" "}
         <Link href="/account/orders" className={LINK}>
           your account
         </Link>{" "}
@@ -215,8 +215,8 @@ export default function RefundsPage() {
         WHAT IS DELIBERATELY MISSING, AND IT NEEDS THE OWNER'S DECISION.
         There is no change-of-mind rule for a scoop here. The section above
         grants 30 days on "a stock design" and refuses it on "personalised
-        items"; a scoop is neither — it is a tier, not a product row, and it is
-        not made to anybody's specification — so no rule on this page currently
+        items"; a scoop is neither - it is a tier, not a product row, and it is
+        not made to anybody's specification - so no rule on this page currently
         reaches it either way, and none is invented here. Two drafts, one of
         which she has to choose:
 
@@ -232,8 +232,8 @@ export default function RefundsPage() {
               the bowl. This does not affect your rights below if a scoop is
               faulty, short, or not what the bowl described."
 
-        (b) is permitted — change-of-mind refunds are a goodwill policy, not an
-        ACL entitlement — but it must be stated BEFORE purchase to be relied on,
+        (b) is permitted - change-of-mind refunds are a goodwill policy, not an
+        ACL entitlement - but it must be stated BEFORE purchase to be relied on,
         and if she picks it the same sentence belongs on the tier page. Until she
         picks one, silence favours the customer, which is the safe direction to
         be wrong in.
@@ -246,7 +246,7 @@ export default function RefundsPage() {
         </Link>{" "}
         is a set number of pieces drawn from a pool we publish in full. The
         bowl&rsquo;s page says how many pieces it holds and lists every design it
-        can draw from, and that list is the description of what you are buying —
+        can draw from, and that list is the description of what you are buying,
         your pieces come out of it and out of nothing else.
       </p>
       <p>
@@ -258,8 +258,8 @@ export default function RefundsPage() {
       </p>
       <p>
         What we cannot change is which pieces came out. Nobody picks them for
-        you and nobody picks them by machine — one of us draws them by hand when
-        your order is packed — and getting a piece you would not have chosen is
+        you and nobody picks them by machine (one of us draws them by hand when
+        your order is packed), and getting a piece you would not have chosen is
         not a fault. Your Australian Consumer Law rights apply to a scoop in
         full, exactly as they do to everything else here.
       </p>
@@ -269,7 +269,7 @@ export default function RefundsPage() {
         Tell us within 14 days of delivery, or as soon as a fault appears if it
         is not immediately obvious.{" "}
         <Reach
-          detail="with your order number and a photo of the problem — a photo usually saves you having to post anything at all"
+          detail="with your order number and a photo of the problem. A photo usually saves you having to post anything at all"
           unavailable={NO_CHANNEL}
         />
       </p>
@@ -301,7 +301,7 @@ export default function RefundsPage() {
 
       <h2>How to start a return</h2>
       {/* The reply here is a person writing back from the studio inbox, not an
-          automated email — real as long as there is a channel to write to. With
+          automated email - real as long as there is a channel to write to. With
           no channel at all the steps cannot be honestly described, so the page
           says that instead. The return address itself is a detail only the
           owner can supply, so it is given in the reply rather than printed. */}
@@ -315,7 +315,7 @@ export default function RefundsPage() {
               />
             </li>
             <li>
-              Wait for our reply before posting anything — one of us will write
+              Wait for our reply before posting anything. One of us will write
               back with the return address and, where it is our fault, a way to
               return it at our cost.
             </li>
@@ -339,7 +339,7 @@ export default function RefundsPage() {
         We process approved refunds within 3 business days of receiving the item
         or agreeing to the refund. It then takes your bank or card issuer a
         further 5 to 10 business days to show the money. Refunds go back to the
-        original payment method — we cannot refund to a different card or
+        original payment method. We cannot refund to a different card or
         account.
       </p>
 
@@ -356,7 +356,7 @@ export default function RefundsPage() {
         <li>Damage from drops, pets, modification or misuse.</li>
         <li>
           Layer lines, faint seams and small variations between two of the same
-          design — these are inherent to 3D printing, not faults.
+          design. These are inherent to 3D printing, not faults.
         </li>
       </ul>
 

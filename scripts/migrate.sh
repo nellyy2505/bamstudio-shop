@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # ===========================================================================
-# migrate.sh — bring a database up to date with supabase/migrations/, then
+# migrate.sh - bring a database up to date with supabase/migrations/, then
 # prove it, and fail if either half did not work.
 # ===========================================================================
 #
@@ -14,13 +14,13 @@
 #      ones it has not.
 #   3. Runs the missing ones, oldest first, each inside its own transaction.
 #   4. Runs supabase/verify.sql against the database and fails if ANY
-#      assertion comes back false — naming the ones that failed.
+#      assertion comes back false - naming the ones that failed.
 #
 # It is safe to run twice. Step 2 is the reason: the database keeps a list of
 # which files it has run, in a table called
 # `supabase_migrations.schema_migrations`. A file already on that list is not
 # run again, no matter how many times you run this script. That list is the
-# whole point — "these files are safe to re-run" is not good enough, because
+# whole point - "these files are safe to re-run" is not good enough, because
 # 0004 contains a one-shot data repair and seed.sql would duplicate the
 # catalogue.
 #
@@ -66,7 +66,7 @@
 #
 #   --dry-run            Print what would be applied. Touches nothing.
 #   --baseline A B C     One-time only. Tell the database "these files have
-#                        already been run, do not run them again" — for a
+#                        already been run, do not run them again" - for a
 #                        database that was migrated by hand before this script
 #                        existed. See BASELINING below.
 #   --verify-only        Skip the migrating, just run the assertions.
@@ -74,7 +74,7 @@
 #                        half-broken database you are repairing by hand.
 #
 # ---------------------------------------------------------------------------
-# BASELINING — read this once, do it once, never again
+# BASELINING - read this once, do it once, never again
 # ---------------------------------------------------------------------------
 #
 # The live database has had 0001, 0002, 0003 and 0004 pasted into it by hand.
@@ -98,8 +98,8 @@
 #
 # There are no undo files in this repo. A migration that does the wrong thing
 # is undone by restoring a backup, and nothing else. So the first time this
-# script runs against a database that has never been migrated by it — no list
-# table yet — it REFUSES, and prints how to take a snapshot first. Set
+# script runs against a database that has never been migrated by it - no list
+# table yet - it REFUSES, and prints how to take a snapshot first. Set
 # MIGRATE_ACK_BACKUP=yes (the "I have taken a backup" box in GitHub) to say you
 # have done it.
 #
@@ -113,18 +113,18 @@
 # Because it was tested and it works with these exact filenames. Supabase
 # documents its migrations as `<timestamp>_name.sql` and this repo has
 # `0001_init.sql`, so the obvious worry was that adopting the official tool
-# would force a rename of four files the live database has already run —
+# would force a rename of four files the live database has already run -
 # which would be trading a small problem for a much worse one.
 #
 # Tested on a real PostgreSQL 16 and, since 2026-08-27, on a real PostgreSQL 17
-# — the major the live Supabase project runs — with supabase CLI 2.116.0:
+# - the major the live Supabase project runs - with supabase CLI 2.116.0:
 # `migration list`, `db push`, `db push --dry-run` and `migration repair` all
 # read `0001_init.sql` correctly and record it on the list as version `0001`.
 # No rename is needed and none is made.
 #
 # THE ONE SHARP EDGE, and the reason for the filename check below: the CLI
 # reads the number before the first underscore and it must be DIGITS ONLY. A
-# file called `0003b_fix.sql` or `0007-fix.sql` is not an error — it is
+# file called `0003b_fix.sql` or `0007-fix.sql` is not an error - it is
 # **silently skipped**, and `db push` still exits 0 and still says "up to
 # date". A migration that is never applied cannot fail; it just quietly is not
 # there. So this script checks every filename itself, first, and refuses to go
@@ -133,7 +133,7 @@
 # Next migration file: `0007_something.sql`. Digits, underscore, lower case.
 #
 # ---------------------------------------------------------------------------
-# WHEN IT REFUSES — a REQUEST is not a FAILURE
+# WHEN IT REFUSES - a REQUEST is not a FAILURE
 # ---------------------------------------------------------------------------
 #
 # This script stops for two very different reasons, and it now says out loud
@@ -145,7 +145,7 @@
 #   panel at the top of the run page. Do the one step it names and run it
 #   again.
 #
-#   FAILED (a failure).  Something IS wrong — a migration file is misnamed, the
+#   FAILED (a failure).  Something IS wrong - a migration file is misnamed, the
 #   database cannot be reached, or an assertion the shop depends on came back
 #   false. In GitHub it prints a red error and a "Migration failed" panel, and
 #   the panel says whether the database had already been changed before it
@@ -200,18 +200,18 @@ done
 # HOW A STOP IS REPORTED
 # ---------------------------------------------------------------------------
 #
-# DEFECT THIS CLOSES — 2026-08-27, the owner's first real run against the live
+# DEFECT THIS CLOSES - 2026-08-27, the owner's first real run against the live
 # Supabase project. The backup gate below did exactly what it was built to do:
 # it stopped before touching anything, and printed a page explaining how to take
-# a snapshot first. It also exited non-zero — correctly, because the deploy must
-# not proceed — so GitHub showed a red cross indistinguishable from the one a
+# a snapshot first. It also exited non-zero - correctly, because the deploy must
+# not proceed - so GitHub showed a red cross indistinguishable from the one a
 # broken migration shows, with the reason forty lines down inside a collapsed
 # log. It was reported as "error when push". A safety stop that reads as a
 # breakage is a safety stop that eventually gets routed around, so the REASON
 # now has to be the first thing on the run page, not the last thing in the log.
 #
 # Mechanism, from GitHub's workflow-commands documentation:
-#   * $GITHUB_STEP_SUMMARY names a file — unique to each step — whose
+#   * $GITHUB_STEP_SUMMARY names a file - unique to each step - whose
 #     GitHub-Flavored Markdown is rendered on the run page ABOVE the logs.
 #     Written by appending (>>). 1 MiB per step; up to 20 step summaries shown.
 #   * `::notice title=T::message` and `::error title=T::message` are echoed on
@@ -221,7 +221,7 @@ done
 # NEITHER EXISTS ON HER LAPTOP. $GITHUB_STEP_SUMMARY is unset outside Actions,
 # and a bare `::notice::` line in a terminal is noise. Every function here is a
 # no-op when it is not running in Actions, and the local text is printed
-# unchanged either way — the terminal output of this script is the same as it
+# unchanged either way - the terminal output of this script is the same as it
 # has always been, byte for byte.
 # ---------------------------------------------------------------------------
 
@@ -234,7 +234,7 @@ fi
 
 in_actions() { [ "${GITHUB_ACTIONS:-}" = "true" ]; }
 
-# Reporting must never be able to fail the run it is reporting on — a read-only
+# Reporting must never be able to fail the run it is reporting on - a read-only
 # $RUNNER_TEMP or a full disk would otherwise turn a clean, explained stop back
 # into the mystery this whole section exists to end. Hence the `|| true`s.
 record_outcome() {
@@ -278,7 +278,7 @@ stop() {
     record_outcome request
     annotate notice "Action needed - nothing was changed" "$headline Next: $next"
     summary <<MD
-## ⏸️ Action needed — nothing in your database was changed
+## ⏸️ Action needed - nothing in your database was changed
 
 **$headline**
 
@@ -307,7 +307,7 @@ MD
     record_outcome failure
     annotate error "Migration FAILED - $headline" "$headline Next: $next"
     summary <<MD
-## ❌ Migration failed — $headline
+## ❌ Migration failed - $headline
 
 $db_state
 
@@ -338,7 +338,7 @@ MD
 fail() {
   local msg="$*"
   stop failure "${msg%%$'\n'*}" \
-    "Your database was **not** changed — this run stopped before it could apply anything." \
+    "Your database was **not** changed - this run stopped before it could apply anything." \
     "Read the message below. It names exactly what is missing and how to supply it." <<MSG
 
 ERROR: $msg
@@ -351,7 +351,7 @@ if [ -z "${SUPABASE_DB_URL:-}" ]; then
   # script simply has not been told which database to talk to.
   stop request \
     "The setting that says which database to use has not been filled in yet." \
-    "Nothing was changed — without this setting there is nothing to connect to." \
+    "Nothing was changed - without this setting there is nothing to connect to." \
     "Add a repository **secret** named \`SUPABASE_DB_URL\`, then run this again. Settings → Secrets and variables → Actions → Secrets. Get the value from Supabase: your project → Connect → **Session pooler** → copy the URI, and paste your database password where it says \`[YOUR-PASSWORD]\`." <<'MSG'
 
 ERROR: SUPABASE_DB_URL is not set.
@@ -376,7 +376,7 @@ command -v "$SUPABASE_BIN" >/dev/null 2>&1 || fail \
   (GitHub installs it automatically; this message is for your own computer.)"
 
 command -v psql >/dev/null 2>&1 || fail \
-  "the 'psql' command is not installed — it is what runs supabase/verify.sql.
+  "the 'psql' command is not installed - it is what runs supabase/verify.sql.
   Ubuntu/Debian:  sudo apt-get install -y postgresql-client
   macOS:          brew install libpq && brew link --force libpq"
 
@@ -395,12 +395,12 @@ ALL_FILES=("$MIGRATIONS_DIR"/*.sql)
 shopt -u nullglob
 
 [ "${#ALL_FILES[@]}" -gt 0 ] || fail \
-  "no .sql files in $MIGRATIONS_DIR — this is a broken checkout, not an empty schema."
+  "no .sql files in $MIGRATIONS_DIR - this is a broken checkout, not an empty schema."
 
 BAD=()
 for f in "${ALL_FILES[@]}"; do
   base="$(basename "$f")"
-  # digits, underscore, anything, .sql — exactly what the CLI's parser accepts.
+  # digits, underscore, anything, .sql - exactly what the CLI's parser accepts.
   [[ "$base" =~ ^[0-9]+_.+\.sql$ ]] || BAD+=("$base")
 done
 
@@ -412,12 +412,12 @@ if [ "${#BAD[@]}" -gt 0 ]; then
   stop failure \
     "A migration file is named in a way the tool silently ignores." \
     "Your database was **not** changed. This is the check that stops a file being skipped without anybody noticing." \
-    "Rename the file(s) listed below to \`<digits>_<description>.sql\` — for example \`0008_add_gift_notes.sql\` — and push again. **Do not rename a file that has already been applied to the live database.**" <<MSG
+    "Rename the file(s) listed below to \`<digits>_<description>.sql\` - for example \`0008_add_gift_notes.sql\` - and push again. **Do not rename a file that has already been applied to the live database.**" <<MSG
 
 ERROR: these migration files would be SILENTLY SKIPPED, not applied:
 $BAD_LIST
   The name must be digits, then an underscore, then a description, then .sql
-  — for example 0007_add_gift_notes.sql. Letters or dashes in the number part
+  - for example 0007_add_gift_notes.sql. Letters or dashes in the number part
   ("0003b_", "0007-fix") make the tool ignore the file while still reporting
   success, which is worse than an error: the code goes live against a schema
   that was never changed.
@@ -452,16 +452,16 @@ if [ -z "$LEDGER" ] && [ "$VERIFY_ONLY" = 0 ] && [ "$DRY_RUN" = 0 ]; then
   if [ "${MIGRATE_ACK_BACKUP:-}" != "yes" ]; then
     # THE ONE THAT WAS MISREAD AS A BREAKAGE. A REQUEST: everything works, the
     # script is asking a person to confirm a backup exists before it does
-    # something that has no undo. Quoted heredoc — the body contains the literal
+    # something that has no undo. Quoted heredoc - the body contains the literal
     # string $SUPABASE_DB_URL inside a command she is meant to copy, and it must
     # stay literal and unexpanded. See the no-printing-the-URL rule at the top.
     stop request \
       "This database has never been migrated by this system, and there is no undo. It is asking you to take a backup first." \
       "**Nothing has been changed.** This run stopped before touching the database." \
-      "Take a backup (a minute — the log below tells you where the button is), then open **Actions → Run migrations → Run workflow**, tick **I have taken a backup**, put \`0001 0002 0003 0004\` in the baseline box, and run it. It only ever asks once." <<'MSG'
+      "Take a backup (a minute - the log below tells you where the button is), then open **Actions → Run migrations → Run workflow**, tick **I have taken a backup**, put \`0001 0002 0003 0004\` in the baseline box, and run it. It only ever asks once." <<'MSG'
 
   ========================================================================
-  STOP — TAKE A BACKUP FIRST. This is the first time migrations have been
+  STOP - TAKE A BACKUP FIRST. This is the first time migrations have been
   run against this database automatically, and there is no way to undo one.
   ========================================================================
 
@@ -476,7 +476,7 @@ if [ -z "$LEDGER" ] && [ "$VERIFY_ONLY" = 0 ] && [ "$DRY_RUN" = 0 ]; then
       the time right now. That is the moment you can rewind to.
       Or: Database -> Backups -> Scheduled backups -> check today's is there.
 
-    Free plan — there are NO automatic backups at all, so do this:
+    Free plan - there are NO automatic backups at all, so do this:
       Either  Database -> Backups -> download the latest daily backup,
       or, from your own computer with the Supabase CLI installed:
 
@@ -486,9 +486,9 @@ if [ -z "$LEDGER" ] && [ "$VERIFY_ONLY" = 0 ] && [ "$DRY_RUN" = 0 ]; then
 
   WHEN YOU HAVE DONE IT:
 
-    In GitHub — re-run the "Run migrations" workflow with the
+    In GitHub - re-run the "Run migrations" workflow with the
       "I have taken a backup" box ticked.
-    On your own computer —
+    On your own computer -
       MIGRATE_ACK_BACKUP=yes ./scripts/migrate.sh --baseline 0001 0002 0003 0004
 
   Nothing has been changed. This run stopped before touching the database.
@@ -524,7 +524,7 @@ if [ "$VERIFY_ONLY" = 0 ]; then
     echo "Dry run finished. Nothing was changed."
     record_outcome ok
     summary <<'MD'
-## ✅ Dry run finished — nothing was changed
+## ✅ Dry run finished - nothing was changed
 
 This run only *reported* what it would do. The list of migrations it would apply
 is in the **Migrate and verify** step below.
@@ -538,7 +538,7 @@ MD
   # ------------------------------------------------------- 5. apply them
   #
   # Each file runs inside its own transaction. Tested: a migration that
-  # raises leaves nothing behind — the half-created table was rolled back,
+  # raises leaves nothing behind - the half-created table was rolled back,
   # the file was NOT added to the list, and the command exited 1. `set -e`
   # turns that into a stopped deploy, which is the whole requirement: code
   # must never go live against a schema that did not migrate.
@@ -566,7 +566,7 @@ if [ "$SKIP_VERIFY" = 1 ]; then
 ## ⚠️ Migrations applied, but the schema was **not** checked
 
 `--skip-verify` was passed, so `supabase/verify.sql` did not run. This run is
-green, and green here does **not** mean the database is correct — nothing looked.
+green, and green here does **not** mean the database is correct - nothing looked.
 
 Run **Actions → Run migrations** again without that flag to get a real answer.
 MD
@@ -596,15 +596,15 @@ if [ "$PSQL_STATUS" -ne 0 ] || [ -z "$ROWS" ]; then
   # the migrations have run. It is the code rollout that has been stopped.
   stop failure \
     "The schema check could not run at all." \
-    "The migrations **were** applied. What has been stopped is the rollout of the new code — the shop is still serving the previous version." \
-    "Read the error in the block below. If it names something that does not exist — a table, a column, a function — then a migration did not do what it was supposed to, and the deploy has been stopped before the new code could run against a database that cannot serve it." <<MSG
+    "The migrations **were** applied. What has been stopped is the rollout of the new code - the shop is still serving the previous version." \
+    "Read the error in the block below. If it names something that does not exist - a table, a column, a function - then a migration did not do what it was supposed to, and the deploy has been stopped before the new code could run against a database that cannot serve it." <<MSG
 
 ERROR: verify.sql did not complete.
 
 $RAW
 
-  READ THE ERROR ABOVE. If it names something that does not exist — a table,
-  a column, a function — then a migration has not been applied, and this
+  READ THE ERROR ABOVE. If it names something that does not exist - a table,
+  a column, a function - then a migration has not been applied, and this
   deploy has been stopped before the new code could run against a database
   that cannot serve it. That is the system working.
 
@@ -629,15 +629,15 @@ if [ -n "$FAILURES" ]; then
   # names the count so it is legible from the run list.
   stop failure \
     "$FAILED_COUNT of $TOTAL schema checks came back false." \
-    "Your database **was** migrated. What has been stopped is the code rollout — the shop is still serving the previous version, so customers are unaffected." \
-    "Each failing line below is a guarantee the shop depends on and the database is not currently keeping. These are the failures that otherwise only show up in production — a missing grant here means a customer can pay and no order is ever recorded. The schema needs fixing, then re-run." <<MSG
+    "Your database **was** migrated. What has been stopped is the code rollout - the shop is still serving the previous version, so customers are unaffected." \
+    "Each failing line below is a guarantee the shop depends on and the database is not currently keeping. These are the failures that otherwise only show up in production - a missing grant here means a customer can pay and no order is ever recorded. The schema needs fixing, then re-run." <<MSG
 
-FAILED — $FAILED_COUNT of $TOTAL assertions came back false:
+FAILED - $FAILED_COUNT of $TOTAL assertions came back false:
 $FAILED_LIST
 
   Each line above is a guarantee the shop depends on and the database is not
   currently keeping. These are the failures that otherwise only show up in
-  production — a missing grant here means a customer can pay and no order is
+  production - a missing grant here means a customer can pay and no order is
   ever recorded.
 
   The deploy has been stopped. The database HAS been migrated; it is the code
@@ -647,10 +647,10 @@ $FAILED_LIST
 MSG
 fi
 
-echo "OK — all $TOTAL assertions passed."
+echo "OK - all $TOTAL assertions passed."
 echo
 echo "A note on the count: verify.sql should return 126 rows as of 0007. A"
-echo "SHORTER table is not a better result — it means an older copy of"
+echo "SHORTER table is not a better result - it means an older copy of"
 echo "verify.sql that never looked at part of the schema."
 
 record_outcome ok
@@ -661,6 +661,6 @@ Every migration this database had not run has been applied, and all $TOTAL
 assertions in \`supabase/verify.sql\` came back true.
 
 There should be **126** of them as of \`0007\`. A *shorter* table is not a better
-result — it means an older copy of \`verify.sql\` that never looked at part of
+result - it means an older copy of \`verify.sql\` that never looked at part of
 the schema.
 MD

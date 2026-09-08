@@ -10,8 +10,8 @@
  * There was a 43-scenario harness for this route. It lived in `/tmp` and it was
  * lost with the session that wrote it, and WORKLOG.md has said ever since that
  * it must be rebuilt BEFORE the webhook's payload changes again. Lucky Scoop
- * changes the payload — a line with no product row, which must be written to
- * `order_items` with a tier id and must be kept out of stock claiming — so this
+ * changes the payload - a line with no product row, which must be written to
+ * `order_items` with a tier id and must be kept out of stock claiming - so this
  * is that rebuild, and it is in `scripts/` rather than in `/tmp` so the next
  * change to this route starts with something to run.
  *
@@ -25,7 +25,7 @@
  * The REAL route modules, loaded through jiti so the TypeScript and the `@/`
  * aliases resolve exactly as Next resolves them. Only the four edges are faked:
  * Supabase, Stripe, the mail provider and the costing tables. Nothing in the
- * routes is copied, re-implemented or stubbed — a test that asserts against a
+ * routes is copied, re-implemented or stubbed - a test that asserts against a
  * copy of the code is a test that passes after the original is broken.
  */
 
@@ -84,7 +84,7 @@ function check(label, condition, detail) {
     console.log(`  ok   ${label}`);
     return;
   }
-  failures.push(`${scenario} — ${label}${detail ? `\n         ${detail}` : ""}`);
+  failures.push(`${scenario}, ${label}${detail ? `\n         ${detail}` : ""}`);
   console.log(`  FAIL ${label}${detail ? `  (${detail})` : ""}`);
 }
 
@@ -115,7 +115,7 @@ const TIER = {
   created_at: "2026-08-01T00:00:00Z",
   pool: [],
   // `sellable` is "switched on and priced" and nothing else. `drawable` and
-  // `scoopsAvailable` are studio information — how full the bowl is — and no
+  // `scoopsAvailable` are studio information - how full the bowl is - and no
   // longer gate anything; scenario 8c is the assertion that keeps it that way.
   availability: {
     poolSize: 12,
@@ -405,7 +405,7 @@ function itemsOf(orderId) {
 
 /*
  * 5. The rebuild path with a scoop, and the slug collision it exists to
- *    survive. No order was staged — the database was unreachable at checkout —
+ *    survive. No order was staged - the database was unreachable at checkout -
  *    so the webhook rebuilds the order from the Stripe session. The tier's slug
  *    is deliberately the SAME STRING as a real product's, which is legal:
  *    `scoop_tiers.slug` and `products.slug` are separate unique indexes.
@@ -522,7 +522,7 @@ function itemsOf(orderId) {
 
 /*
  * 7. A piece count that did not survive the Stripe round trip. The promise is
- *    left unstated rather than invented — "5 pieces" on an order that promised
+ *    left unstated rather than invented - "5 pieces" on an order that promised
  *    three is worse than saying nothing.
  */
 {
@@ -569,7 +569,7 @@ async function postCheckout(body) {
  *
  * This scenario used to be one case: the bowl emptied while the customer was
  * deciding, and checkout refused. That behaviour is gone and it should be. THE
- * SHOP PRINTS TO ORDER — `decrement_stock` returns a shortfall and keeps
+ * SHOP PRINTS TO ORDER - `decrement_stock` returns a shortfall and keeps
  * selling (0005_sale_integrity.sql) because a piece that runs out is printed
  * again, and a scoop is no different: she scoops from the bowl and prints the
  * rest before packing. The gate could only ever take a paid product off the
@@ -578,11 +578,11 @@ async function postCheckout(body) {
  * The race it was testing is real, though, so the scenario is re-pointed rather
  * than deleted, at the changes that still have to stop a sale: a tier the owner
  * SWITCHED OFF (8a) and a tier she UNPRICED (8b). Those are about whether the
- * thing is for sale at all, and RLS alone cannot be relied on to catch them —
+ * thing is for sale at all, and RLS alone cannot be relied on to catch them -
  * this harness reaches checkout through a fake `loadScoopTiersBySlug`, which is
  * exactly the point: if the route's own guard were deleted, only these two
- * assertions would notice. (The third refusal — a slug that is not a tier at
- * all — is scenario 10.)
+ * assertions would notice. (The third refusal - a slug that is not a tier at
+ * all - is scenario 10.)
  *
  * 8c is the new behaviour, asserted positively, and it is the one that stops
  * the gate coming back: an empty bowl checks out like anything else.
@@ -622,7 +622,7 @@ async function postCheckout(body) {
     body.error,
   );
   // The refusal must not blame the shelf. "Sold out" was the old wording and it
-  // is now never true of a scoop — saying it would tell a customer to come back
+  // is now never true of a scoop - saying it would tell a customer to come back
   // for something that never went away.
   check(
     "the customer is not told it sold out",
@@ -664,7 +664,7 @@ async function postCheckout(body) {
     !String(body.error).includes("no price"),
     body.error,
   );
-  // Nothing may reach Stripe at any price for an unpriced tier — a 0 here would
+  // Nothing may reach Stripe at any price for an unpriced tier - a 0 here would
   // be a free scoop, which is why price_cents is nullable and never zero (0007).
   check(
     "no free scoop was priced on the way past",
@@ -673,7 +673,7 @@ async function postCheckout(body) {
 }
 
 {
-  begin("8c. An EMPTY BOWL still checks out — the gate that was removed");
+  begin("8c. An EMPTY BOWL still checks out, the gate that was removed");
   // Everything the old rule refused on: the pool cannot fill a single scoop off
   // the shelf. The tier is switched on and priced, so it is for sale, so this
   // sale completes. She prints the missing pieces before she packs it.
@@ -726,8 +726,8 @@ async function postCheckout(body) {
     lines: [
       { product_id: PRODUCT.id, slug: PRODUCT.slug, quantity: 2 },
     ],
-    // A price the browser would like to pay. It is not on the wire at all —
-    // the schema has no field for it — which is the point being recorded here.
+    // A price the browser would like to pay. It is not on the wire at all -
+    // the schema has no field for it - which is the point being recorded here.
     scoop_lines: [{ slug: "pet-scoop", quantity: 1 }],
     shipping_method: "standard",
   });
@@ -789,7 +789,7 @@ async function postCheckout(body) {
 }
 
 /*
- * 9b. A basket of nothing but scoops. The path with NO product lines at all —
+ * 9b. A basket of nothing but scoops. The path with NO product lines at all -
  *     an empty costing lookup, an empty stock map, and a postage quote built
  *     entirely from tier weights. It is also the basket the old `lines.min(1)`
  *     would have refused outright, so it is what proves that cap moved safely.
@@ -824,7 +824,7 @@ async function postCheckout(body) {
   );
   /*
    * Two scoops at $25 is $50, over the $49 free-standard-postage threshold, so
-   * the customer is charged nothing for postage — and the real quote is STILL
+   * the customer is charged nothing for postage - and the real quote is STILL
    * recorded on the order. That is the invariant `isFreeShipping()` and
    * `quoteBasket()` are kept apart to protect: waiving the charge must not
    * erase what the carrier actually wants, or a postage bill can never be
@@ -851,7 +851,7 @@ async function postCheckout(body) {
 }
 
 /*
- * 10. A tier that is not published at all — RLS never returned it. Same 409 the
+ * 10. A tier that is not published at all - RLS never returned it. Same 409 the
  *     product branch gives for a retired product, and again with no session.
  */
 {

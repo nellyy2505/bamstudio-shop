@@ -13,7 +13,7 @@ import { InviteForm } from "./InviteForm";
  * There is no sign-up. The shop's registration form makes customers and nothing
  * else, the staff table is unreadable and unwritable with the key the browser
  * holds, and the only way in is an invitation made on this page by someone who
- * already has the access capability — which is the owner alone.
+ * already has the access capability - which is the owner alone.
  */
 
 const INVITE_TONE: Record<InvitationRow["state"], "accent" | "good" | "neutral" | "warn"> = {
@@ -57,16 +57,16 @@ export default async function AccessPage() {
           </p>
           <ul className="flex flex-col gap-2">
             <li>
-              <b className="text-ink">Owner</b> — everything, including this page and the
+              <b className="text-ink">Owner</b>, everything, including this page and the
               costing settings. There is one, placed by hand in the database, and it cannot be
               handed out or invited.
             </li>
             <li>
-              <b className="text-ink">Studio</b> — everything except studio access and
+              <b className="text-ink">Studio</b>, everything except studio access and
               settings. Orders, products, inventory, colours and reports.
             </li>
             <li>
-              <b className="text-ink">Packing</b> — orders only. No products, no settings, no
+              <b className="text-ink">Packing</b>, orders only. No products, no settings, no
               reports, so no costs and no margins. This is the role for someone helping you get
               parcels out.
             </li>

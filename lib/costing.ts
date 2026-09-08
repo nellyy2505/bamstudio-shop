@@ -27,12 +27,12 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * EVERYTHING HERE IS IN CENTS, AND MOST OF IT IS FRACTIONAL CENTS.
  *
- * A keyring costs $9.50 per hundred — 9.5 cents each. Packaging is 13 cents.
+ * A keyring costs $9.50 per hundred - 9.5 cents each. Packaging is 13 cents.
  * The machine, at $1049 over 10,000 hours, is 10.49 cents an hour. Round any of
  * those to a whole cent as it goes past and a $2.50 product's cost moves by a
  * few per cent, which at a 70% target margin is real money on a market table.
  *
- * So: `number`, not integers, all the way through, and exactly one rounding —
+ * So: `number`, not integers, all the way through, and exactly one rounding -
  * at the end, into the price, in the direction the workbook rounds (up, to the
  * nearest 50c). Money that is *charged* is still an integer number of cents;
  * money that is *computed about* is not.
@@ -42,7 +42,7 @@
  * studio that can be checked against a spreadsheet by reading it.
  */
 
-/** The constants row — `shop_settings`, as numbers. */
+/** The constants row - `shop_settings`, as numbers. */
 export type CostSettings = {
   printerPriceCents: number;
   printerLifeHours: number;
@@ -71,7 +71,7 @@ export function powerCostPerHour(s: CostSettings): number {
   return (s.powerDrawWatts / 1000) * s.electricityPerKwhCents;
 }
 
-/** Workbook Settings!C12 — the single rate the Products sheet multiplies by. */
+/** Workbook Settings!C12 - the single rate the Products sheet multiplies by. */
 export function machineAndPowerPerHour(s: CostSettings): number {
   return machineCostPerHour(s) + powerCostPerHour(s);
 }
@@ -82,7 +82,7 @@ export function machineAndPowerPerHour(s: CostSettings): number {
  *
  * `printHours` and `grams` are nullable because most of her catalogue has never
  * been measured. Null is carried through to `unknown: true` rather than
- * substituted with zero — a product nobody has timed is not a product that
+ * substituted with zero - a product nobody has timed is not a product that
  * prints instantly, and a cost of $0.13 (packaging alone) shown as if it were
  * real is how you price a piece at fifty cents.
  */
@@ -143,7 +143,7 @@ export function unitCost(
  * every suggested price in the shop by about half a per cent and she would have
  * no idea why.
  *
- * Returns null rather than a number when there is nothing to price from —
+ * Returns null rather than a number when there is nothing to price from -
  * a cost of zero, or a margin plus fee that leaves nothing to divide by. The
  * workbook returns 0 there, which then displays as "$0.00" and reads like a
  * free product; null lets the screen say "not priced yet" instead.
@@ -162,7 +162,7 @@ export function suggestedPrice(s: CostSettings, costCents: number): number | nul
  * Profit on one unit at a given price. Workbook column AA.
  *
  * The card fee comes off the *price*, not off the margin, because that is when
- * it is actually charged — Stripe takes its cut of what the customer paid.
+ * it is actually charged - Stripe takes its cut of what the customer paid.
  */
 export function profitPerUnit(
   s: CostSettings,
@@ -187,7 +187,7 @@ export function marginAt(
  *
  *   MAX(0, ordered + buffer - onHand)
  *
- * `ordered` is open demand — quantities on orders that are neither finished nor
+ * `ordered` is open demand - quantities on orders that are neither finished nor
  * cancelled. It belongs in here rather than being netted off elsewhere: a piece
  * with four on the shelf and five sold is short by one *plus* whatever buffer
  * she wants to keep, and a queue that ignores sold-but-unposted stock sends her

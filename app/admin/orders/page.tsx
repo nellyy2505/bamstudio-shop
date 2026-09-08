@@ -16,7 +16,7 @@ import { PAGE_SIZE, listOrders, type OrderFilters } from "../data";
 /**
  * Every order the shop has taken, newest first.
  *
- * The filters are a plain GET form — no client JavaScript, no state to keep in
+ * The filters are a plain GET form - no client JavaScript, no state to keep in
  * sync. A filtered list is therefore a real URL: it survives a refresh, it can
  * be bookmarked, and the page links below carry the same filters rather than
  * silently widening the search when someone clicks page 2.
@@ -79,7 +79,7 @@ export default async function OrdersPage({
   /*
    * `pageFromParam` clamps to a page count that is not known until the query
    * has run. `listOrders` performs the same clamp itself and reports the page
-   * it settled on, so the parse here only has to turn nonsense into 1 — the
+   * it settled on, so the parse here only has to turn nonsense into 1 - the
    * real clamp comes back as `orders.page`.
    */
   const requestedPage = pageFromParam(params.page, Number.MAX_SAFE_INTEGER);
@@ -228,7 +228,7 @@ export default async function OrdersPage({
                   <tr key={order.id} className="align-middle">
                     <td className="px-5 py-3.5">
                       <span className="font-mono text-[13px] font-semibold">
-                        {order.orderNumber ?? "—"}
+                        {order.orderNumber ?? "-"}
                       </span>
                       <span className="block truncate text-[12.5px] text-faint">
                         {order.email}

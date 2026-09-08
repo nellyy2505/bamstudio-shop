@@ -8,14 +8,14 @@ import { resolveJoin, type JoinState } from "./invitation";
 import { JoinForm } from "./JoinForm";
 
 /**
- * /admin/join?token=… — where an invitation becomes studio access.
+ * /admin/join?token=… - where an invitation becomes studio access.
  *
  * ────────────────────────────────────────────────────────────────────────────
  * WHY THIS FILE IS AT app/(admin-join)/admin/join/ AND NOT AT app/admin/join/
  *
  * `app/admin/layout.tsx` calls `requireStaff()`, which redirects anyone without
- * a row in `public.staff`. An invited person is BY DEFINITION not staff yet —
- * that is the whole reason they were sent a link — so a page nested under that
+ * a row in `public.staff`. An invited person is BY DEFINITION not staff yet -
+ * that is the whole reason they were sent a link - so a page nested under that
  * layout would bounce them to /admin the moment it rendered, and the invitation
  * could never be accepted. It is the same trap the route was born with: the
  * link `inviteStaff` hands out has never resolved to anything.
@@ -26,7 +26,7 @@ import { JoinForm } from "./JoinForm";
  *
  * A route group does it instead. `(admin-join)` is a folder whose name is in
  * parentheses, so it contributes nothing to the URL: this file still serves
- * exactly /admin/join. What it changes is the LAYOUT chain — layouts nest by
+ * exactly /admin/join. What it changes is the LAYOUT chain - layouts nest by
  * folder, so a page outside app/admin/ is not wrapped by app/admin/layout.tsx
  * and never calls `requireStaff()`. Every other /admin/* route is untouched and
  * still guarded. There is no conflict, because nothing else in the app resolves
@@ -38,7 +38,7 @@ import { JoinForm } from "./JoinForm";
  *     footer. It therefore draws its own frame below.
  *   • `proxy.ts` also keys on the path, so a signed-out visitor is still sent
  *     to /login before this page renders. The signed-out branch below is the
- *     second line, not the only one — see the note on `backHere`.
+ *     second line, not the only one - see the note on `backHere`.
  * ────────────────────────────────────────────────────────────────────────────
  *
  * Nothing here writes anything. Accepting is a mutation and lives in a server
@@ -75,7 +75,7 @@ export default async function JoinPage({
    * Built through `safeNext()` even though we are the ones building it. The
    * token is arbitrary text from a URL, so it is encoded first and then the
    * whole path is put through the same validator every other `next=` goes
-   * through — one rule, one place, and no way for a crafted token to smuggle a
+   * through - one rule, one place, and no way for a crafted token to smuggle a
    * second destination into the query string.
    *
    * `proxy.ts` used to drop this: it redirected a signed-out visitor to /login
@@ -100,7 +100,7 @@ function renderState(state: JoinState, token: string, backHere: string): ReactNo
           <Ending
             icon="lock"
             title="Sign in first"
-            body="This invitation belongs to one email address, so we need to know who you are before it can be used. If you have never shopped with us, make an account with that same address first — the studio runs on the shop's own sign-in."
+            body="This invitation belongs to one email address, so we need to know who you are before it can be used. If you have never shopped with us, make an account with that same address first, the studio runs on the shop's own sign-in."
           >
             <ButtonLink href={`/login?next=${encodeURIComponent(backHere)}`}>
               Sign in and come back
@@ -116,7 +116,7 @@ function renderState(state: JoinState, token: string, backHere: string): ReactNo
           </Ending>
           <Alert tone="info">
             Keep this link anyway. Signing in or making an account should bring you straight
-            back here — but if it leaves you somewhere else, open the invitation again and it
+            back here, but if it leaves you somewhere else, open the invitation again and it
             will pick up where you left off.
           </Alert>
         </>
@@ -134,7 +134,7 @@ function renderState(state: JoinState, token: string, backHere: string): ReactNo
         <Ending
           icon="help"
           title="This link isn't valid"
-          body="We can't match it to an invitation. Links get broken by being split across two lines in a message, so it is worth copying it again in one piece — otherwise ask whoever invited you for a fresh one."
+          body="We can't match it to an invitation. Links get broken by being split across two lines in a message, so it is worth copying it again in one piece, otherwise ask whoever invited you for a fresh one."
         >
           <ButtonLink href="/" variant="soft">
             Back to the shop
@@ -174,7 +174,7 @@ function renderState(state: JoinState, token: string, backHere: string): ReactNo
         <Ending
           icon="clock"
           title="This invitation has expired"
-          body="Invitations last seven days and this one is past that. Nothing has gone wrong — ask the owner for a fresh one and it will work straight away."
+          body="Invitations last seven days and this one is past that. Nothing has gone wrong, ask the owner for a fresh one and it will work straight away."
         >
           <ButtonLink href="/" variant="soft">
             Back to the shop
@@ -186,8 +186,8 @@ function renderState(state: JoinState, token: string, backHere: string): ReactNo
     case "wrong_person":
       /*
        * The address that WAS invited is deliberately not shown. Whoever is
-       * reading this may be the wrong person entirely — a forwarded message, a
-       * shared computer — and they have no business learning who the owner
+       * reading this may be the wrong person entirely - a forwarded message, a
+       * shared computer - and they have no business learning who the owner
        * invited. Their own address is theirs to see, and it is the one thing
        * they need in order to work out what to do.
        */
@@ -223,7 +223,7 @@ function renderState(state: JoinState, token: string, backHere: string): ReactNo
         <Ending
           icon="shield"
           title="You're already in the studio"
-          body={`There is nothing to accept — your account is already in the studio as ${ROLE_LABEL[state.role]}. This link has done its job.`}
+          body={`There is nothing to accept, your account is already in the studio as ${ROLE_LABEL[state.role]}. This link has done its job.`}
         >
           <ButtonLink href="/admin">Open the studio</ButtonLink>
         </Ending>
@@ -251,7 +251,7 @@ function renderState(state: JoinState, token: string, backHere: string): ReactNo
             </div>
             <p className="text-[13px] text-muted">
               {state.role === "packing"
-                ? "Packing sees orders and nothing else — no products, no settings and no reports, so no costs or margins."
+                ? "Packing sees orders and nothing else, no products, no settings and no reports, so no costs or margins."
                 : "Studio sees orders, products, inventory, colours and reports. Studio access and the costing settings stay with the owner."}
             </p>
           </dl>

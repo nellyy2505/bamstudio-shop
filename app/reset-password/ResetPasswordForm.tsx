@@ -10,14 +10,14 @@ const MIN_LENGTH = 8;
 /**
  * Whether the browser holds the keys it needs to reach Supabase Auth.
  *
- * Defect this closes: with no Supabase env vars — the shop's state today, and
- * a supported mode of this app — `createClient()` ran outside any `try` (it
+ * Defect this closes: with no Supabase env vars - the shop's state today, and
+ * a supported mode of this app - `createClient()` ran outside any `try` (it
  * was the bare statement after `setPending(true)`) and threw. The rejection
  * was unhandled, and because `setPending(false)` existed only on the branches
  * further down that returned normally, none of them ran: the button sat on
  * "Saving…" forever with no error ever reaching the customer. Identical shape
  * to the hang already fixed in LoginForm, SignupForm and ForgotPasswordForm,
- * and the same class as WORKLOG §0.1 — a customer-facing claim not gated on
+ * and the same class as WORKLOG §0.1 - a customer-facing claim not gated on
  * the capability behind it, plus a hang.
  *
  * `isSupabaseConfigured()` (lib/supabase/client.ts) rather than
@@ -37,10 +37,10 @@ const CAN_SET_PASSWORD = isSupabaseConfigured();
 /**
  * Shown when the shop has no accounts system behind it. Plain, in the shop's
  * voice, and it never names an env var, prints an exception or blames the
- * password the customer typed — none of that is theirs to fix.
+ * password the customer typed - none of that is theirs to fix.
  */
 const UNAVAILABLE =
-  "Password changes aren't switched on yet — this shop isn't connected to its accounts system, so we can't save a new password. Nothing you type here would reach us. Please try again later.";
+  "Password changes aren't switched on yet, this shop isn't connected to its accounts system, so we can't save a new password. Nothing you type here would reach us. Please try again later.";
 
 const OFFLINE =
   "We couldn't reach the shop just now. Check your connection and try again.";
@@ -55,7 +55,7 @@ function isOffline(error: { name?: string; status?: number }): boolean {
 
 /**
  * Password-update errors that are safe to show, keyed by Supabase's stable
- * error code — the same allow-list shape LoginForm and SignupForm use. Every
+ * error code - the same allow-list shape LoginForm and SignupForm use. Every
  * entry is about what the visitor just typed or how fast they typed it.
  */
 const SAFE_UPDATE_ERRORS: Record<string, string> = {
@@ -70,8 +70,8 @@ const SAFE_UPDATE_ERRORS: Record<string, string> = {
 };
 
 /**
- * Was `setError(updateError.message)`. Supabase's own text is developer copy —
- * "Failed to fetch", "AuthApiError: …" — and putting it on the page hands the
+ * Was `setError(updateError.message)`. Supabase's own text is developer copy -
+ * "Failed to fetch", "AuthApiError: …" - and putting it on the page hands the
  * customer a string they can neither read nor act on.
  */
 function updateMessage(error: {
@@ -94,8 +94,8 @@ function updateMessage(error: {
  *
  * When it is true the visitor proved control of the mailbox and by definition
  * cannot know the old password, so new + confirm is all we ask for. When it is
- * false this is just an ordinary signed-in session — which Supabase would
- * happily let change the password on its own — so we re-authenticate first,
+ * false this is just an ordinary signed-in session - which Supabase would
+ * happily let change the password on its own - so we re-authenticate first,
  * exactly as account/settings/PasswordCard does. Without that, any borrowed or
  * shared browser left signed in could take the account over silently.
  *
@@ -119,7 +119,7 @@ export function ResetPasswordForm({ viaRecovery }: { viaRecovery: boolean }) {
     setError(null);
 
     // Defence in depth: the fields and button below are disabled while
-    // unconfigured, so a submit should not be reachable — but if one arrives
+    // unconfigured, so a submit should not be reachable - but if one arrives
     // it must say something true rather than throw into a dead promise.
     if (!CAN_SET_PASSWORD) {
       setError(UNAVAILABLE);
@@ -140,7 +140,7 @@ export function ResetPasswordForm({ viaRecovery }: { viaRecovery: boolean }) {
 
     setPending(true);
     // The only path that deliberately leaves the button busy is the one that
-    // is navigating away. Every other path — a returned error, a throw —
+    // is navigating away. Every other path - a returned error, a throw -
     // hands the button back.
     let leaving = false;
     try {
@@ -193,8 +193,8 @@ export function ResetPasswordForm({ viaRecovery }: { viaRecovery: boolean }) {
       router.refresh();
       leaving = true;
     } catch {
-      // Anything that throws on the way out — a client that refuses to build,
-      // a blocked request — still has to land as copy the customer can act on.
+      // Anything that throws on the way out - a client that refuses to build,
+      // a blocked request - still has to land as copy the customer can act on.
       // The exception itself is never shown: no stack trace, no env-var name.
       setError(CAN_SET_PASSWORD ? OFFLINE : UNAVAILABLE);
     } finally {

@@ -3,7 +3,7 @@
  *
  * **Both the cart and the checkout route must call this and nothing else.** If
  * one of them computed postage a different way, the price a customer agreed to
- * on the cart page and the price Stripe charges could diverge — silently, and
+ * on the cart page and the price Stripe charges could diverge - silently, and
  * only for some baskets. One entry point is what makes that impossible.
  *
  * Resolution order is cache → live → fallback:
@@ -91,7 +91,7 @@ const TRACKED: Record<string, boolean> = {
 };
 
 /**
- * The weight assumed when the basket could not be measured at all — reachable
+ * The weight assumed when the basket could not be measured at all - reachable
  * only from the outer catch. 500 g is the top of the second parcel band, so
  * the deliberately-one-band-high fallback lookup lands on the ≤1 kg rate.
  * Expensive on purpose: this path means something is broken and the estimate
@@ -115,8 +115,8 @@ function letterServiceForWeight(weightGrams: number): string {
 /**
  * The always-available answer. No network, no clock, no way to fail.
  *
- * If the table has no entry for the code — which would mean somebody added a
- * service without adding its rates — this falls through to the dearest ladder
+ * If the table has no entry for the code - which would mean somebody added a
+ * service without adding its rates - this falls through to the dearest ladder
  * it has rather than to zero. Zero postage is the one answer that is never
  * safe.
  */
@@ -144,7 +144,7 @@ function fallbackQuote(
  *
  * @param lines    Basket lines carrying **server-loaded product rows**. The
  *                 browser supplies which product and how many, never a weight.
- * @param methodId `"standard"` or `"express"` — the ids in `SHIPPING.methods`.
+ * @param methodId `"standard"` or `"express"` - the ids in `SHIPPING.methods`.
  *                 An unrecognised id is treated as standard, because refusing
  *                 to quote would block a sale over a typo.
  */
@@ -224,7 +224,7 @@ export async function quoteBasket(
             serviceCode,
             fromPostcode: ORIGIN_POSTCODE,
             // A destination is required by the endpoint and does not affect
-            // the price — see PROBE_POSTCODE in dimensions.ts.
+            // the price - see PROBE_POSTCODE in dimensions.ts.
             toPostcode: PROBE_POSTCODE,
             lengthMm: dimensionsMm?.lengthMm ?? 0,
             widthMm: dimensionsMm?.widthMm ?? 0,
@@ -256,7 +256,7 @@ export async function quoteBasket(
         // quoting fallback prices for a while without anybody noticing. PAC
         // error text quotes our own request, never customer data.
         console.warn(
-          `[shipping] PAC ${result.reason} for ${serviceCode} at ${weightGrams} g — ` +
+          `[shipping] PAC ${result.reason} for ${serviceCode} at ${weightGrams} g, ` +
             `using the fallback table. ${result.detail}`,
         );
       }

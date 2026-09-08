@@ -36,7 +36,7 @@ export default async function ProductsPage({
 
   // pageFromParam needs a page count, which is only known after the query. Ask
   // for page 1's worth of clamping, then use the page listProducts actually
-  // settled on — it clamps against the real total.
+  // settled on - it clamps against the real total.
   const requested = Number.parseInt(one(params.page) || "1", 10);
   const [products, settings, accessories, categories, demand] = await Promise.all([
     listProducts(Number.isFinite(requested) ? requested : 1, filters),
@@ -181,7 +181,7 @@ export default async function ProductsPage({
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums">
                           {margin === null ? (
-                            <span className="text-faint">—</span>
+                            <span className="text-faint">-</span>
                           ) : (
                             <span
                               className={
@@ -194,7 +194,7 @@ export default async function ProductsPage({
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums">{product.stockOnHand}</td>
                         <td className="px-3 py-3 text-right tabular-nums">
-                          {queue > 0 ? <b>{queue}</b> : <span className="text-faint">—</span>}
+                          {queue > 0 ? <b>{queue}</b> : <span className="text-faint">-</span>}
                         </td>
                         <td className="px-5 py-3 text-right">
                           <Link

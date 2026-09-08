@@ -15,7 +15,7 @@ const LINK = "font-bold text-accent underline underline-offset-2";
  * be printed without `hasStudioMailbox`. Same chain as the legal pages; the
  * predicates now live in lib/contact.ts, the markup cannot.
  *
- * @param canSendEmail server-read capability, threaded in as a prop — see the
+ * @param canSendEmail server-read capability, threaded in as a prop - see the
  *   note on the component's props. Never read the secrets here: this is a
  *   client component and would answer false in the browser.
  */
@@ -24,7 +24,7 @@ function emailChangeHint(canSendEmail: boolean) {
   if (hasStudioMailbox) {
     return (
       <>
-        Changing the email on an account needs a hand from us — write to{" "}
+        Changing the email on an account needs a hand from us. Write to{" "}
         <a href={`mailto:${SHOP.supportEmail}`} className={LINK}>
           {SHOP.supportEmail}
         </a>
@@ -47,7 +47,7 @@ function emailChangeHint(canSendEmail: boolean) {
   if (handles.length > 0) {
     return (
       <>
-        Changing the email on an account needs a hand from us — message us on{" "}
+        Changing the email on an account needs a hand from us. Message us on{" "}
         {handles.map((handle, index) => (
           <span key={handle.label}>
             {index > 0 ? " or " : ""}
@@ -79,7 +79,7 @@ export function ProfileCard({
 }: {
   userId: string;
   /**
-   * Whether the shop can send its own email — `isEmailConfigured()`, read on
+   * Whether the shop can send its own email - `isEmailConfigured()`, read on
    * the server by the settings page and handed down. It cannot be read here:
    * the secrets behind it are not `NEXT_PUBLIC_`, so this client component
    * would see `undefined`, offer the contact form as a second door when it does
@@ -140,7 +140,7 @@ export function ProfileCard({
       <h2 id="profile-heading" className="text-xl">
         Profile
       </h2>
-      {/* The name goes on the parcel, and — where the Resend secrets are set —
+      {/* The name goes on the parcel, and - where the Resend secrets are set -
           onto the order confirmation's delivery details. Neither is a claim
           this line needs to make, so it says the part that is true in every
           configuration and no more. */}
@@ -198,7 +198,7 @@ export function ProfileCard({
           <Field
             label="Phone"
             htmlFor="profile-phone"
-            hint="Only used if a courier needs to reach you — optional"
+            hint="Only used if a courier needs to reach you (optional)"
           >
             <input
               id="profile-phone"

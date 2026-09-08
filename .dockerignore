@@ -2,14 +2,14 @@
 # it would leak, or it would be copied only to be thrown away.
 
 # Secrets. `.env.local` holds live keys and, since standalone does not read
-# .env files anyway, shipping it would be pure risk for zero benefit — every
+# .env files anyway, shipping it would be pure risk for zero benefit - every
 # runtime value arrives as a real process env var from a Fly secret.
 .env
 .env.*
 
 # No `!.env.example` exemption. It was here so the template travelled with the
-# context, but nothing in the build reads it — Next loads .env, .env.local and
-# .env.<NODE_ENV>, never .env.example — so its only effect was to punch a hole
+# context, but nothing in the build reads it - Next loads .env, .env.local and
+# .env.<NODE_ENV>, never .env.example - so its only effect was to punch a hole
 # in the `.env.*` rule and leave a file named like a secret sitting in an image
 # layer, one careless `COPY` away from the runtime stage. It stays in git,
 # which is where a template belongs. Verified: the build succeeds without it.

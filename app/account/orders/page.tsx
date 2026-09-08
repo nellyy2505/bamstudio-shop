@@ -63,7 +63,7 @@ function one(value: string | string[] | undefined): string | undefined {
 
 /**
  * Re-orderable lines keep the colour and attachment that were actually
- * ordered (stored on the order item), but are priced at *today's* price —
+ * ordered (stored on the order item), but are priced at *today's* price -
  * the shopper reviews the basket before paying. Personalised lines are
  * skipped: the letters have to be chosen again in the builder.
  */
@@ -77,7 +77,7 @@ function reorderLines(items: OrderItemRow[]): Omit<CartLine, "key">[] {
      *
      * That is the right answer and not merely a convenient one. "Buy again"
      * restores the exact variant that was ordered, and there is no such thing
-     * for a scoop — the tier may since have been retired, re-priced or given a
+     * for a scoop - the tier may since have been retired, re-priced or given a
      * different pool, and the one thing that certainly cannot be repeated is
      * the draw. Another scoop is bought from the tier page, where the price and
      * the pool shown are the current ones.
@@ -88,7 +88,7 @@ function reorderLines(items: OrderItemRow[]): Omit<CartLine, "key">[] {
      * it carried folded in whether the pool could fill a scoop off the shelf,
      * and the owner removed that because the shop prints to order and a short
      * bowl is a print job rather than a closed listing. What is left of
-     * `sellable` — switched on and priced — is enforced by RLS and again by
+     * `sellable` - switched on and priced - is enforced by RLS and again by
      * `/api/checkout`, not on the way into a basket. None of that changes the
      * decision here; it is the reason for it that had to stop citing a gate
      * that no longer exists.
@@ -154,7 +154,7 @@ export default async function OrdersPage({
       orders = (data ?? []) as OrderRow[];
     }
   } catch {
-    // Database unreachable — fall through to the empty state below.
+    // Database unreachable - fall through to the empty state below.
   }
 
   if (orders.length === 0) {

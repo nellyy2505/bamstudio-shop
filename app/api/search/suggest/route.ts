@@ -18,8 +18,8 @@ const MAX_QUERY_LENGTH = 64;
  * The client debounces at 180ms and only fires at 2+ characters, so one typed
  * search costs well under ten requests, and a request only leaves the browser
  * after the shopper pauses. 30 in 10 seconds covers three back-to-back
- * searches — or a couple of shoppers sharing an office/household NAT, since
- * clientKey() buckets by IP — while capping a scripted loop at 3 requests a
+ * searches - or a couple of shoppers sharing an office/household NAT, since
+ * clientKey() buckets by IP - while capping a scripted loop at 3 requests a
  * second instead of as fast as the socket allows. The window is short (rather
  * than the 60s used by /api/track and /api/checkout) so a shared address that
  * does trip it gets its typeahead back within seconds; nothing here is
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   // 10s window makes the store call proportionally the most expensive of the
   // migrated call sites, which is why the ceiling matters: 500ms hard timeout,
   // breaker after three failures, in-process bucket underneath either way
-  // (lib/rate-limit.ts). Forget the `await` and `limit.ok` is `undefined` —
+  // (lib/rate-limit.ts). Forget the `await` and `limit.ok` is `undefined` -
   // every keystroke 429s and the typeahead goes silent. Nothing in the lint
   // config would say so; this is a read-it-and-check.
   const limit = await rateLimitDurable(

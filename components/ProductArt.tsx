@@ -2,7 +2,7 @@ import type { ArtKey, Tint } from "@/lib/types";
 
 /**
  * Illustrated stand-ins for product photography, ported from the approved
- * design canvas. Swap `ProductImage` for real photos when they exist —
+ * design canvas. Swap `ProductImage` for real photos when they exist -
  * everything else keys off the same `art`/`tint` pair.
  */
 

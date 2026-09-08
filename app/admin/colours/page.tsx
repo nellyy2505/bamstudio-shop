@@ -17,7 +17,7 @@ import { Field, Pill, cx, inputClass } from "@/components/ui";
  *      table has to be re-read to change one hex code.
  *   2. The roll count is a *second*, separate form, because counting stock is
  *      the "inventory" capability and editing the palette is "colours". Two
- *      forms side by side, never one inside the other — a nested <form> is
+ *      forms side by side, never one inside the other - a nested <form> is
  *      invalid HTML, and the browser silently drops the inner one, so the
  *      count would look like it saved and never leave the page.
  */
@@ -44,7 +44,7 @@ export default async function ColoursPage() {
         subtitle={
           <>
             The palette the shop offers, in the order it is shown. A colour can
-            be turned off but never deleted — once a product prints in it, a
+            be turned off but never deleted, once a product prints in it, a
             foreign key holds it in place, which is what stops an old order
             losing the colour it was made in.
           </>
@@ -213,7 +213,7 @@ function ColourFields({ colour }: { colour: ColourRow }) {
 }
 
 /**
- * The roll count — a separate form, and a separate capability.
+ * The roll count - a separate form, and a separate capability.
  *
  * Sits beside the colour form, never inside it.
  */

@@ -29,7 +29,7 @@ function toInt(value: string | undefined): number | undefined {
  * `?attachment=…`, `?min=`, `?max=`, `?sort=`, and any pairing of them. The
  * home page alone links seven of them (CATEGORY_TILES), so they are crawled.
  *
- * `page` is deliberately NOT in this list — see below.
+ * `page` is deliberately NOT in this list - see below.
  */
 const VIEW_PARAMS = [
   "category",
@@ -52,7 +52,7 @@ const VIEW_PARAMS = [
  *    /sitemap.xml by its own URL, so nothing becomes undiscoverable by
  *    folding these into the one listing.
  *  • `?page=N` with no filter → `/shop?page=N`, itself. Page 2 is NOT a
- *    duplicate of page 1 — it holds twelve different products — and Google is
+ *    duplicate of page 1 - it holds twelve different products - and Google is
  *    explicit that paginated pages should not be canonicalised to the first.
  *    Saying otherwise here would be a false statement about the content.
  *  • Anything else, `?utm_source=` included → `/shop`.
@@ -80,7 +80,7 @@ export async function generateMetadata({
   return {
     title: "Shop all",
     description:
-      "Every Bam Studio clicker keychain, charm and desk piece — printed to order in Wollongong.",
+      "Every Bam Studio clicker keychain, charm and desk piece, printed to order in Wollongong.",
     alternates: { canonical },
     openGraph: { ...SITE_OPEN_GRAPH, url: canonical },
   };
@@ -187,7 +187,7 @@ export default async function ShopPage({
               </span>
               <h2 className="mt-5 text-xl">Nothing matches those filters</h2>
               <p className="mt-2 max-w-sm text-sm text-muted">
-                Try widening the price range or clearing a filter — the whole
+                Try widening the price range or clearing a filter. The whole
                 range is only a click away.
               </p>
               <Link

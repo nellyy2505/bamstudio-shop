@@ -28,7 +28,7 @@ export const metadata: Metadata = {
  * that answer is frozen into the HTML at build: an owner who adds the two
  * secrets to the host without triggering a rebuild gets order-confirmation
  * emails going out from the Stripe webhook while this page still says none
- * are sent. A stale bake would turn a privacy disclosure into a false one —
+ * are sent. A stale bake would turn a privacy disclosure into a false one -
  * specifically, it would keep denying that customer names, addresses and
  * order contents reach a US mail processor while they do. Cheap to render.
  */
@@ -37,7 +37,7 @@ export const dynamic = "force-dynamic";
 /**
  * Whether the shop can send at all, read once from the server-side secrets.
  * This is a server component, so `isEmailConfigured()` is safe here and is the
- * same condition the senders themselves check — no public mirror to drift.
+ * same condition the senders themselves check - no public mirror to drift.
  *
  * It matters more on this page than anywhere else: it decides whether a US mail
  * processor is disclosed as a recipient of customer names, addresses, order
@@ -123,8 +123,8 @@ const NO_CHANNEL = (
     We have not published a contact address yet. Until one appears on our{" "}
     <Link href="/contact" className={LINK}>
       contact page
-    </Link>
-    , there is no way to reach us about this.
+    </Link>,
+    there is no way to reach us about this.
   </>
 );
 
@@ -139,7 +139,7 @@ export default function PrivacyPage() {
       {/* The registered business name and postal address are the owner's real
           details and cannot be invented, so this sentence is written to be
           true and complete without them. Both still have to be added before
-          launch — a privacy policy needs a named contact point. */}
+          launch - a privacy policy needs a named contact point. */}
       <p>
         {SHOP.name} is a sole trader business based in {SHOP.city},{" "}
         {SHOP.country}
@@ -161,7 +161,7 @@ export default function PrivacyPage() {
       <h2>What we collect</h2>
       <ul>
         <li>
-          <strong>Order details</strong> — your name, email address, delivery
+          <strong>Order details</strong>: your name, email address, delivery
           address, phone number if you give one, what you bought, and any
           personalisation text (for example the letters on a name charm).
         </li>
@@ -169,7 +169,7 @@ export default function PrivacyPage() {
             naming it here when it is absent points a customer at something they
             cannot find. The mailbox clause is gated for the same reason. */}
         <li>
-          <strong>Messages</strong> — anything you send us
+          <strong>Messages</strong>: anything you send us
           {FORM_DELIVERS ? " through our contact form" : ""}
           {FORM_DELIVERS && hasStudioMailbox ? " or" : ""}
           {hasStudioMailbox ? " by email" : ""}
@@ -184,26 +184,26 @@ export default function PrivacyPage() {
             else. There is no subscriber database behind this site." Both
             sentences stopped being true with 0006_enquiries.sql, which adds
             public.newsletter_signups. What has NOT changed is that nothing
-            sends to it — see the marketing section below. */}
+            sends to it - see the marketing section below. */}
         <li>
-          <strong>Asking to hear about new drops</strong> — if you give us your
+          <strong>Asking to hear about new drops</strong>: if you give us your
           email address to hear about new designs, we save that address, the
           date you asked and which part of the site you asked from. We do not
           keep a name with it. There is no newsletter, so nothing is sent to it.
         </li>
         <li>
-          <strong>Account details</strong> — if you create an account, your email
+          <strong>Account details</strong>: if you create an account, your email
           address and a securely hashed password held by Supabase, the service
           that runs our accounts and database. We never see the password itself.
         </li>
         <li>
-          <strong>Payment information</strong> — handled entirely by our payment
+          <strong>Payment information</strong>: handled entirely by our payment
           processor. Card numbers are never sent to us or stored on our systems.
           We receive only a payment reference, the amount, and the billing name
           and email.
         </li>
         <li>
-          <strong>Technical information</strong> — basic server logs such as IP
+          <strong>Technical information</strong>: basic server logs such as IP
           address, browser type and pages requested, used to keep the site
           running and to spot abuse.
         </li>
@@ -229,24 +229,24 @@ export default function PrivacyPage() {
       </p>
       <ul>
         <li>
-          <strong>Payment processing</strong> — Stripe, which handles the card
+          <strong>Payment processing</strong>: Stripe, which handles the card
           transaction and fraud checks.
         </li>
         <li>
-          <strong>Accounts and order records</strong> — Supabase, which stores
+          <strong>Accounts and order records</strong>: Supabase, which stores
           your order history, profile and sign-in details, the messages sent
           through our contact form and any address given to hear about new
           drops, and sends the account emails described below.
         </li>
         <li>
-          <strong>Website hosting</strong> — Fly.io, which serves these pages
+          <strong>Website hosting</strong>: Fly.io, which serves these pages
           from its Sydney region and keeps the basic server logs above.
         </li>
         <li>
-          <strong>Delivery</strong> — Australia Post, which receives the name and
+          <strong>Delivery</strong>: Australia Post, which receives the name and
           address on the parcel label.
         </li>
-        {/* Disclosed whenever email is ON — on the secrets alone, NOT on
+        {/* Disclosed whenever email is ON - on the secrets alone, NOT on
             `FORM_DELIVERS`. The order confirmation goes through Resend with no
             dependency on the studio mailbox, so gating this on the mailbox too
             produced a real configuration in which customer names, addresses,
@@ -257,7 +257,7 @@ export default function PrivacyPage() {
             form carries their message to us. */}
         {CAN_SEND_EMAIL ? (
           <li>
-            <strong>Email delivery</strong> — Resend, which sends our email for
+            <strong>Email delivery</strong>: Resend, which sends our email for
             us and is based in the United States. It handles your order
             confirmation, so it sees your name, your email address, what you
             ordered and what you paid
@@ -278,9 +278,9 @@ export default function PrivacyPage() {
         Some of these providers store data outside Australia, including in the
         United States and the European Union. Two of our designers are based in
         Vietnam; they work on artwork and product files and do not need access to
-        customer records. By ordering — or by sending us a message or your email
+        customer records. By ordering, or by sending us a message or your email
         address through this site, both of which are now saved with the same
-        providers — you consent to your information being stored and processed
+        providers, you consent to your information being stored and processed
         overseas by the providers listed above.
       </p>
 
@@ -296,7 +296,7 @@ export default function PrivacyPage() {
             paragraph was previously ungated and false in the launch config. */}
       {/* "There is no mailing list" was true until 0006_enquiries.sql and is
           not any more: addresses are kept. What is still true, and is the part
-          that matters to a reader, is that nothing sends to them — there is no
+          that matters to a reader, is that nothing sends to them - there is no
           code anywhere in this project that mails a subscriber. */}
       <p>
         We do not send marketing email. There is no newsletter: we keep the
@@ -309,7 +309,7 @@ export default function PrivacyPage() {
       <p>
         {SENDS_CONFIRMATION
           ? "There are two kinds of email this site sends by itself. The first is about your account: confirming your email address when you sign up, and the link that resets your password when you ask for one. The second is a single order confirmation, sent to the address you gave at checkout once your payment succeeds, listing what you ordered and the total paid. Neither is marketing, and there is nothing to unsubscribe from."
-          : "The only email this site sends by itself is about your account: confirming your email address when you sign up, and the link that resets your password when you ask for one. Those are part of signing in, not marketing. No order confirmation is sent — your order number is shown on screen after you pay instead."}
+          : "The only email this site sends by itself is about your account: confirming your email address when you sign up, and the link that resets your password when you ask for one. Those are part of signing in, not marketing. No order confirmation is sent. Your order number is shown on screen after you pay instead."}
       </p>
       <p>
         There is no unsubscribe link on this site, because there is nothing yet
@@ -347,14 +347,14 @@ export default function PrivacyPage() {
           ? "A message sent through our contact form is kept in our database, and so is an address given to hear about new drops."
           : "Any address we have been given to hear about new drops is kept in our database."}{" "}
         We have not set a period after which either is deleted, and nothing
-        removes them on its own — they stay until we delete them by hand. You
+        removes them on its own. They stay until we delete them by hand. You
         can ask us to delete yours at any time; see below.
       </p>
 
       <h2>Security</h2>
       {/* The access sentence is the schema, in plain words: both tables have
           row-level security on with no policy and are revoked from the anon and
-          authenticated roles, so only the service-role key reaches them — which
+          authenticated roles, so only the service-role key reaches them - which
           is still true now that /admin/enquiries exists, because that screen is
           server-rendered and reads with the service-role key. What changed is
           WHO can then see the words: the screen is gated on the `reports`
@@ -368,7 +368,7 @@ export default function PrivacyPage() {
         {FORM_DELIVERS
           ? "Messages sent through the contact form, and addresses given to hear about new drops, are stored"
           : "Addresses given to hear about new drops are stored"}{" "}
-        where only the studio&apos;s own administrative key can reach them — the
+        where only the studio&apos;s own administrative key can reach them, the
         key this website runs on cannot read them at all. No system is perfectly
         secure, but if a data breach ever occurs that is likely to cause you
         serious harm, we will notify you and the Office of the Australian
@@ -386,11 +386,11 @@ export default function PrivacyPage() {
         <p>
           Being plain about who reads a message and when: messages sent through
           this form are listed on a screen inside our studio that only accounts
-          we have given access to can open — someone helping us pack parcels
+          we have given access to can open, such as someone helping us pack parcels
           cannot see them. An email tells us a message has arrived, and if that
           email does not go out your message is still saved and still on that
           screen, so it is seen the next time we look. Nobody is watching it
-          around the clock — this is a very small shop — so a reply can take a
+          around the clock, because this is a very small shop, so a reply can take a
           few days.
         </p>
       ) : null}
@@ -402,7 +402,7 @@ export default function PrivacyPage() {
           unavailable={NO_CHANNEL}
         />{" "}
         We will respond within a reasonable time, usually 30 days. Deleting an
-        account is done by hand rather than by a button — see the note on the{" "}
+        account is done by hand rather than by a button. See the note on the{" "}
         <Link href="/account/settings" className={LINK}>
           settings page
         </Link>
@@ -413,7 +413,7 @@ export default function PrivacyPage() {
       <h2>Complaints</h2>
       <p>
         If you think we have mishandled your personal information, tell us first
-        — we would rather fix it.{" "}
+        We would rather fix it.{" "}
         <Reach
           detail="with what went wrong"
           unavailable={NO_CHANNEL}

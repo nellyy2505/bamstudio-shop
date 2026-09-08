@@ -28,15 +28,15 @@ const BodySchema = z.object({
 
 // Every bound above is mirrored by a CHECK constraint on
 // public.contact_enquiries (0006_enquiries.sql), and the two must move
-// together. The table is the backstop — it is what makes an unbounded message
-// impossible whichever code path writes it — so raising a limit here without
+// together. The table is the backstop - it is what makes an unbounded message
+// impossible whichever code path writes it - so raising a limit here without
 // raising it there turns a long message into a failed insert rather than a
 // stored row. The topic enum is mirrored the same way.
 
 /**
  * Escapes the enquiry before it goes into the HTML part. The studio inbox is
  * the only reader, but the text is attacker-controlled and mail clients render
- * HTML — no reason to hand one an injection point.
+ * HTML - no reason to hand one an injection point.
  */
 function escapeHtml(value: string): string {
   return value
@@ -51,7 +51,7 @@ function escapeHtml(value: string): string {
  * be stored.
  *
  * THE DEFECT THIS CLOSES. This route used to hand the message to Resend and
- * keep nothing, so the email WAS the delivery — its own comment said as much.
+ * keep nothing, so the email WAS the delivery - its own comment said as much.
  * An unset `RESEND_API_KEY` or `EMAIL_FROM`, an unset
  * `NEXT_PUBLIC_SUPPORT_EMAIL`, a provider 4xx/5xx or an 8-second timeout each
  * destroyed the only copy of what the customer typed, and the route answered
@@ -63,8 +63,8 @@ function escapeHtml(value: string): string {
  * and the email is a notification about a row that already exists.
  *
  * **Written with the service-role client, and the table grants no INSERT to
- * `anon`.** The alternative — an insert-only RLS policy so the browser writes
- * its own row — makes a public PostgREST endpoint out of this table, walking
+ * `anon`.** The alternative - an insert-only RLS policy so the browser writes
+ * its own row - makes a public PostgREST endpoint out of this table, walking
  * straight past the validation and the rate limiting above. This route already
  * runs server-side, so the row is written by the same code that validated it
  * and the key in the browser bundle gets nothing at all. The reasoning is
@@ -91,15 +91,15 @@ async function storeEnquiry(
       .single();
 
     if (error) {
-      // PostgREST's message is text about the statement — a constraint name, a
-      // missing relation — not the customer's words. The row values are
+      // PostgREST's message is text about the statement - a constraint name, a
+      // missing relation - not the customer's words. The row values are
       // deliberately not logged: that was the §0.9 PII-in-the-log-stream
       // defect, and this path handles nothing but PII.
       console.error("[contact] enquiry NOT stored", { reason: error.message });
       // A failed write on the one channel a customer has for "my order is
       // wrong". Nothing throws here on purpose, so nothing else would ever
-      // report it. The row values are NOT attached — this function handles
-      // nothing but PII — only PostgREST's text about the statement, which
+      // report it. The row values are NOT attached - this function handles
+      // nothing but PII - only PostgREST's text about the statement, which
       // `scrub()` cleans on the way out because it quotes rejected values.
       void captureMessage("Contact enquiry could not be stored", {
         scope: "contact",
@@ -129,7 +129,7 @@ async function storeEnquiry(
 }
 
 /**
- * Stamps the enquiry as notified — the same shape and the same reasoning as
+ * Stamps the enquiry as notified - the same shape and the same reasoning as
  * `orders.confirmation_email_sent_at` in 0005. Null means no notification has
  * gone out for this one, which is what separates "she was emailed about this"
  * from "this exists only in the table".
@@ -153,7 +153,7 @@ async function markNotified(id: string): Promise<void> {
 
 export async function POST(request: Request) {
   // Durable when a shared store is configured, identical to before when it
-  // is not — see lib/rate-limit.ts. One `await`, same arguments, same result.
+  // is not - see lib/rate-limit.ts. One `await`, same arguments, same result.
   const limit = await rateLimitDurable(clientKey(request, "contact"), 5, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
@@ -185,7 +185,7 @@ export async function POST(request: Request) {
   // email", and it is checked here per request rather than trusted from the UI.
   // The public `NEXT_PUBLIC_EMAIL_ENABLED` claim flag that used to shadow it is
   // gone: it could be true with the secrets absent, so the form was rendered
-  // and the enquiry was lost. The pages now derive from this same predicate —
+  // and the enquiry was lost. The pages now derive from this same predicate -
   // see lib/contact.ts `formsReachStudio`, which is this condition exactly.
   // Without a support address there is nowhere to send it either.
   //
@@ -204,7 +204,7 @@ export async function POST(request: Request) {
       // two apart by looking at it.
       stored
         ? "A copy is stored in the studio, so this mail can be deleted."
-        : "THIS IS THE ONLY COPY — the studio could not store this enquiry.",
+        : "THIS IS THE ONLY COPY, the studio could not store this enquiry.",
     ].filter((line): line is string => line !== null);
 
     const result = await sendEmail({
@@ -226,12 +226,12 @@ export async function POST(request: Request) {
 
   if (delivered && enquiryId) await markNotified(enquiryId);
 
-  // Deliberately no name, address, order number or message body — that was the
+  // Deliberately no name, address, order number or message body - that was the
   // §0.9 PII-in-the-log-stream defect. `topic` is a fixed enum chosen from a
   // dropdown, not free text, and cannot identify anyone on its own.
   //
   // Severity now follows `stored`, not `delivered`. An enquiry on disk that was
-  // not emailed is a prompt the owner has not received — a warning. An enquiry
+  // not emailed is a prompt the owner has not received - a warning. An enquiry
   // that is neither is the original defect reproducing itself, and it is the
   // only one of the four that is an error.
   if (stored && delivered) {
@@ -244,14 +244,14 @@ export async function POST(request: Request) {
     // The message survives and IS readable: /admin/enquiries now lists these
     // rows for owner and studio (the `reports` capability), and an unnotified
     // one is on the "still to deal with" filter waiting to be found. So this is
-    // no longer the lost enquiry the comment here used to call it — that
+    // no longer the lost enquiry the comment here used to call it - that
     // sentence was written while the screen was still owed in HANDOFF.md, and a
     // reader who believed it would over-rate the severity below.
     //
     // It stays a REPORT rather than a warning anyway, for the reason that
     // survived the screen: nothing pushes. Being findable by somebody who
     // thinks to open a studio page is not the same as being told, and the topic
-    // enum here covers faulty goods and missing parcels — things a customer is
+    // enum here covers faulty goods and missing parcels - things a customer is
     // waiting on. The report is the push the email failed to be.
     //
     // "not_configured" is excluded: on a deploy with no mail provider every
@@ -270,7 +270,7 @@ export async function POST(request: Request) {
       topic: body.topic,
     });
   } else {
-    console.error("[contact] enquiry LOST — neither stored nor delivered", {
+    console.error("[contact] enquiry LOST, neither stored nor delivered", {
       topic: body.topic,
       reason: failure,
     });
@@ -278,7 +278,7 @@ export async function POST(request: Request) {
     // and there is now no copy of it anywhere. `topic` is a fixed dropdown
     // enum and identifies nobody; the name, the address and the message body
     // are deliberately absent, here as in the log line above.
-    void captureMessage("Contact enquiry lost — neither stored nor delivered", {
+    void captureMessage("Contact enquiry lost, neither stored nor delivered", {
       scope: "contact",
       level: "fatal",
       route: "/api/contact",
@@ -288,23 +288,23 @@ export async function POST(request: Request) {
 
   // 200 in all four cases, for the reason it always was: the customer did
   // nothing wrong, and where the failure is an unconfigured provider, retrying
-  // fails identically every time — an error status would only produce a "try
+  // fails identically every time - an error status would only produce a "try
   // again" loop against a form that cannot succeed. The truth rides in the
   // flags instead.
   //
   // WHAT EACH FLAG MAY BE USED TO CLAIM, spelled out because overclaiming here
   // is the failure mode this route keeps producing:
   //
-  //   delivered — a mail provider accepted a notification addressed to the
+  //   delivered - a mail provider accepted a notification addressed to the
   //     studio inbox. That, and nothing past it. Not that it was read.
-  //   stored — the message is a row in public.contact_enquiries and will still
+  //   stored - the message is a row in public.contact_enquiries and will still
   //     be there tomorrow. **It does not mean anybody has seen it**, and until
   //     the studio has a screen listing those rows, nobody can. Copy for
   //     `stored && !delivered` may say the message is safe and that no one has
   //     read it yet; it may not promise a reply.
   //
   // ContactForm.tsx branches on `delivered` alone today, and its undelivered
-  // copy — "we could not get that to the studio, so nobody has read it" —
+  // copy - "we could not get that to the studio, so nobody has read it" -
   // remains true when `stored` is true. That is deliberate: this flag is safe
   // to ship ahead of the copy that will use it, because the copy it ships
   // beside does not become false.

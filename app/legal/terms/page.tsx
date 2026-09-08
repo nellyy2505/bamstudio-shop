@@ -42,7 +42,7 @@ export const dynamic = "force-dynamic";
 /**
  * Whether the shop can send at all, read once from the server-side secrets.
  * This is a server component, so `isEmailConfigured()` is safe here and is the
- * same condition the senders themselves check — no public mirror to drift.
+ * same condition the senders themselves check - no public mirror to drift.
  */
 const CAN_SEND_EMAIL = isEmailConfigured();
 
@@ -123,8 +123,8 @@ const NO_CHANNEL = (
     We have not published a contact address yet. Until one appears on our{" "}
     <Link href="/contact" className={LINK}>
       contact page
-    </Link>
-    , there is no way to reach us about an order.
+    </Link>,
+    there is no way to reach us about an order.
   </>
 );
 
@@ -151,15 +151,15 @@ export default function TermsPage() {
           Checkout stages the order as `pending`; the Stripe webhook confirms it
           and allocates the order number once payment succeeds. The confirmation
           email is sent AFTER that, only when the Resend secrets are set, and it
-          can fail silently — so the contract cannot hang off it, which is why
+          can fail silently - so the contract cannot hang off it, which is why
           the old "when we send you an order confirmation email" was wrong even
-          now that one is sent. FLAGGED FOR THE OWNER'S LEGAL REVIEW — it is the
+          now that one is sent. FLAGGED FOR THE OWNER'S LEGAL REVIEW - it is the
           most load-bearing sentence on the site. */}
       <p>
-        Placing an order is an offer to buy. We accept that offer — and the
-        contract is formed — when your payment succeeds and we record the order
+        Placing an order is an offer to buy. We accept that offer, and the
+        contract is formed, when your payment succeeds and we record the order
         under its own order number, which is the number shown to you at the end
-        of checkout. Until that happens we may decline an order — for example if
+        of checkout. Until that happens we may decline an order, for example if
         an item has sold out, if a price was listed incorrectly, or if we cannot
         deliver to your address. If we decline after you have paid, we refund you
         in full.
@@ -175,10 +175,10 @@ export default function TermsPage() {
             really is sent, and denying it here would be a false statement in a
             legal document. Dispatch and tracking mail is denied unconditionally
             because nothing sends either in any configuration. It is stated as
-            what we do, not as a delivery guarantee — the send is fire-and-forget
+            what we do, not as a delivery guarantee - the send is fire-and-forget
             and can fail, which is why /track never depends on it. */}
         {SENDS_CONFIRMATION
-          ? "When your payment succeeds we email you an order confirmation listing what you ordered and the total paid. We do not send dispatch or tracking emails, and the confirmation is a courtesy rather than a guarantee — your order number and this website are what you rely on."
+          ? "When your payment succeeds we email you an order confirmation listing what you ordered and the total paid. We do not send dispatch or tracking emails, and the confirmation is a courtesy rather than a guarantee. Your order number and this website are what you rely on."
           : "We do not send order confirmation, dispatch or tracking emails."}
       </p>
 
@@ -201,7 +201,7 @@ export default function TermsPage() {
         Everything here is printed after you order it, on a single printer, in
         PLA plastic. Allow {PRINT_LEAD_TIME.label} for printing, checking and
         packing before dispatch. That lead time is in addition to delivery time,
-        and it can stretch during market weekends or a busy gift season — we will
+        and it can stretch during market weekends or a busy gift season, and we will
         tell you if it does.
       </p>
 
@@ -214,7 +214,7 @@ export default function TermsPage() {
         time.
       </p>
       <p>
-        <strong>Safety:</strong> these are not toys for children under three —
+        <strong>Safety:</strong> these are not toys for children under three:
         they contain small parts and can present a choking hazard. PLA is not
         food-safe, dishwasher-safe or heat-resistant. Keep pieces out of hot cars
         and away from boiling water.
@@ -223,7 +223,7 @@ export default function TermsPage() {
       <h2>Personalised items</h2>
       <p>
         For name charms and anything else you personalise, you are responsible
-        for the spelling, characters and colours you submit — we print exactly
+        for the spelling, characters and colours you submit. We print exactly
         what you enter. Check the personalisation in your basket before you pay,
         and afterwards in{" "}
         <Link href="/account/orders" className={LINK}>
@@ -251,7 +251,7 @@ export default function TermsPage() {
       <p>
         {/* This clause named a flat $9.50 / $14.50 until postage moved to live
             Australia Post quoting, at which point it would have been a stated
-            price the shop does not charge — in the contract itself. It now
+            price the shop does not charge - in the contract itself. It now
             states the rule rather than a number, which stays true as carrier
             rates move. The free-postage threshold is the shop's own promotion,
             is unchanged, and is still stated as a figure because it is one. */}
@@ -303,7 +303,7 @@ export default function TermsPage() {
       <h2>Using this website</h2>
       <p>
         Do not attempt to break into, overload, scrape or interfere with the
-        site. If you create an account, keep your password to yourself — you are
+        site. If you create an account, keep your password to yourself. You are
         responsible for what happens under your account. We may suspend an
         account that is being used abusively.
       </p>

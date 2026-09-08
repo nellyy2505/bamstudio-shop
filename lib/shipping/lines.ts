@@ -7,7 +7,7 @@ import type { ShippingLine } from "./weights";
  *
  * This module exists so that the cart's quote route and the checkout route
  * cannot build that array differently. Two code paths computing postage is how
- * the price a customer agreed to and the price Stripe charges come to differ —
+ * the price a customer agreed to and the price Stripe charges come to differ -
  * silently, and only for some baskets. There is one builder, and it is here.
  *
  * Weights come from the `Product` row, never from the request: the browser says
@@ -17,7 +17,7 @@ import type { ShippingLine } from "./weights";
 
 /**
  * The subset of a basket line that postage actually depends on. Deliberately
- * narrower than checkout's `LineSchema` — colour and personalisation text do
+ * narrower than checkout's `LineSchema` - colour and personalisation text do
  * not change what a parcel weighs, and a type that accepted them would invite a
  * caller to think they might.
  */

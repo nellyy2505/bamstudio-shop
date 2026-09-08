@@ -8,7 +8,7 @@ import { Icon, cx, type IconName } from "@/components/ui";
  * The staff-area sidebar.
  *
  * A client component only because it needs `usePathname()` to mark the current
- * page. It takes the list of links it may show as a prop — it never works out
+ * page. It takes the list of links it may show as a prop - it never works out
  * permissions itself. `lib/auth/staff.ts` decides that on the server with the
  * service-role key, and this file could not check even if it wanted to: the
  * `staff` table is unreadable with the key that reaches the browser.

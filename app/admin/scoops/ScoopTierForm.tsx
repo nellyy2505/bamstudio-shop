@@ -13,7 +13,7 @@ import type { PoolCandidate, ScoopTierRow } from "../data";
  * ────────────────────────────────────────────────────────────────────────────
  * A SERVER COMPONENT, unlike ProductForm next door.
  *
- * That one is a client component for one reason — its filament recipe is a list
+ * That one is a client component for one reason - its filament recipe is a list
  * of rows a person adds to and removes from, which is state. Nothing here is.
  * The pool is a fixed set of checkboxes over a catalogue the server already
  * knows, so it stays on the server, and no product name, cost or stock count
@@ -23,7 +23,7 @@ import type { PoolCandidate, ScoopTierRow } from "../data";
  * THE SUGGESTED PRICE SITS BESIDE THE PRICE FIELD AND IS NEVER IN IT.
  *
  * `suggestedTierPrice` answers null unless EVERY product in the pool has been
- * measured, which today is every pool — 0 of 44 products have a cost. That null
+ * measured, which today is every pool - 0 of 44 products have a cost. That null
  * is the point. It would be easy to average the pieces that have been measured
  * and print that number next to a field she is about to type into; two of twelve
  * measured makes it a guess dressed as arithmetic, and a guess in a price field
@@ -43,8 +43,8 @@ export function ScoopTierForm({
   const chosen = new Set((tier?.pool ?? []).map((piece) => piece.productId));
   const pieceCount = tier?.pieceCount ?? 5;
 
-  // Grouped so a forty-four-item list is scannable. The order is the read's —
-  // category, then name — so the groups come out in one pass.
+  // Grouped so a forty-four-item list is scannable. The order is the read's -
+  // category, then name - so the groups come out in one pass.
   const groups: { category: string; items: PoolCandidate[] }[] = [];
   for (const product of products) {
     const category = product.category || "Uncategorised";
@@ -111,7 +111,7 @@ export function ScoopTierForm({
 
       <Panel
         title="What it promises, and what it costs"
-        note="The piece count is the promise. Leave the price empty until you have decided — that says “not priced yet”, which is a fact. It is never $0.00."
+        note="The piece count is the promise. Leave the price empty until you have decided, that says “not priced yet”, which is a fact. It is never $0.00."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
@@ -156,7 +156,7 @@ export function ScoopTierForm({
 
       <Panel
         title="Packed size and weight"
-        note="A scoop has no product row to take a weight from, so the tier carries its own — and it has to be the heaviest pack you would send, not the average. The studio wears the difference on every parcel that comes out heavier."
+        note="A scoop has no product row to take a weight from, so the tier carries its own, and it has to be the heaviest pack you would send, not the average. The studio wears the difference on every parcel that comes out heavier."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
@@ -194,7 +194,7 @@ export function ScoopTierForm({
 
       <Panel
         title="The pool"
-        note="The pieces that may be drawn into this scoop. Tick them one by one — a category filter would let a pet bowl join a clicker scoop the day somebody re-files it."
+        note="The pieces that may be drawn into this scoop. Tick them one by one, a category filter would let a pet bowl join a clicker scoop the day somebody re-files it."
       >
         {/* The sentinel. An unticked checkbox is absent from the payload, so
             without this a POST that simply omitted every pool field would read
@@ -239,7 +239,7 @@ export function ScoopTierForm({
         )}
 
         <Alert>
-          Small things only — clickers, keyrings, magnets. One tier carries one packed weight, so a
+          Small things only, clickers, keyrings, magnets. One tier carries one packed weight, so a
           pool that can produce either a charm or a pet bowl has no honest weight to quote postage
           on.
         </Alert>
@@ -282,7 +282,7 @@ export function ScoopTierForm({
             */}
             <Alert>
               Still on sale, but the bowl can&rsquo;t fill a scoop off the shelf
-              today — {tier.availability.drawable} of{" "}
+              today, {tier.availability.drawable} of{" "}
               {tier.availability.poolSize} pieces have one in. Print what you
               need before the next one is packed.
             </Alert>
@@ -384,7 +384,7 @@ function CostBasisNote({ tier }: { tier: ScoopTierRow | null }) {
  * One product in the picker.
  *
  * WHAT IS ON THIS ROW IS WHAT SHE IS ACTUALLY DECIDING ON: what one costs to
- * make, and how many are on the shelf. Nothing else — no description, no
+ * make, and how many are on the shelf. Nothing else - no description, no
  * gallery, no colours. Forty-four of these render at once, and the measure
  * screen's round-14 defect (1.2 MB of HTML, because every row shipped a whole
  * palette four times over) is what a fat picker becomes.

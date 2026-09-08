@@ -1,6 +1,6 @@
 /**
  * Business rules for the shop. These mirror the Settings sheet of the
- * 3D_Planner workbook — change them here, not inline in components.
+ * 3D_Planner workbook - change them here, not inline in components.
  * All money is in cents (AUD) to avoid float drift.
  */
 
@@ -15,7 +15,7 @@ export const SHOP = {
   /**
    * GST registration is only required above $75,000 turnover, and the shop is
    * below it. While this is false, prices must NOT claim to include GST and
-   * no GST component may be shown — that would misrepresent a tax that is not
+   * no GST component may be shown - that would misrepresent a tax that is not
    * being collected. Flip it (and set the ABN) on the day you register.
    */
   gstRegistered: process.env.NEXT_PUBLIC_GST_REGISTERED === "true",
@@ -38,7 +38,7 @@ export const SHOP = {
    * shop was in fact sending.
    *
    * The capability is now read once, on the server, from `isEmailConfigured()`
-   * (lib/email.ts) and handed to client components as a prop — see lib/contact.ts.
+   * (lib/email.ts) and handed to client components as a prop - see lib/contact.ts.
    * Do not reintroduce a public mirror of a server fact.
    */
   socials: {
@@ -59,15 +59,15 @@ export const PAYMENT_BADGES: string[] = ["VISA", "MASTERCARD", "AMEX"];
  * The shop's delivery options.
  *
  * There is deliberately **no `price` here any more.** Each method used to carry
- * a flat rate — 950 and 1450 — and the terms of sale, the FAQ, the tracking
+ * a flat rate - 950 and 1450 - and the terms of sale, the FAQ, the tracking
  * page and every product page printed it. Postage is now quoted per basket from
  * Australia Post by `lib/shipping/quoteBasket()`, which for a real basket
  * returns anything from about 340 to well over 2000, so every one of those
- * pages was about to state a price the shop does not charge — in the contract,
+ * pages was about to state a price the shop does not charge - in the contract,
  * in one case. The field is gone rather than left unread: a number sitting here
  * called `price` is one a future page will print.
  *
- * What belongs here is what the *shop* decides — its promotion and its service
+ * What belongs here is what the *shop* decides - its promotion and its service
  * names. What the carrier charges belongs to `lib/shipping/`.
  *
  * ## Postage is charged in three bands over the basket subtotal
@@ -81,7 +81,7 @@ export const PAYMENT_BADGES: string[] = ["VISA", "MASTERCARD", "AMEX"];
  * and waiving part of it would mean the studio paying for speed it never
  * promised.
  *
- * The worst order in the model is the one that *just* crosses `freeThreshold` —
+ * The worst order in the model is the one that *just* crosses `freeThreshold` -
  * it carries the full rate against the smallest subtotal that earns free post.
  * Two narrow cliffs exist by construction and are harmless: a basket just under
  * `subsidyThreshold` nets more than one just over, and a basket just under
@@ -98,7 +98,7 @@ export const SHIPPING = {
     {
       id: "standard",
       label: "Standard",
-      /** Carrier transit only — printing happens before this starts. */
+      /** Carrier transit only - printing happens before this starts. */
       transitDays: [3, 7],
     },
     {
@@ -110,7 +110,7 @@ export const SHIPPING = {
 } as const;
 
 /**
- * "3–7 business days" — the carrier's transit range alone, with no claim about
+ * "3–7 business days" - the carrier's transit range alone, with no claim about
  * tracking.
  *
  * Pages that describe postage in general cannot know whether a given basket
@@ -129,14 +129,14 @@ export function transitRangeLabel(methodId: string): string {
  *
  * `tracked` is required and deliberately not defaulted. This function used to
  * hardcode the word "tracked", which was accurate only while every product
- * shipped as a parcel — and `letter_eligible` is a checkbox on a product's row
+ * shipped as a parcel - and `letter_eligible` is a checkbox on a product's row
  * in the Supabase table editor, so a single tick, with no deploy and no code
  * review, would have had the shop telling customers that untracked, uninsured
  * mail is tracked. Making it a required argument means the compiler asks the
  * question at every call site.
  *
  * `quoteBasket()` returns the answer as `tracked` on each quote. Pass that.
- * Never pass a literal — a literal is the hardcode again, just moved.
+ * Never pass a literal - a literal is the hardcode again, just moved.
  */
 export function transitLabel(methodId: string, tracked: boolean): string {
   const method = SHIPPING.methods.find((m) => m.id === methodId);
@@ -152,7 +152,7 @@ export function transitDays(methodId: string): readonly [number, number] {
 
 export type ShippingMethodId = (typeof SHIPPING.methods)[number]["id"];
 
-/** Printing happens before dispatch — surfaced everywhere we quote delivery. */
+/** Printing happens before dispatch - surfaced everywhere we quote delivery. */
 export const PRINT_LEAD_TIME = {
   minDays: 2,
   maxDays: 4,
@@ -163,7 +163,7 @@ export const PRINT_LEAD_TIME = {
 export const GST_DIVISOR = 11;
 
 /**
- * The letter caps, by how many the customer spelled. **Caps only** — no charm.
+ * The letter caps, by how many the customer spelled. **Caps only** - no charm.
  *
  * $3.99 for the first letter, $1.49 for each one after. Identical across every
  * colourway so the stall never has to price on the fly.
@@ -173,7 +173,7 @@ export const GST_DIVISOR = 11;
  * who spent most. This one is close to flat at every length, because the first
  * letter carries the holder and each one after carries only itself.
  *
- * It sits under the workbook's own $3.33/printer-hour bar — clearing that would
+ * It sits under the workbook's own $3.33/printer-hour bar - clearing that would
  * need roughly $4.07 then $1.81. This is the ladder that was chosen, and the
  * gap is recorded here rather than hidden: a five-letter name is a little over
  * two hours of machine time, and machine time, not price, is what limits the
@@ -189,7 +189,7 @@ export const BUILDER_PRICING: Record<number, number> = {
 
 export const BUILDER_MAX_LETTERS = 5;
 
-/** Cheapest a builder charm can be — the honest "from" price to advertise. */
+/** Cheapest a builder charm can be - the honest "from" price to advertise. */
 export const BUILDER_FROM_PRICE = Math.min(...Object.values(BUILDER_PRICING));
 
 /**
@@ -208,15 +208,15 @@ export const PERSONALISATION_TEXT_PATTERN = /^[A-Za-z0-9 '&.\-/]+$/;
 /**
  * What comes off a charm's own retail price when it is bought with letter caps.
  *
- * The charm is **not** included and is off by default — the customer designs
+ * The charm is **not** included and is off by default - the customer designs
  * caps, and adds a charm only if they want one. Adding it charges that
  * product's real price less this, so a charm never carries a second price of
  * its own to drift from the first: reprice the macaron in the Studio and the
  * builder follows in the same breath. The pointer to that product is
  * `collections.charm_slug` (migration 0009).
  *
- * $1.50 is a decision, not a costing. Bundling genuinely saves about $0.44 — no
- * bag of its own, no second fixed card fee — and the rest is bought goodwill
+ * $1.50 is a decision, not a costing. Bundling genuinely saves about $0.44 - no
+ * bag of its own, no second fixed card fee - and the rest is bought goodwill
  * and basket size, which the postage bands then pay back, since a bigger basket
  * walks toward `SHIPPING.subsidyThreshold`. Worth knowing before it moves
  * again: at the macaron's $6.49 the standalone earns roughly the
@@ -230,7 +230,7 @@ export const BUILDER_CHARM_BUNDLE_DISCOUNT = 150;
  *
  * Clamped at zero so a charm cheaper than the discount is free rather than a
  * credit. A negative line would let a basket price itself downward, which is
- * the shape of every "add it twice and get paid" bug — and the cart, which
+ * the shape of every "add it twice and get paid" bug - and the cart, which
  * cannot see the database, would have no way to notice.
  */
 export function builderCharmPrice(charmProductPrice: number): number {
@@ -240,10 +240,10 @@ export function builderCharmPrice(charmProductPrice: number): number {
 /*
  * There is deliberately no `SLOW_LETTERS` here any more.
  *
- * It listed Q, X, Z and F as "letters we don't keep deep stock of — printed to
+ * It listed Q, X, Z and F as "letters we don't keep deep stock of - printed to
  * order, adds a day", and the builder printed that sentence to customers. Both
  * halves were untrue. Nothing in this codebase measures stock per letter, and
- * nothing anywhere adds a day to the lead time for a name that contains one —
+ * nothing anywhere adds a day to the lead time for a name that contains one -
  * `PRINT_LEAD_TIME` is flat. It also implied the other twenty-two letters are
  * *not* printed to order, which is a stock claim by implication: every keycap
  * is printed for the order it belongs to.
@@ -266,7 +266,7 @@ export const BUILDER_ATTACHMENTS = [
  * one and the basket, the postage quote and the Stripe session all have to move
  * together. They were four literals hand-copied into two Zod schemas
  * (`app/api/checkout/route.ts` and `app/api/shipping/quote/route.ts`) and then
- * transcribed a third time into `components/cart/limits.ts` — three copies,
+ * transcribed a third time into `components/cart/limits.ts` - three copies,
  * nothing enforcing that they agreed, and a disagreement would not have failed
  * loudly: the client would happily build a basket the server then refuses with
  * a blanket "Invalid basket.", and the cart's postage call would come back 400
@@ -275,7 +275,7 @@ export const BUILDER_ATTACHMENTS = [
  *
  * Both routes already import this module, and it is safe for them to: it
  * imports nothing at all and reads only NEXT_PUBLIC_ values, so it drags no
- * server-only code — no Supabase client, no Stripe, no secret — into a route
+ * server-only code - no Supabase client, no Stripe, no secret - into a route
  * schema, and it stays importable from the client components below.
  *
  * Why the client enforces them too: a basket that breaches either cap is
@@ -286,14 +286,14 @@ export const BASKET_LIMITS = {
   /** Most of any one line. Units, not lines. */
   maxLineQuantity: 20,
   /**
-   * Most distinct lines in a basket. Counted in lines, not units — twenty of
+   * Most distinct lines in a basket. Counted in lines, not units - twenty of
    * one clicker is one line.
    */
   maxLines: 40,
 } as const;
 
 /**
- * What SHARE of the postage the customer pays — never how much the postage is.
+ * What SHARE of the postage the customer pays - never how much the postage is.
  *
  * This is the shop's own promotion, and it is deliberately separate from what
  * the carrier charges. `quoteBasket()` in `lib/shipping/` answers "what does
@@ -352,7 +352,7 @@ export function isFreeShipping(subtotal: number, methodId: string): boolean {
 }
 
 /**
- * True in the middle band only — the customer pays something, but not all of
+ * True in the middle band only - the customer pays something, but not all of
  * it. Copy that says "we pay half" must be gated on this and not on
  * `!isFreeShipping()`, which is also true of a basket paying the full rate.
  */

@@ -11,8 +11,8 @@ import { getPickList, type PickEntry } from "../../data";
  * ────────────────────────────────────────────────────────────────────────────
  * WHY THIS IS THE SAME JOB AS THE PACKING SLIP, AND WHY IT IS NOT.
  *
- * It is the same medium — the print stylesheet, the page box, the black-on-
- * white rule, "no colour may carry meaning", the `.no-print` chrome — and it
+ * It is the same medium - the print stylesheet, the page box, the black-on-
+ * white rule, "no colour may carry meaning", the `.no-print` chrome - and it
  * reuses every one of them. It is the same reading, near enough: open orders,
  * their lines, their personalisation, rendered by the same
  * `describePersonalisationText`. And it answers the same complaint, which is
@@ -21,15 +21,15 @@ import { getPickList, type PickEntry } from "../../data";
  * What is NOT shared is the shape of the document, and that is deliberate. A
  * packing slip is per-order and its job is to be checked against one parcel. A
  * pick list is per-shelf and its job is to be walked once: plain pieces are
- * therefore POOLED across orders — three of the same clicker in the same colour
- * is one trip to one drawer — while a personalised piece is never pooled,
+ * therefore POOLED across orders - three of the same clicker in the same colour
+ * is one trip to one drawer - while a personalised piece is never pooled,
  * because three "Custom name charm" lines are three different objects that
  * happen to share a product row. `getPickList()` in data.ts holds that rule;
  * this page only draws it.
  *
  * WHAT IS NOT ON IT. No costs, no prices, no addresses, no customer names, no
  * email addresses. A pick list lives on the bench, gets handled all day and
- * ends up in the recycling — it needs order numbers so a piece can be matched
+ * ends up in the recycling - it needs order numbers so a piece can be matched
  * to a parcel, and nothing else about the person who ordered it.
  * ────────────────────────────────────────────────────────────────────────────
  *
@@ -90,7 +90,7 @@ export default async function PickListPage() {
             </div>
             {/* When this sheet was produced, so a stale one found on the bench
                 next week can be recognised as stale. It is the render time and
-                nothing else — no claim about when the orders arrived. */}
+                nothing else - no claim about when the orders arrived. */}
             <p className="text-[13px] text-muted">Printed {formatDate(new Date())}</p>
           </header>
 
@@ -104,7 +104,7 @@ export default async function PickListPage() {
 
           {personalised.length > 0 ? (
             <Section
-              title="MADE TO ORDER — CHECK EVERY LETTER"
+              title="MADE TO ORDER, CHECK EVERY LETTER"
               note="One entry per order. These are never added together: each one is its own piece."
               entries={personalised}
             />

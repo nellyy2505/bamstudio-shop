@@ -40,7 +40,7 @@ export function BuilderClient({
   alternatives?: Product[];
   /**
    * What each colourway's charm costs here, keyed by colourway slug and already
-   * discounted — resolved on the server from `collections.charm_slug` and that
+   * discounted - resolved on the server from `collections.charm_slug` and that
    * product's real price. A colourway missing from this map offers no charm,
    * and the option is hidden rather than shown at a guessed price.
    *
@@ -200,8 +200,8 @@ export function BuilderClient({
             </div>
             {/* This read "Popular letters are always in stock; rare ones may
                 add a day." Both halves were untrue. Nothing anywhere measures
-                per-letter stock — every product row is `stock_on_hand: 0` and
-                there is no letter inventory in the schema at all — and nothing
+                per-letter stock - every product row is `stock_on_hand: 0` and
+                there is no letter inventory in the schema at all - and nothing
                 adds a day to anything: PRINT_LEAD_TIME is one constant, no
                 other surface quotes a longer window for a rare letter, and
                 checkout's Stripe delivery estimate never adjusts it. The
@@ -279,17 +279,17 @@ export function BuilderClient({
             </div>
 
             {/* Removed: "{SLOW_LETTERS} are printed to order (+1 day)". The
-                "+1 day" was not backed by anything — see the note above the
+                "+1 day" was not backed by anything - see the note above the
                 letter tray. It also implied the other letters are NOT printed
                 to order, which is the stock claim again by implication: every
                 letter on this keyboard is printed for the order. Removing that
                 copy left `SLOW_LETTERS` with no reader, and it has since been
-                deleted from lib/config.ts — a note where it stood records why a
+                deleted from lib/config.ts - a note where it stood records why a
                 named list of "slow" letters is not worth keeping. */}
 
             {full ? (
               <p className="mt-3 text-center text-[13px] font-bold text-accent-dark">
-                That&apos;s the {BUILDER_MAX_LETTERS}-letter maximum — remove one
+                That&apos;s the {BUILDER_MAX_LETTERS}-letter maximum. Remove one
                 to swap it out.
               </p>
             ) : null}
@@ -355,7 +355,7 @@ export function BuilderClient({
                       Add the {collection.charm_name} charm
                     </b>
                     <span className="block text-[13px] text-muted">
-                      The matching clicker, threaded on the end —{" "}
+                      The matching clicker, threaded on the end,{" "}
                       {money(BUILDER_CHARM_BUNDLE_DISCOUNT)} less than buying it
                       on its own
                     </span>
@@ -438,10 +438,10 @@ export function BuilderClient({
           <div className="mb-4 flex flex-col gap-2.5 text-sm">
             <div className="flex justify-between">
               <span className="text-muted">
-                {letters.length || "—"} letter{letters.length === 1 ? "" : "s"}
+                {letters.length || "-"} letter{letters.length === 1 ? "" : "s"}
               </span>
               <span>
-                {letters.length ? money(BUILDER_PRICING[letters.length]) : "—"}
+                {letters.length ? money(BUILDER_PRICING[letters.length]) : "-"}
               </span>
             </div>
             {charmAvailable ? (
@@ -462,11 +462,11 @@ export function BuilderClient({
             </div>
             <div className="flex justify-between border-t border-line pt-3 text-[17px]">
               <b>Total</b>
-              <b>{letters.length ? `${money(price)} AUD` : "—"}</b>
+              <b>{letters.length ? `${money(price)} AUD` : "-"}</b>
             </div>
           </div>
 
-          {/* Removed: an info alert reading "Your name uses a rare letter —
+          {/* Removed: an info alert reading "Your name uses a rare letter -
               add a day to the print time." Nothing adds that day. The order
               carries PRINT_LEAD_TIME like every other, the Stripe delivery
               estimate is built from the same constant, and telling a customer
@@ -501,7 +501,7 @@ export function BuilderClient({
 
           <p className="mt-3.5 flex items-center justify-center gap-2 text-center text-[12.5px] text-muted">
             <Icon name="box" size={15} />
-            Personalised — printed in {PRINT_LEAD_TIME.label}
+            Personalised, printed in {PRINT_LEAD_TIME.label}
           </p>
         </div>
       </div>

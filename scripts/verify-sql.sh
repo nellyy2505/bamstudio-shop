@@ -16,7 +16,7 @@
 # installed the day it was written, and the version gate then froze the mistake
 # in place and made it look deliberate.
 #
-# It is the same trap this file already carries two scars from — a stand-in for
+# It is the same trap this file already carries two scars from - a stand-in for
 # the hosted platform that failed to reproduce the platform's shape, and so
 # printed green about a database the schema does not ship to. The `extensions`
 # schema comment further down is one; the `alter default privileges` comment is
@@ -30,21 +30,21 @@
 #     is a command rather than an edit;
 #   * `--both` runs 16 and 17 back to back for exactly that check;
 #   * an unavailable version is a **hard error naming how to install it**, never
-#     a silent fall back to whatever happens to be on the box — falling back is
+#     a silent fall back to whatever happens to be on the box - falling back is
 #     how this started.
 #
 # WHAT WAS FOUND WHEN 17 WAS FIRST RUN (2026-08-27): nothing. All 126 assertions
 # returned `t` on both, with identical labels in identical order; the seven
 # migrations, the seed and verify.sql emitted byte-identical NOTICE/WARNING
 # output on both (none); and the two constructs this file used to name as
-# version-sensitive — the stored generated `search_vector` and
-# `websearch_to_tsquery` + `ts_rank` ordering in `search_products` — produced
+# version-sensitive - the stored generated `search_vector` and
+# `websearch_to_tsquery` + `ts_rank` ordering in `search_products` - produced
 # byte-identical tsvectors, parses and orderings on 16.13 and 17.11. The harness
 # targets 17 anyway. Matching production is not a thing you do only once a
 # difference has already cost you something.
 #
 # The container this was proved in is Ubuntu 24.04, whose own repositories stop
-# at PostgreSQL 16 — 17 comes from PGDG. See the install hint below, and SETUP.md.
+# at PostgreSQL 16 - 17 comes from PGDG. See the install hint below, and SETUP.md.
 #
 # CLAUDE.md describes doing this in Docker. Docker is not available in every
 # environment this repo gets checked out into, so this script drives a locally
@@ -52,7 +52,7 @@
 # apply the migration and the seed, run verify.sql, and every row it prints
 # must be `t`.
 #
-# Supabase's SQL editor is not vanilla Postgres — the migration leans on things
+# Supabase's SQL editor is not vanilla Postgres - the migration leans on things
 # the hosted platform provides (the `anon`/`authenticated`/`service_role` roles,
 # `auth.users`, `auth.uid()`). Those are recreated below as local stand-ins, in
 # a heredoc rather than a separate .sql file so this script stays the single
@@ -76,8 +76,8 @@
 #   ./scripts/verify-sql.sh --rehearse
 #       REHEARSAL. Answers a different and more urgent question: "will the
 #       thing that runs against the live shop work?" It builds a database
-#       shaped like production — only the migrations that have actually been
-#       applied there, and no ledger — and then hands it to `scripts/migrate.sh`,
+#       shaped like production - only the migrations that have actually been
+#       applied there, and no ledger - and then hands it to `scripts/migrate.sh`,
 #       the exact script GitHub runs on every deploy. That script does the
 #       baselining, applies whatever is pending, and runs the assertions
 #       itself.
@@ -87,7 +87,7 @@
 #
 #       Which migrations count as "already applied in production" is the
 #       PROD_APPLIED list below. It is a fact about the live database, not
-#       about this repo, so it is written down here rather than derived —
+#       about this repo, so it is written down here rather than derived -
 #       and it only ever needs touching again if someone applies a migration
 #       by hand outside this system, which is the practice all of this exists
 #       to end.
@@ -128,7 +128,7 @@ while [ $# -gt 0 ]; do
     -h|--help)
       echo "usage: verify-sql.sh [--rehearse] [--pg-version N | --both]"
       echo "  (no flags)      build the schema from nothing and run the assertions,"
-      echo "                  against PostgreSQL $PROD_PG_MAJOR — the major the live"
+      echo "                  against PostgreSQL $PROD_PG_MAJOR - the major the live"
       echo "                  Supabase database runs"
       echo "  --rehearse      rehearse the real deploy-time migration against a"
       echo "                  production-shaped copy, using scripts/migrate.sh"
@@ -181,7 +181,7 @@ PROD_APPLIED=(0001 0002 0003 0004)
 # BOTH $PGWORK AND THE CHECKOUT MUST BE REACHABLE BY THE `postgres` USER.
 # Every server-side command runs as `postgres` (see as_postgres below), and the
 # migrations are read by the *server process*, not by the caller. A checkout
-# under a 0700 home directory — /root on a stock container is exactly that —
+# under a 0700 home directory - /root on a stock container is exactly that -
 # fails with a bare "Permission denied" on the first `psql -f`, which reads
 # like a missing file and is not. Either check the repo out somewhere
 # traversable, or `chmod o+x` the directories above it and set
@@ -207,7 +207,7 @@ ERROR: PostgreSQL $PG_MAJOR is not installed here, and this script will not
        quietly test against a different one.
 
   Ubuntu/Debian:
-    # Ubuntu's own repositories stop at 16 — 17 comes from PostgreSQL's:
+    # Ubuntu's own repositories stop at 16 - 17 comes from PostgreSQL's:
     sudo apt-get install -y curl ca-certificates
     sudo install -d /usr/share/postgresql-common/pgdg
     sudo curl -fsS -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \\
@@ -226,7 +226,7 @@ MSG
 fi
 
 # Every path below carries the major version. Two majors cannot share a data
-# directory — a 17 server refuses to start on a 16 one and says so obscurely —
+# directory - a 17 server refuses to start on a 16 one and says so obscurely -
 # and they must not share a port either, or `--both` would find the first pass's
 # server still listening and test 16 twice while printing 17.
 PGWORK="${PGWORK:-/root/pgwork-pg$PG_MAJOR}"
@@ -240,7 +240,7 @@ SQL_DIR="$REPO_ROOT/supabase"
 
 # The server refuses to run as root, so every server-side command is handed to
 # the `postgres` system user. When the script is already running as postgres,
-# `su` would prompt for a password — call through directly in that case.
+# `su` would prompt for a password - call through directly in that case.
 as_postgres() {
   if [ "$(id -u)" -eq 0 ]; then
     su postgres -c "$1"
@@ -264,7 +264,7 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
   echo "==> initdb $PGDATA"
   mkdir -p "$PGDATA" "$PGSOCK"
   chown -R postgres:postgres "$PGWORK"
-  # trust auth over a unix socket only — the socket lives in $PGWORK, not
+  # trust auth over a unix socket only - the socket lives in $PGWORK, not
   # /var/run, so this cluster is not reachable by anything else on the box.
   as_postgres "$PGBIN/initdb -D '$PGDATA' -U postgres --auth=trust -E UTF8 --locale=C" >/dev/null
 fi
@@ -292,7 +292,7 @@ if [ "$SERVER_MAJOR" != "$PG_MAJOR" ]; then
   # is the defect at the top of this file.
   echo "ERROR: asked for PostgreSQL $PG_MAJOR, but the server in $PGBIN is $SERVER_VERSION." >&2
   echo "       Refusing to report a result about a version you did not ask for." >&2
-  echo "       (A stale cluster in $PGDATA from an older run is the usual cause —" >&2
+  echo "       (A stale cluster in $PGDATA from an older run is the usual cause -" >&2
   echo "        delete that directory and run this again.)" >&2
   exit 2
 fi
@@ -309,7 +309,7 @@ fi
 
 # ---------------------------------------------------------------- database
 # Dropped and recreated every run. verify.sql wraps itself in begin/rollback so
-# it leaves no trace, but the migration and seed do not — a baseline has to
+# it leaves no trace, but the migration and seed do not - a baseline has to
 # start from nothing or a stale object could mask a missing one.
 echo "==> recreating database $DBNAME"
 psql_run "-d postgres -Atc 'drop database if exists $DBNAME'" >/dev/null
@@ -350,7 +350,7 @@ grant usage on schema public to anon, authenticated, service_role;
 --
 -- Vanilla PostgreSQL has no such default. So a harness without this line
 -- reports "anon cannot read staff" as PASS whether or not the revoke is there
--- — it is measuring the absence of a grant that Supabase would have made. Every
+-- - it is measuring the absence of a grant that Supabase would have made. Every
 -- privacy assertion in verify.sql is worthless without it, and worse than
 -- worthless, because it reads as evidence.
 --
@@ -363,7 +363,7 @@ alter default privileges in schema public
 alter default privileges in schema public
   grant all on functions to anon, authenticated, service_role;
 
--- Hosted Supabase does NOT put extensions in `public` — it puts them in a
+-- Hosted Supabase does NOT put extensions in `public` - it puts them in a
 -- schema called `extensions`. Reproducing that here is the whole point: this
 -- shim used to install pgcrypto into `public`, where it sat on the default
 -- search_path and every SECURITY DEFINER function could see it. The harness
@@ -374,8 +374,8 @@ alter default privileges in schema public
 create schema if not exists extensions;
 grant usage on schema extensions to anon, authenticated, service_role;
 
--- gen_random_uuid() is core in 13+ (16 and 17 both), but gen_random_bytes() — used by
--- next_order_number() for the anti-enumeration suffix — is not.
+-- gen_random_uuid() is core in 13+ (16 and 17 both), but gen_random_bytes() - used by
+-- next_order_number() for the anti-enumeration suffix - is not.
 create extension if not exists pgcrypto with schema extensions;
 
 -- auth.users stand-in. The migration references exactly two columns: `id`
@@ -415,15 +415,15 @@ printf '%s\n' "$PREREQ_SQL" | psql_run "-d $DBNAME -q -f -" >/dev/null
 # asserted against it, so the run stopped at `products.weight_grams` and the
 # 29 shipping assertions were never executed. A hand-maintained list makes
 # adding a migration a two-file change, and the file nobody remembers is this
-# one — the failure is silent because a migration that is never applied cannot
+# one - the failure is silent because a migration that is never applied cannot
 # fail, it just takes its assertions with it.
 #
-# NB: CLAUDE.md and WORKLOG.md both say to pipe `schema.sql` — no such file
+# NB: CLAUDE.md and WORKLOG.md both say to pipe `schema.sql` - no such file
 # exists. The migrations ARE the schema; that is what gets applied here.
 #
 # Numeric prefixes and `LC_ALL=C` together make the order the same everywhere:
 # a glob sorts by the collation in force, and en_US.UTF-8 does not sort ASCII
-# the way C does. Order is not cosmetic here — 0002 and 0003 both ALTER tables
+# the way C does. Order is not cosmetic here - 0002 and 0003 both ALTER tables
 # 0001 creates.
 # nullglob so an empty directory yields an empty array rather than the literal
 # pattern. The glob is collected into an array first and only then piped to
@@ -453,7 +453,7 @@ fi
 if [ "$REHEARSE" = 1 ]; then
   # ---------------------------------------------------------- rehearsal
   # Apply ONLY what production has already had applied to it, exactly the way
-  # production got it — by hand, with no record kept. Everything after this
+  # production got it - by hand, with no record kept. Everything after this
   # point is scripts/migrate.sh doing what it will do to the real shop.
   for v in "${PROD_APPLIED[@]}"; do
     found=""
@@ -462,7 +462,7 @@ if [ "$REHEARSE" = 1 ]; then
     done
     if [ -z "$found" ]; then
       echo "ERROR: PROD_APPLIED lists $v but supabase/migrations/ has no ${v}_*.sql" >&2
-      echo "       Either the file was renamed — which it must not be, production has run it —" >&2
+      echo "       Either the file was renamed - which it must not be, production has run it -" >&2
       echo "       or PROD_APPLIED at the top of this script is out of date." >&2
       exit 2
     fi
@@ -477,7 +477,7 @@ if [ "$REHEARSE" = 1 ]; then
   echo "=========================================================================="
   echo " The throwaway database now looks like the live shop: ${PROD_APPLIED[*]}"
   echo " applied, and no record anywhere that they were. Handing it to"
-  echo " scripts/migrate.sh — the same script GitHub runs on every deploy."
+  echo " scripts/migrate.sh - the same script GitHub runs on every deploy."
   echo "=========================================================================="
   echo
 
@@ -491,7 +491,7 @@ if [ "$REHEARSE" = 1 ]; then
   # automatic, and it is safe precisely because the database is disposable.
   #
   # The baseline is passed on purpose. Watching migrate.sh apply only 0005 and
-  # 0006 — and leave 0001-0004 alone — is the whole point of the rehearsal.
+  # 0006 - and leave 0001-0004 alone - is the whole point of the rehearsal.
   echo "==> scripts/migrate.sh --baseline ${PROD_APPLIED[*]}"
   MIGRATE_ACK_BACKUP=yes \
   SUPABASE_DB_URL="$REHEARSAL_DB_URL" \

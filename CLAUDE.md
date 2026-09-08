@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 The import above is not optional. This is Next.js 16: `middleware` is renamed
 `proxy` (see `proxy.ts`), and `params`/`searchParams` are Promises that must be
 awaited. Read the matching guide under `node_modules/next/dist/docs/` before
-writing code — `01-app/02-guides/upgrading/version-16.md` covers both changes.
+writing code - `01-app/02-guides/upgrading/version-16.md` covers both changes.
 
 ## What this is
 
@@ -17,7 +17,7 @@ The storefront for Bam Studio, a **pre-revenue Australian sole trader** selling
 Stripe Checkout · **Fly.io** (Docker, one always-on 512 MB machine in `syd`).
 All money is **integer cents (AUD)**.
 
-The hosting moved off Vercel to Fly.io — Vercel's Hobby plan forbids commercial
+The hosting moved off Vercel to Fly.io - Vercel's Hobby plan forbids commercial
 use and Pro is US$20/dev/month, while Fly is ~A$6/month, has a Sydney region and
 keeps a long-lived Node process this app depends on. **Anything you were about
 to assume from a Vercel-shaped mental model is probably wrong here**; the
@@ -33,16 +33,16 @@ There is a **staff area at `/admin`** (round 11), the shop is **deployed** at
 project. See *The staff area* below before touching anything under `app/admin/`.
 
 `WORKLOG.md` is the source of truth for project state: what was built, sixteen
-rounds of findings, what is deliberately still open, and — in **§0** — the ten
+rounds of findings, what is deliberately still open, and - in **§0** - the ten
 launch blockers with their current status plus **the open list as it stands
 today**. Round 14 cut `/admin/inventory/measure`'s markup and gave the admin
-pages their own titles; round 15 was a security and truthfulness sweep — the
+pages their own titles; round 15 was a security and truthfulness sweep - the
 response headers in `next.config.ts`, a throttle on `/order/confirmed`, six
 untrue customer-facing statements removed, and `0005_sale_integrity.sql` for the
 money-integrity defects; round 16 made a customer's contact message a **row**
 before it is an email (`0006_enquiries.sql`); and **round 17 built Lucky Scoop**
-(`0007_lucky_scoop.sql`) — the one product this shop sells before it knows what
-is in it, which inverts the stock and costing rules everywhere it appears — and
+(`0007_lucky_scoop.sql`) - the one product this shop sells before it knows what
+is in it, which inverts the stock and costing rules everywhere it appears - and
 rebuilt the webhook harness these docs had listed as lost since round 7.
 All ten blockers have been addressed;
 two are closed **for the claims they made only**, and §0 also separates what was
@@ -53,13 +53,13 @@ here. `SETUP.md` is the owner's deployment runbook.
 
 ```bash
 npm run dev        # dev server (Turbopack by default in 16)
-npm run build      # production build — run before every deploy
+npm run build      # production build - run before every deploy
 npm run lint       # eslint (flat config; `next lint` was removed in 16)
 npx tsc --noEmit   # typecheck
 node scripts/generate-seed.mjs [workbook.xlsx]   # regenerate the catalogue
 node scripts/check-costing.mjs                   # lib/costing.ts vs the workbook's
                                                  # own cached values
-node scripts/check-scoop.mjs                     # lib/scoop.ts — the Lucky Scoop
+node scripts/check-scoop.mjs                     # lib/scoop.ts - the Lucky Scoop
                                                  # rules. 34 assertions
 node scripts/check-webhook.mjs                   # the Stripe webhook and the scoop
                                                  # half of checkout, against the REAL
@@ -73,8 +73,8 @@ node scripts/check-webhook.mjs                   # the Stripe webhook and the sc
 
 **`npm run build` is on the check list, not a formality.** `npx tsc --noEmit`
 and `npx eslint .` both passed on a round-11 tree that could not compile: one
-`export const` in a `"use server"` file — every export there must be an async
-function — made Turbopack report the module as having no exports and took eleven
+`export const` in a `"use server"` file - every export there must be an async
+function - made Turbopack report the module as having no exports and took eleven
 pages down. Only `next build` sees the server-action boundary, and only it
 proves a route group resolves to the URL you expect, which is what `/admin/join`
 depends on. `tsc` also accepts a server action defined inside a `"use client"`
@@ -86,12 +86,12 @@ and `supabase/seed.sql` had their shipping columns **patched in place** in round
 9, and a real regenerate from the workbook is owed the next time someone has it.
 Note also that the script **text-parses `BUILDER_PRICING` out of `lib/config.ts`
 with a brace-naive regex**, and now carries a hand-transcribed copy of
-`CATEGORY_DEFAULTS` from `lib/shipping/dimensions.ts` — a `.mjs` script cannot
+`CATEGORY_DEFAULTS` from `lib/shipping/dimensions.ts` - a `.mjs` script cannot
 import a `.ts` module. Nothing enforces that the two agree. Change one, change
 the other.
 
 There is **no test framework**. Verification is done by replaying real payloads
-against a running dev server and by running SQL assertions — see below.
+against a running dev server and by running SQL assertions - see below.
 
 ## Verifying a change (this is the part that matters)
 
@@ -101,10 +101,10 @@ three times in this project a *fix* introduced a regression that only a
 replayed payload caught. Hand-written API tests passed while checkout was
 completely broken for the highest-margin products.
 
-**And open the page.** Round 12's worst defect — a product page printing
+**And open the page.** Round 12's worst defect - a product page printing
 *Suggested $0.50 · Profit $8.73 · Actual margin 97%* on a piece with no print
 time and no filament, directly under a panel correctly saying there was no cost
-— was invisible to the typecheck, the lint, the build and all 50 SQL
+- was invisible to the typecheck, the lint, the build and all 50 SQL
 assertions.
 
 Both checks are scripts. Run them; don't reconstruct them.
@@ -120,7 +120,7 @@ node scripts/replay-checkout.mjs      # in a second terminal
 ```
 
 `scripts/replay-checkout.mjs` posts the exact JSON `CartView.checkout()` sends
-— key order and omitted-vs-null included — for seven cases: all four
+- key order and omitted-vs-null included - for seven cases: all four
 personalised products (`custom-name-charm` and `alphabet-bag-charm-on-cord` in
 builder mode, `custom-number-date-chain` and `personalised-bowl-with-pet-s-name`
 in text mode), an ordinary product, a five-line mixed basket, and a negative
@@ -132,7 +132,7 @@ control.
 **Case 7 is the negative control and it is the only reason a green run means
 anything**: free-text personalisation on an ordinary product, which checkout
 must refuse with **400**. If it returns 502 the harness is not observing
-validation and every PASS above it is worthless — the script prints exactly
+validation and every PASS above it is worthless - the script prints exactly
 that. A run where the negative control passed is not a run.
 
 The route allows 10 requests per 60s per IP and the script sends 7, so it
@@ -141,7 +141,7 @@ reporting throttling as failures. `BASE_URL` points it elsewhere. Back-to-back
 runs will trip the limit.
 
 **One bad line rejects the whole basket**, which is how two previous blockers
-escaped notice — so never drop the mixed basket.
+escaped notice - so never drop the mixed basket.
 
 ### SQL
 
@@ -157,13 +157,13 @@ those grants customers pay and no order is ever recorded), and that
 > **The script keeps no list of migrations.** It globs every `.sql` in
 > `supabase/migrations/`, sorts under `LC_ALL=C` and applies the lot before the
 > seed, printing `applied N migration(s)`. The hand-written list it replaced fell
-> behind twice — `0002_shipping.sql` sat unapplied for two rounds while
+> behind twice - `0002_shipping.sql` sat unapplied for two rounds while
 > `verify.sql` asserted against it, and the run stopped rather than failing, so
 > 29 assertions silently stopped existing. Observed: **29/29** (round 10),
 > **50/50** (round 11, each assertion proved to fail when broken), 50 rows all
 > `t` against the live project, and **126/126** in round 17 against a real local
 > PostgreSQL 16 from an empty database. **These docs used to say the count had
-> never been observed above 50. That is no longer true — do not reinstate it**,
+> never been observed above 50. That is no longer true - do not reinstate it**,
 > and do not distrust 126 on the strength of a sentence that has since been
 > corrected. 52/52, 65/65 and 86/86 were each superseded before anyone ran
 > them; 126 is the first count after 50 that has actually printed.
@@ -175,8 +175,8 @@ those grants customers pay and no order is ever recorded), and that
 > once, in the Supabase SQL editor.
 >
 > ⚠️ **The stand-in must keep granting Supabase's default privileges.** Hosted
-> Supabase grants every new `public` table to `anon` as it is created — which is
-> *why* `0002` and `0003` revoke explicitly — and vanilla PostgreSQL does not.
+> Supabase grants every new `public` table to `anon` as it is created - which is
+> *why* `0002` and `0003` revoke explicitly - and vanilla PostgreSQL does not.
 > Without that `alter default privileges` block, every "anon cannot read X"
 > assertion passes whether or not the revoke exists: it measures the absence of
 > a grant, not the presence of a revoke. Round 11 deleted each revoke one at a
@@ -191,7 +191,7 @@ those grants customers pay and no order is ever recorded), and that
 > `WORKLOG.md` §5 round 10.
 >
 > ⚠️ **`verify.sql` returns ONE table, and it is now 126 rows.** It was eight
-> separate statements, and the Supabase SQL editor shows only the last — so the
+> separate statements, and the Supabase SQL editor shows only the last - so the
 > owner saw two rows, both `true`, and could not check her own database with the
 > tool the runbook names. Count rows as well as ticks: the file has grown 24 →
 > 29 (shipping) → 50 (the staff area) → 52 (the `letter_eligible` default) →
@@ -222,13 +222,13 @@ empty, applies the Supabase stand-ins the migration needs (`anon` /
 the migration, the seed and `verify.sql`, and prints the assertion table. It
 refuses to run against anything that is not Postgres 16.
 
-> **The schema is the seven files in `supabase/migrations/`** — `0001_init.sql`,
+> **The schema is the seven files in `supabase/migrations/`** - `0001_init.sql`,
 > `0002_shipping.sql`, `0003_admin.sql`, `0004_letter_eligible_default.sql`,
 > `0005_sale_integrity.sql`, `0006_enquiries.sql`, `0007_lucky_scoop.sql`, in
 > that order, plus `supabase/storage.sql` by hand.
 > **`0007` is written and is NOT applied to the production database.** Migrations
-> now run themselves on deploy — `scripts/migrate.sh`, called by the `migrate`
-> job that `deploy` has a `needs:` on — so it lands when the owner next pushes,
+> now run themselves on deploy - `scripts/migrate.sh`, called by the `migrate`
+> job that `deploy` has a `needs:` on - so it lands when the owner next pushes,
 > and the deploy stops if `verify.sql` goes red afterwards.
 > That list is what is in the directory as this was written; the harness globs
 > rather than reading it, so trust `ls supabase/migrations/` over this sentence.
@@ -237,7 +237,7 @@ refuses to run against anything that is not Postgres 16.
 > `schema.sql`; it does not exist and never did, and that cost someone real
 > time.
 
-Docker is the alternative where a local Postgres is unwanted — it is the older
+Docker is the alternative where a local Postgres is unwanted - it is the older
 recipe, kept because the script assumes an `apt`-installed server and Docker
 was *unavailable* in the environment this was last verified in:
 
@@ -250,7 +250,7 @@ docker run -d --rm --name pg -e POSTGRES_PASSWORD=test postgres:16-alpine
 # docker exec -i pg psql -U postgres
 ```
 
-### The webhook — and the harness that IS now in this repo
+### The webhook - and the harness that IS now in this repo
 
 ```bash
 node scripts/check-webhook.mjs      # 91 assertions across 12 scenarios
@@ -258,11 +258,11 @@ node scripts/check-webhook.mjs      # 91 assertions across 12 scenarios
 
 The Stripe webhook is the highest-consequence file in the project and neither
 `verify-sql.sh` nor the checkout replay touches it. **`scripts/check-webhook.mjs`
-does, and it is in the repo** — with its four fakes in
+does, and it is in the repo** - with its four fakes in
 `scripts/webhook-harness/`. It loads the **real** route modules through `jiti`,
 so the TypeScript and the `@/` aliases resolve exactly as Next resolves them,
 and only four edges are faked: Supabase, Stripe, the mail provider and the
-costing tables. Nothing in the routes is copied or re-implemented — a test that
+costing tables. Nothing in the routes is copied or re-implemented - a test that
 asserts against a copy of the code is a test that passes after the original is
 broken. Last run **91/91 across 12 scenarios**, with five deliberate mutations
 of the routes each proved to fail it.
@@ -284,7 +284,7 @@ It is smaller than 43 scenarios and does not pretend otherwise. The old
 harness's coverage list is kept below, because it is the target for the parts
 still missing rather than a description of what runs today:
 
-- the `23505` duplicate-insert paths — existing row genuinely finished, still
+- the `23505` duplicate-insert paths - existing row genuinely finished, still
   pending/unnumbered/itemless, and the re-read itself erroring;
 - transient errors at every swallowed-error site: the staged-row SELECT, the
   order-items probe, the products lookup, the confirming compare-and-set, the
@@ -293,24 +293,24 @@ still missing rather than a description of what runs today:
 - duplicate delivery of the same event, and a genuine concurrent winner
   mid-flight (first retry 500, next 200);
 - two rows sharing a `stripe_session_id` (PGRST116 → 500);
-- **zero line items from Stripe** — must not close the event;
-- **unexpanded** line items (`price.product` is an id string) — nothing may be
+- **zero line items from Stripe** - must not close the event;
+- **unexpanded** line items (`price.product` is an id string) - nothing may be
   invented, the line still has to be written;
-- **a segment matching both a colour name and an attachment label** — placed as
+- **a segment matching both a colour name and an attachment label** - placed as
   neither;
 - slug-versus-name matching, including a legacy line with no `metadata.slug`;
 - the sentinel-email path: order still numbered and stocked, mail task queued,
   **no send attempted**;
-- **a cancelled order** — not numbered, no stock claim, no decrement, no mail,
+- **a cancelled order** - not numbered, no stock claim, no decrement, no mail,
   no writes at all, and still 200; likewise cancelled-and-itemless;
-- a `confirmed`-but-unfinished and a `confirmed`-but-itemless order — both
+- a `confirmed`-but-unfinished and a `confirmed`-but-itemless order - both
   still repaired, which is what proves the terminal check is scoped to
   `cancelled` and not to "anything past pending".
 
 ### The one guard you must not tighten
 
 `app/api/checkout/route.ts` refuses checkout when Stripe is live and Supabase
-is missing — scoped to `NODE_ENV === "production"` on purpose. **Leave the
+is missing - scoped to `NODE_ENV === "production"` on purpose. **Leave the
 scoping alone.** The checkout replay above runs the app with *no database at
 all*; an unconditional guard turns all seven cases into a 503 that never
 reaches the validation being tested, and the run goes quiet rather than red.
@@ -319,7 +319,7 @@ Round 4's rule is the constraint: **a guard may reject a query error, never the
 absence of a database.** `WORKLOG.md` §4 has the full reasoning, and so does a
 comment at the guard itself.
 
-## Hard business rules — not preferences
+## Hard business rules - not preferences
 
 Breaking one of these is a real-world problem, not a bug. `WORKLOG.md` §2 has
 the full table.
@@ -335,31 +335,31 @@ the full table.
   Delivery quotes are print lead time *plus* carrier transit.
 - **Personalised items are non-returnable** except when faulty.
 - **Prices are always recomputed server-side.** The client says which product
-  and how many, never what it costs — and never how heavy it is.
+  and how many, never what it costs - and never how heavy it is.
 - **No sample data, ever, and no plausible-looking zero.** A shop that has taken
   no orders reports that it has taken no orders; a piece nobody has measured says
   "not measured" rather than printing a price derived from a floor. This was an
   explicit instruction from the owner, and three round-12 defects were breaches
   of it. **A plausible zero is a false statement someone eventually decides on**
-  — round 15 removed six of them, including a search suggestion that printed
+  - round 15 removed six of them, including a search suggestion that printed
   "0 reviews" under every product and a "Highest rated" sort over a column where
   every row is `0`, which is really an arbitrary order dressed as a ranking.
 - **Overselling is allowed, and must stay visible.** The shop prints to order.
   Stock only moves in the webhook, *after* payment, so a stock check at checkout
-  guards a window it does not own — two shoppers can both pass it, and the loser
+  guards a window it does not own - two shoppers can both pass it, and the loser
   would be refused after being charged. `decrement_stock` therefore sells anyway
   and returns the shortfall, which accumulates on `products.oversold_units` and
   surfaces on `/admin` as a print-this-first signal. It is not an error state.
 - **…except for a Lucky Scoop, and both rules are true at once.** Overselling is
   right for everything else because a shortfall can be reprinted; the buffer is
   pieces already printed, not the only ones that exist. **A scoop breaks that
-  premise** — its promise is "these exist now, and five of them are going in a
+  premise** - its promise is "these exist now, and five of them are going in a
   bag", and you cannot print a surprise on Tuesday to satisfy Monday's order
   without deciding for the customer what they got. So a tier **stops being
   offered** when its pool cannot fill it. That is a *listing* decision asked at
   read time in `lib/scoop.ts`, not a refused decrement: nothing in the scoop
   path rejects a sale after payment, and `decrement_stock` is untouched. The
-  race is smaller, not gone — two shoppers can still both see the last fillable
+  race is smaller, not gone - two shoppers can still both see the last fillable
   scoop, and the pack panel is where a human finds out.
 - **A scoop is sold before its contents are decided.** No stock comes off at the
   sale and `order_items.unit_cost_cents` stays **null** until the studio records
@@ -367,7 +367,7 @@ the full table.
   (`scoop_pack_items.unit_cost_cents`, stamped per piece). This is the opposite
   of every other product in the shop, and the absent decrement in the webhook is
   the design. `packCost()` answers **null, not a partial sum**, when any piece is
-  unmeasured — a flattering partial total is the plausible zero above wearing a
+  unmeasured - a flattering partial total is the plausible zero above wearing a
   different hat.
 - **Nothing draws the pieces. A person does, out of a bowl, on camera.**
   `lib/scoop.ts` contains no randomiser, the schema has no notion of a draw, and
@@ -380,7 +380,7 @@ the full table.
   elsewhere: the day a pet bowl is filed under a clicker scoop's category it
   silently joins the pool, nothing raises, and the first anyone knows is a $2
   scoop that cost $9 to make and does not fit the postage band. Rows also make
-  the promise describable — the tier page lists the pool, and under the ACL a
+  the promise describable - the tier page lists the pool, and under the ACL a
   visible pool is what makes "five pieces drawn from these twelve" true.
 - **Three scoop decisions are the owner's and are deliberately unrecorded in the
   copy**: whether a scoop may contain duplicates, how the video is promised, and
@@ -388,12 +388,12 @@ the full table.
   either direction on all three, on purpose. `app/legal/refunds/page.tsx` carries
   two drafted paragraphs in a comment for her to choose between, and
   `scoop_packs.video_url` is nullable so that a `not null` does not decide the
-  video question for her. **Do not "complete" any of the three by guessing** —
+  video question for her. **Do not "complete" any of the three by guessing** -
   silence favours the customer, which is the safe direction to be wrong in.
 - **Never promise a tracking number in general copy.** Whether a basket goes as
   a tracked parcel or an untracked Large Letter is not known until
   `quoteBasket()` answers, so the FAQ, `/track` and any page describing postage
-  in the abstract must use `transitRangeLabel()` — the carrier's transit range
+  in the abstract must use `transitRangeLabel()` - the carrier's transit range
   with no tracking claim. `transitLabel(methodId, tracked)` takes `tracked` as a
   **required** argument for this reason; pass the quote's own boolean, never a
   literal.
@@ -416,7 +416,7 @@ capability behind it cannot disagree.
 
 - **There is no `SHOP.canSendEmail` and no `NEXT_PUBLIC_EMAIL_ENABLED`.** Both
   are gone; nothing reads the variable. A comment in `lib/config.ts` marks the
-  spot and says why. **Do not reintroduce a public mirror of a server fact** —
+  spot and says why. **Do not reintroduce a public mirror of a server fact** -
   the mirror is what let the terms, the privacy policy and the account settings
   page each state that the shop sends no order emails while the webhook was
   sending itemised ones, and what let Resend go undisclosed as a data processor
@@ -425,17 +425,17 @@ capability behind it cannot disagree.
   is `NEXT_PUBLIC_`, so both read `undefined` in a client bundle: the secret
   cannot leak, but a silent `false` there would render different words than the
   server did and trip a hydration mismatch. The guard is a hand-rolled
-  stand-in for `import "server-only"` — that package is **not** a dependency
+  stand-in for `import "server-only"` - that package is **not** a dependency
   here and cannot be added from a docs pass.
 - So: a **server component** calls it; a **client component** takes a
   `canSendEmail` boolean **prop** from its server parent.
-  `app/account/settings/page.tsx` is the one threading site — down to
+  `app/account/settings/page.tsx` is the one threading site - down to
   `ProfileCard`, `EmailPreferences` and `DeleteAccountCard`. If you add a
   client component that needs the answer, thread it; do not import the module.
 - API routes check it per request and report what the send really did:
   `/api/contact` and `/api/newsletter` return `{ ok, delivered }` and the forms
   render different copy for `delivered: false`, because nothing persists an
-  enquiry — the email *is* the delivery.
+  enquiry - the email *is* the delivery.
 
 **Everything built on top of it lives in `lib/contact.ts`. Import, never
 re-derive.** `hasStudioMailbox`, `hasSocialAccount`, `canReachStudio`,
@@ -447,12 +447,12 @@ as an argument rather than reading it.
 The distinction that caused the privacy defect, and the one to hold on to:
 
 - **`sendsOrderConfirmation` is `canSendEmail` ALONE.** The webhook's itemised
-  confirmation has no dependency on the studio mailbox — that only decides
+  confirmation has no dependency on the studio mailbox - that only decides
   whether the mail also carries a reply-to.
 - **`formsReachStudio` is `canSendEmail && hasStudioMailbox`.** The contact form
   and the newsletter box deliver *by emailing* the mailbox, so both are needed.
 
-Anding them — one test for both jobs — is the specific mistake. It produces
+Anding them - one test for both jobs - is the specific mistake. It produces
 configurations where the mail goes out and the privacy policy denies it.
 
 `hasStudioMailbox` also guards §0.6: `SHOP.supportEmail` renders the literal
@@ -464,12 +464,12 @@ string `[HELLO@YOURDOMAIN]` when unset, so it may never be printed, and no
 **The catalogue is generated, not hand-written.** `scripts/generate-seed.mjs`
 reads `../Documents/3D_Planner.xlsx` and writes *both* `supabase/seed.sql` and
 `lib/fallback-data.ts`. A `.mjs` script cannot import the TypeScript module,
-so it parses `BUILDER_PRICING` out of `lib/config.ts` — a builder product can
+so it parses `BUILDER_PRICING` out of `lib/config.ts` - a builder product can
 never advertise a price the builder cannot charge, and the script throws if it
 cannot find the literal. After
 editing the workbook, re-run the script *and* re-run `seed.sql`.
 
-**Business rules live in `lib/config.ts`** — the free-postage threshold (but
+**Business rules live in `lib/config.ts`** - the free-postage threshold (but
 **not** postage prices, which come from Australia Post via `lib/shipping/`), print lead time, builder bundle pricing, personalisation limits,
 payment badges, the GST and support-email flags. Change a number there and it
 propagates to every page, the basket and the Stripe session together. Never
@@ -485,7 +485,7 @@ deleted, and both route schemas and `components/cart/CartProvider.tsx` import
 the constant instead. Change the number in `lib/config.ts` and nowhere else. The
 cart enforces them at all because a breaching basket used to be refused by
 checkout with a blanket `{ error: "Invalid basket." }` and by the quote route
-with a 400 the cart could only render as "Calculated at checkout" — a customer
+with a 400 the cart could only render as "Calculated at checkout" - a customer
 with no total and no reason. Stopping the basket being built that way, and
 naming the limit at the point it is reached, is the honest version.
 
@@ -493,8 +493,8 @@ naming the limit at the point it is reached, is the honest version.
 simplification.** `components/cart/CartProvider.tsx` exports
 `BasketLine = ProductBasketLine | ScoopBasketLine`, each member carrying the
 other's key as `never`, and `isScoopLine` / `isProductLine` are the only way to
-ask which one you are holding. The obvious "tidy-up" — one type with an optional
-`scoop_tier_id` — is the thing to refuse: a widened type still carries
+ask which one you are holding. The obvious "tidy-up" - one type with an optional
+`scoop_tier_id` - is the thing to refuse: a widened type still carries
 `product_id: string`, so a scoop line has to put *something* there, and every
 candidate is either a real product id that checkout would price and decrement or
 an empty string that reads as a product to every `if (line.product_id)` in the
@@ -507,7 +507,7 @@ than as `Omit<BasketLine, "key">`, because `Omit` over a union collapses it to
 the shared keys and throws away every discriminant; and the storage key is
 **still** `bamstudio.cart.v1`, because bumping it would have emptied the basket
 of every shopper mid-purchase at the moment of deploy. Checkout takes the two
-halves as separate fields — `lines` and `scoop_lines` — validated by separate
+halves as separate fields - `lines` and `scoop_lines` - validated by separate
 Zod schemas, and `lib/scoop-line.ts` is the one place a scoop becomes a line
 (its `variant_label`, its stand-in artwork, its Stripe metadata marker, and its
 postage line, which is always a **parcel** and never a Large Letter).
@@ -519,7 +519,7 @@ Four things it is worth knowing before touching the webhook or Reports:
   no record that it had been, so a send lost to a stopped machine was lost for
   good. The webhook now stamps it with a `.is("confirmation_email_sent_at",
   null)` filter, which makes a Stripe redelivery either recover a lost email or
-  do nothing — never send twice. `getStudioAttention()` counts website orders
+  do nothing - never send twice. `getStudioAttention()` counts website orders
   that are numbered, past `pending`, and still unstamped.
 - **`order_items.unit_cost_cents` is written for web sales too**, from
   `unitCostsAtSale()` in `app/admin/data.ts`, called by both
@@ -534,7 +534,7 @@ Four things it is worth knowing before touching the webhook or Reports:
 - **`public.payment_incidents`.** A payment that clears for an order somebody
   already cancelled used to be a `console.error` saying "refund this one by
   hand" and a 200 to Stripe: the customer charged, nothing sent, and the only
-  record a log line on a platform nobody reads. It is now a row — RLS on with no
+  record a log line on a platform nobody reads. It is now a row - RLS on with no
   policy plus an explicit revoke, `service_role` only, `stripe_session_id`
   unique so an `on conflict do nothing` insert records one incident however many
   times Stripe delivers. `resolveRefundIncident` in `app/admin/actions.ts`
@@ -542,24 +542,24 @@ Four things it is worth knowing before touching the webhook or Reports:
   should**: refunding is a decision with a customer at the other end of it.
 - **`recordSale` no longer leaves an order with no lines counted as revenue**,
   and `removePhoto` can no longer be steered by a form field into deleting any
-  object in the `product-photos` bucket — the product's own stored photo list is
+  object in the `product-photos` bucket - the product's own stored photo list is
   the authority, deliberately not a path-prefix check, because a rule derived
   from a naming convention stops holding the day the convention changes.
 
 **A customer's message is a row before it is an email** (`0006_enquiries.sql`).
-`/api/contact` handed the enquiry to Resend and stored it nowhere — its own
-comment said "the email IS the delivery" — and answered `{ ok: true, delivered:
+`/api/contact` handed the enquiry to Resend and stored it nowhere - its own
+comment said "the email IS the delivery" - and answered `{ ok: true, delivered:
 false }` on a failed send. Honest to the customer, and a total loss to the shop:
 the words existed only in the HTTP request. Three ordinary configurations lost
 them outright (no `RESEND_API_KEY`/`EMAIL_FROM`; no `NEXT_PUBLIC_SUPPORT_EMAIL`;
 Resend answering 4xx/5xx or not inside the 8s timeout), and this shop states in
-several places, the legal pages included, that it sends no order emails — so the
+several places, the legal pages included, that it sends no order emails - so the
 contact form is one of very few channels a customer has, and a message reporting
 faulty goods is exactly the one that must not vanish. **Write the row first; the
 email is a notification about a row that already exists.** Do not reorder them.
 
 `contact_enquiries` and `newsletter_signups` are deliberately two tables. An
-enquiry is a piece of *work*: repeatable — a follow-up is a second thing said —
+enquiry is a piece of *work*: repeatable - a follow-up is a second thing said -
 ends in a reply, and carries `handled_at`/`handled_by`. A sign-up is a
 *membership*: the lower-cased address is the primary key so asking twice is
 idempotent, and it ends in an unsubscribe that a later `on conflict do nothing`
@@ -568,8 +568,8 @@ for half the rows, the unique-address rule is wrong for enquiries and required
 for sign-ups, and clearing out answered enquiries would delete the mailing list.
 
 **Neither table has an anon insert grant**, and that is the decision worth
-keeping. The obvious alternative — `grant insert to anon` plus an insert-only
-RLS policy, letting the browser write its own row — was rejected because the
+keeping. The obvious alternative - `grant insert to anon` plus an insert-only
+RLS policy, letting the browser write its own row - was rejected because the
 anon key ships in the browser bundle, which makes that grant a public PostgREST
 endpoint accepting arbitrary rows: it walks straight past the route's zod
 validation, its rate limiter and its topic enum, leaving the CHECK constraints
@@ -578,16 +578,16 @@ returning` and constraint-violation messages both leak, and a duplicate-key
 error on `newsletter_signups` would turn one into an oracle for "is this address
 on the list". `/api/contact` already runs server-side, so the service-role
 client writes the row the same code just validated. `notified_at` null means no
-notification was sent, **not** that the enquiry was lost — the reader asks
+notification was sent, **not** that the enquiry was lost - the reader asks
 `isEmailConfigured()` at read time rather than the schema mirroring a deployment
 setting it cannot see. The length bounds on those columns are duplicated from
-the zod schema in `app/api/contact/route.ts` on purpose — the route validates,
-the table is the backstop — and **the two must move together**. And there is
+the zod schema in `app/api/contact/route.ts` on purpose - the route validates,
+the table is the backstop - and **the two must move together**. And there is
 still **no newsletter, no welcome email and no unsubscribe link**, so no copy on
 the site may promise one.
 
 **Security response headers are set in `next.config.ts`, on `/:path*` with no
-exclusions** — HSTS, the CSP, `X-Frame-Options: DENY`, `nosniff` and
+exclusions** - HSTS, the CSP, `X-Frame-Options: DENY`, `nosniff` and
 `Referrer-Policy`. The hole they close is specific rather than hygiene:
 `@supabase/ssr`'s cookie defaults carry no `secure` flag, and `force_https` in
 `fly.toml` is a *redirect*, so the session cookie has already gone out in clear
@@ -596,7 +596,7 @@ before the redirect comes back. Three things not to undo:
 - **`script-src 'unsafe-inline'` is a documented compromise, not an oversight.**
   Next streams the RSC payload through inline `<script>self.__next_f.push(...)`
   tags on every response; the only supported alternative is a per-request nonce
-  in `proxy.ts`, which forces dynamic rendering on every page — a real bill on
+  in `proxy.ts`, which forces dynamic rendering on every page - a real bill on
   one always-on 512 MB machine. Removing the token without doing the nonce work
   breaks every page, checkout included.
 - **HSTS omits `preload` on purpose.** Preloading is a one-way door for a
@@ -607,14 +607,14 @@ before the redirect comes back. Three things not to undo:
   Stripe signs over; this config only adds *response* headers, which Stripe's
   HTTP client discards. Copying the exclusion would take its shape without its
   reason. Likewise `app/order/confirmed/page.tsx` keeps its own stricter
-  `referrer: "no-referrer"` metadata — that URL carries the Stripe session id.
+  `referrer: "no-referrer"` metadata - that URL carries the Stripe session id.
 
-**Pages that make email claims are rendered per request — but not because they
+**Pages that make email claims are rendered per request - but not because they
 say so.** No page carries `export const dynamic`; the only one in the app is
 `force-dynamic` on the Stripe webhook route, and that is for the raw body, not
 for freshness. The legal, FAQ, contact, track, about and order-confirmed pages
 are dynamic because the **root layout awaits `getUser()`**, which awaits
-`cookies()`, opting the whole tree out of static prerendering — the build's
+`cookies()`, opting the whole tree out of static prerendering - the build's
 prerender manifest lists only `/_global-error` and `/favicon.ico`. Each of
 those pages reads its capability at module scope
 (`const CAN_SEND_EMAIL = isEmailConfigured()`), so the protection is
@@ -629,7 +629,7 @@ mode**, and it is what the checkout verification flow above depends on. A
 "strict" guard that broke it has already had to be re-fixed once. Any new guard
 must distinguish "the database returned an error" from "there is no database".
 
-**Order lifecycle** — the part that needs several files to understand:
+**Order lifecycle** - the part that needs several files to understand:
 
 1. `app/api/checkout/route.ts` recomputes every price from the database, then
    creates the Stripe Checkout Session **and** stages the basket as a `pending`
@@ -643,56 +643,56 @@ must distinguish "the database returned an error" from "there is no database".
    step is a compare-and-set (update scoped to `status = 'pending'`, order
    number scoped to `is null`, stock claimed via `stock_applied`) so Stripe's
    retries and the duplicate `async_payment_succeeded` event are harmless.
-   **Returning 200 tells Stripe to stop retrying** — only do that when the work
+   **Returning 200 tells Stripe to stop retrying** - only do that when the work
    is genuinely done or genuinely already done by someone else.
 4. If the database was unreachable at checkout there is no staged row, so the
    webhook rebuilds the order from Stripe's own line items. **Zero line items
-   from Stripe is a failed read, not an empty basket** — a paid Checkout
-   Session always has them — so that path throws rather than confirming an
+   from Stripe is a failed read, not an empty basket** - a paid Checkout
+   Session always has them - so that path throws rather than confirming an
    order with nothing to print.
 5. Order numbers are allocated **on payment**, not at checkout, so abandoned
    baskets don't burn them.
 6. **`cancelled` is the only terminal status.** The two `status !== "pending"`
    repair branches would otherwise number, stock-move and email a cancelled
    order on a late `async_payment_succeeded`. They are scoped by
-   `isTerminal()`, which holds `cancelled` alone — the later fulfilment states
+   `isTerminal()`, which holds `cancelled` alone - the later fulfilment states
    (`printing`/`packed`/`shipped`/`delivered`) are still repairable. A
    cancelled order returns **200 rather than throwing**: no retry can make it
    eligible, so a 500 buys only an unbounded redelivery loop. It logs at error
    level because the money arrived and **the refund is a manual job**.
 7. **`orders.email` is `NOT NULL`, so the rebuild path writes the sentinel
-   `"unknown"`.** It is truthy — `if (!order.email)` accepts it as a real
+   `"unknown"`.** It is truthy - `if (!order.email)` accepts it as a real
    mailbox, which is exactly how a guard that did not guard got shipped. Read
    it through `hasCustomerEmail()`. The sentinel still escapes the webhook:
    `/track`, the account order pages and `lib/queries.ts` read the column
    without knowing about it (`WORKLOG.md` §6).
 
 `pending` rows are excluded from the account order list and from guest
-tracking — an unpaid checkout is not an order. `/order/confirmed` reads the
+tracking - an unpaid checkout is not an order. `/order/confirmed` reads the
 session's real `payment_status` from Stripe and only claims confirmation when
 Stripe says it was paid.
 
 **Two personalisation modes**, in `products.personalisation_mode`:
 
-- `builder` — the keycap letter builder at `/builder?product=<slug>`, priced by
+- `builder` - the keycap letter builder at `/builder?product=<slug>`, priced by
   letter count from `BUILDER_PRICING`. A builder line's `colour` is a
   *colourway* validated against the collections table, not a product colour.
-- `text` — one free-text line collected on the product page, priced at the
+- `text` - one free-text line collected on the product page, priced at the
   product's own price.
 
-Checkout **refuses a builder payload on anything that isn't builder mode** —
+Checkout **refuses a builder payload on anything that isn't builder mode** -
 without that check any product could be bought at name-charm prices. This is a
 closed exploit; don't loosen it.
 
 **Email** (`lib/email.ts`): one `fetch` POST to the Resend API, deliberately
-with no npm client. **`sendEmail` never throws** — it returns an `EmailResult`
+with no npm client. **`sendEmail` never throws** - it returns an `EmailResult`
 and the caller decides what to tell the customer, because email is a side
 effect of a checkout, a webhook or a form post and none of those may fail
 because a mail provider is slow. It logs no message content and no recipient
 address; `maskEmail()` is the most that may reach the log stream (§0.9). The
 order-confirmation email is scheduled with `after()` from the *one* place that
-can prove this delivery did the work — the successful order-number
-compare-and-set in `assignOrderNumber` — which is the whole at-most-once story.
+can prove this delivery did the work - the successful order-number
+compare-and-set in `assignOrderNumber` - which is the whole at-most-once story.
 Don't send it from anywhere else.
 
 **Postage** (`lib/shipping/`) quotes real Australia Post rates, and is wired
@@ -703,7 +703,7 @@ no `price` field. The rules that govern it:
 - **`quoteBasket(lines, methodId)` in `lib/shipping/quote.ts` is the single
   entry point, and both the cart and checkout must use it.** Two code paths
   computing postage is how the price a customer agreed to and the price Stripe
-  charges come to differ — silently, and only for some baskets.
+  charges come to differ - silently, and only for some baskets.
 - **It never throws and never returns zero for a non-empty basket.** Resolution
   is cache → live PAC → a fallback table that needs no network. A postage lookup
   happens inside rendering a cart and inside creating a checkout session, and
@@ -723,19 +723,19 @@ no `price` field. The rules that govern it:
   total passes through as a total. Never run `gstComponent()` over a quote.
 - **`transitLabel(methodId, tracked)` takes tracking as a required argument.**
   It used to hardcode "· tracked", which was true only while everything shipped
-  as a parcel — and `letter_eligible` is a checkbox in the Supabase table
+  as a parcel - and `letter_eligible` is a checkbox in the Supabase table
   editor, so one tick with no deploy would have armed the lie. Pass
   `quoteBasket()`'s `tracked`; **never pass a literal**, which is the hardcode
   again, just moved. A page with no basket to ask uses `transitRangeLabel()` and
   makes no tracking claim at all.
 - **`isFreeShipping(subtotal, methodId)` decides who pays; `quoteBasket()`
   decides how much.** Never merge them. `shippingCost()` was deleted rather than
-  deprecated — a second function still shaped like a price is one a future call
+  deprecated - a second function still shaped like a price is one a future call
   site reaches for by mistake.
 - **Both surfaces build their lines with `toShippingLines()`
   (`lib/shipping/lines.ts`) over rows from `loadProductsBySlug()`
   (`lib/queries.ts`).** One builder, one loader. If you add a third postage
-  surface, use both — do not re-derive either.
+  surface, use both - do not re-derive either.
 - **A dropped line is not an empty basket.** `toShippingLines()` skips a slug it
   has no row for, and a basket that loses every line quotes at zero, which is
   correct for nothing and wrong for a basket. `/api/shipping/quote` returns 409
@@ -743,8 +743,8 @@ no `price` field. The rules that govern it:
   10 before it was caught.
 - **`letter_eligible` defaults to `false`, and must stay that way.**
   `0002_shipping.sql` originally declared it `default true` while
-  `lib/shipping/weights.ts` documents the opposite — "absent means false", an
-  unmeasured product is quoted as a parcel — and `select.ts` only counts a line
+  `lib/shipping/weights.ts` documents the opposite - "absent means false", an
+  unmeasured product is quoted as a parcel - and `select.ts` only counts a line
   as letter-eligible when the value is exactly `true`. A row typed into the
   Supabase table editor therefore arrived claiming Large Letter: $3.40,
   untracked and uninsured, against about $10.20 tracked, with the undercharge
@@ -753,7 +753,7 @@ no `price` field. The rules that govern it:
   the owner made deliberately; `verify.sql` asserts both the declared default and
   the behaviour a hand-added row gets. **The flag is a judgement, not a
   measurement**, and a default is a judgement nobody made.
-- **`AUSPOST_API_KEY` is a runtime secret** — a Fly secret, never a build arg,
+- **`AUSPOST_API_KEY` is a runtime secret** - a Fly secret, never a build arg,
   and never `NEXT_PUBLIC_`. `isPacConfigured()` throws in the browser rather
   than answering `false`, the same pattern as `isEmailConfigured()`.
 - **The L2 cache tier is a seam, not an implementation.** If you add it, read
@@ -766,7 +766,7 @@ no `price` field. The rules that govern it:
 
 ## The staff area
 
-`/admin` — nine screens for the person running the shop: Overview, Orders (with
+`/admin` - nine screens for the person running the shop: Overview, Orders (with
 a form for typing in a market or TikTok sale), Products, Inventory (print queue,
 filament buy list, and *Measure the catalogue*), Reports, Colours, Settings and
 Studio access. Built in round 11, deployed, and driven against the live database
@@ -774,7 +774,7 @@ in round 12. `WORKLOG.md` §5 rounds 11 and 12 have the reasoning.
 
 **A role is not a column on `profiles`, and must never become one.**
 `0001_init.sql` grants every signed-in account UPDATE on its own profile row
-across *all* columns, and RLS cannot restrict a policy to a subset of columns —
+across *all* columns, and RLS cannot restrict a policy to a subset of columns -
 a `role` there would be self-assignable over PostgREST with the anon key that
 ships in the browser bundle. One HTTP request and a customer is an admin. It
 lives in `public.staff`: RLS on, **no policy at all**, explicit revokes from
@@ -784,7 +784,7 @@ every other table in `0003_admin.sql` that decides authority or exposes cost.
 Do not add a policy to make something "easier to query" from the client.
 
 **`requireStaff(capability)` is called by every page, route handler and server
-action under `/admin`** — it cannot be hoisted anywhere. `proxy.ts` only holds
+action under `/admin`** - it cannot be hoisted anywhere. `proxy.ts` only holds
 the anon client, so it can establish "signed in at all" and nothing more; a
 layout is not a security boundary for a route handler; and a server action is a
 public HTTP endpoint with a generated id that anyone who has ever loaded the shop
@@ -793,7 +793,7 @@ check. In `app/admin/actions.ts` the capability comes first, before the form dat
 is even read.
 
 **There is exactly ONE documented exception: `acceptInvitation`.** It is the
-action that *makes* somebody staff, so requiring staff would be circular —
+action that *makes* somebody staff, so requiring staff would be circular -
 everyone who legitimately reaches it is a signed-in account with no row in
 `public.staff`. It is not unguarded: `resolveJoin()` requires a signed-in user, a
 token that hashes to a live invitation row, and **the signed-in email to equal
@@ -817,7 +817,7 @@ sheet, columns T–AA, the workbook's own formulas quoted in the comments,
 fractional cents throughout with exactly one rounding at the end into the price;
 `scripts/check-costing.mjs` checks it against the values Excel itself cached. The
 round-12 guard for the false suggested price went into `costProduct()` in
-`app/admin/data.ts` — the studio's own composition layer — precisely so that
+`app/admin/data.ts` - the studio's own composition layer - precisely so that
 `lib/costing.ts` still matches the sheet line for line. The workbook has no
 notion of an unmeasured input; knowing that an input is missing is the
 application's job. (Do not copy prices out of the workbook's Suggested price
@@ -828,15 +828,15 @@ row.)
 `/admin/inventory/measure` hangs off Inventory and asks for **`catalogue`**,
 because counting a shelf is an observation and typing a print time is authoring
 the cost basis every price in the shop derives from. `saveMeasurement` also
-refuses partial nonsense rather than dropping it — grams with no colour, a colour
-with no grams, zero grams, a repeated colour — and rejects a payload carrying
+refuses partial nonsense rather than dropping it - grams with no colour, a colour
+with no grams, zero grams, a repeated colour - and rejects a payload carrying
 fewer than `MEASURE_COLOUR_SLOTS` slots, because the recipe is replaced wholesale
 and a POST that simply omitted the fields would wipe one.
 
 **A query that runs is not a query that is right.** The embedded-resource selects
-in `app/admin/data.ts` — `product_filament(grams, colours(...))`,
+in `app/admin/data.ts` - `product_filament(grams, colours(...))`,
 `orders!inner(status)` in `getOpenDemand`, and the `order_items` embeds in
-`getOrder` — have only ever returned `[]` against the real project, because every
+`getOrder` - have only ever returned `[]` against the real project, because every
 table behind them is empty. That proves the syntax parses and nothing else. Until
 one real sale exists, do not trust a number on Inventory or Reports.
 
@@ -844,21 +844,21 @@ one real sale exists, do not trust a number on Inventory or Reports.
 respects RLS; `createAdminClient()` uses the service-role key and bypasses RLS
 entirely. The admin client belongs only in trusted server paths that a request
 body cannot steer. `proxy.ts` refreshes the auth cookie on every request and
-guards `/account` — it deliberately skips **`api/webhooks`**, which must receive
+guards `/account` - it deliberately skips **`api/webhooks`**, which must receive
 an untouched raw body for Stripe's signature check, and **`api/health`**,
 because every matched request runs `supabase.auth.getUser()` and Fly polls that
 endpoint every 15 seconds forever. The matcher is a single negative lookahead of
-prefixes with no leading slash; get one wrong and nothing errors — the exclusion
+prefixes with no leading slash; get one wrong and nothing errors - the exclusion
 silently widens and the `/account` guard quietly stops guarding. After any edit,
 re-check `/account`, `/account/orders`, `/api/health` and `/api/webhooks/stripe`
 against the pattern.
 
-**Rate limiting** (`lib/rate-limit.ts`) is in-memory and per-process — a speed
+**Rate limiting** (`lib/rate-limit.ts`) is in-memory and per-process - a speed
 bump, not a guarantee. It used to be decorative in front of `/api/track` because
 `lookup_order` was granted to `anon` and could be called straight over PostgREST
 with the public key, bypassing every route-level throttle. That grant is now
 `service_role` only, so **the throttle is the only thing left in front of a
-customer's postal address** — order numbers are a sequence plus four hex
+customer's postal address** - order numbers are a sequence plus four hex
 characters. It should move to Upstash/Redis before launch; the call sites don't
 change. The general rule survives the fix: never let this be the only thing
 protecting data, and never grant a data-returning Postgres function to `anon`.
@@ -877,19 +877,19 @@ money was taken is the one mistake that page exists to avoid. A page cannot set
 a 429 or `Retry-After` the way a route handler can, so the wait is stated in the
 copy instead.
 
-**`clientKey()` no longer reads the first `x-forwarded-for` value — do not put
+**`clientKey()` no longer reads the first `x-forwarded-for` value - do not put
 that back.** Vercel's proxy overwrote the header; **Fly's proxy appends to it**,
 so the first value was whatever the caller sent, and rotating it bought
 unlimited attempts against the endpoint that returns a postal address. It now
 prefers `Fly-Client-IP`, gated on `FLY_APP_NAME` (set by the Machines runtime,
 never by a request, so the header cannot be believed off-Fly), and falls back to
-the **last** XFF hop — the one value a caller cannot write — for non-Fly hosts.
+the **last** XFF hop - the one value a caller cannot write - for non-Fly hosts.
 On Fly the last XFF hop is the app's own shared address, the same string for
 every caller, which is why `Fly-Client-IP` is preferred there. The function's
 own comment records the caveats; read it before changing the header logic.
 
 **Guest order visibility.** RLS on `orders` is `auth.uid() = user_id`, so a
-guest can read nothing — which is why `/order/confirmed` goes through
+guest can read nothing - which is why `/order/confirmed` goes through
 `public.order_confirmation_summary(text)`, a `SECURITY DEFINER` function keyed
 on the Stripe session id the page already holds, called with the service role.
 It returns **order number and status only**; that column list is a security
@@ -900,18 +900,18 @@ until someone widens the route too.
 
 **Redirect safety.** `next=` parameters that survive sign-in must go through
 `safeNext()` in `lib/safe-next.ts`, which resolves the value and compares
-`.origin`. Prefix checks like `startsWith("/")` are not sufficient — the URL
+`.origin`. Prefix checks like `startsWith("/")` are not sufficient - the URL
 parser strips tab/CR/LF *after* such a check, so `/<TAB>//evil.com` reads as
 protocol-relative by the time a browser sees it.
 
-## Deployment — constraints a code change can break
+## Deployment - constraints a code change can break
 
 Four committed files describe the deployment: `Dockerfile`, `fly.toml`,
 `.dockerignore`, `.github/workflows/deploy.yml`. Each carries its reasoning in
 comments at the line it applies to. Read the file before changing it; what
 follows is what a *code* change has to respect.
 
-**Build and run are separated by memory.** `next build` peaks at ~1.6 GB RSS —
+**Build and run are separated by memory.** `next build` peaks at ~1.6 GB RSS -
 it cannot build on the 512 MB app machine, and not reliably on 1 GB either. The
 running server is ~150 MB. Builds run on Fly's remote builder
 (`fly deploy --remote-only`, which CI uses); the machine only runs the finished
@@ -919,19 +919,19 @@ server. `output: "standalone"` (in `next.config.ts`) gives ~72 MB of deployable
 tree, ~24 MB gzipped, against 629 MB of `node_modules`. A dependency that
 inflates the traced tree, or a build step that needs more memory, is a
 deployment problem before it is a performance one. The build stage also needs
-outbound network — `next/font/google` fetches Poppins and Nunito Sans.
+outbound network - `next/font/google` fetches Poppins and Nunito Sans.
 
 **The standalone server reads no `.env` file.** `.env.local` is local
 development only. Config arrives as real env vars, two ways:
 
-- **Build args** — every `NEXT_PUBLIC_*`. Inlined by `next build`; changing one
+- **Build args** - every `NEXT_PUBLIC_*`. Inlined by `next build`; changing one
   needs a **rebuild**, never a restart.
-- **Fly secrets** — `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`,
+- **Fly secrets** - `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`,
   `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, and **`AUSPOST_API_KEY`**
   (new in round 9; without it postage quotes from the fallback table and the
   shop still works). Read per request.
 
-**Never move a secret into a build arg** — build args are recorded in image
+**Never move a secret into a build arg** - build args are recorded in image
 history. And never advise the owner to set a `NEXT_PUBLIC_*` value as a Fly
 secret: it does nothing.
 
@@ -947,7 +947,7 @@ Consequences to hold on to:
   and a restart.
 - The `siteUrl()` throw fires **at build time only** (via `metadataBase` in
   `app/layout.tsx`). That, plus the Dockerfile's `test -n` guard, is what keeps
-  a bad image from existing. **Keep both** — the guard fails in a second with a
+  a bad image from existing. **Keep both** - the guard fails in a second with a
   message naming the fix, the throw is the actual protection. The Dockerfile
   comment explains why neither is redundant.
 - The value is **not** in `.next/static`, so nothing leaks to the browser. Do
@@ -964,7 +964,7 @@ Consequences to hold on to:
 i.e. after the response is flushed, and the rate limiter is an in-process `Map`.
 A machine that stops drops both; `suspend` keeps the memory but resumes with
 dead sockets, which breaks the in-flight Resend request specifically. **If you
-ever make the app scale to zero, both have to be fixed first** — a durable queue
+ever make the app scale to zero, both have to be fixed first** - a durable queue
 for the email, shared storage for the limiter. `kill_timeout = "30s"` is the
 same concern's drain window. (`min_machines_running` is strictly inert while
 autostop is off; it is a second lock, not a duplicate.)
@@ -972,13 +972,13 @@ autostop is off; it is a second lock, not a duplicate.)
 **`app/api/health/route.ts` must stay dependency-free.** No Supabase, no Stripe,
 no network, no filesystem. Fly polls it every 15s for the life of the machine,
 and a check that fails when a *dependency* fails is a readiness check wearing a
-liveness check's clothes — Fly would restart a healthy machine because Supabase
+liveness check's clothes - Fly would restart a healthy machine because Supabase
 blinked, which restarting cannot fix. The shop is designed to browse with no
 database at all, so "Supabase is down" must not read as "this container is
 dead". A dependency probe, if ever wanted, belongs at its own path, polled far
 less often, wired to alerting rather than to Fly's restart policy.
 
-**`getStripe()`'s error message has been fixed** — it now names `.env.local` for
+**`getStripe()`'s error message has been fixed** - it now names `.env.local` for
 local work and `fly secrets set` for the server, and says the key is a runtime
 secret and never a build arg. Earlier versions of this file listed the old
 Vercel wording as a known-stale string; it is gone from the code.
@@ -1003,13 +1003,13 @@ None of these is about the app. All of them have cost time.
   anything else that needs egress must be run by the owner. Do not report a
   push as done because the command exited.
 - **`git` on the mounted Windows folder cannot delete its own lock files.**
-  Clear them by moving them aside — `mv .git/index.lock /tmp/`, and the same for
-  any other `.git/**/*.lock` — rather than `rm`.
+  Clear them by moving them aside - `mv .git/index.lock /tmp/`, and the same for
+  any other `.git/**/*.lock` - rather than `rm`.
 - **Nine files show as permanently modified and it is pure CRLF line-ending
   noise** (`git diff --ignore-all-space` is empty). **Never `git add -A`.** Stage
   the files you actually changed, by name, or a commit becomes unreviewable.
 - **A Next build cannot complete on the device shell.** Each call is a fresh
-  ~45s shell and anything left running is killed between calls — `nohup`,
+  ~45s shell and anything left running is killed between calls - `nohup`,
   `setsid` and `disown` all die. What works: `tar` the source (excluding
   `node_modules`, `.next`, `.git`, `.env*`), stage that one file, then `npm ci`
   and `npm run build` in a cloud container with dummy `NEXT_PUBLIC_*` values.
@@ -1025,7 +1025,7 @@ None of these is about the app. All of them have cost time.
 - Australian English in all customer-facing copy ("colour", "personalised",
   "favourites", "postcode", "suburb").
 - Comments in this codebase explain *why*, usually recording a defect that was
-  found and closed. Match that when you touch a guarded path — a future session
+  found and closed. Match that when you touch a guarded path - a future session
   needs to know the constraint, not the syntax.
 - Product artwork is illustrated (`components/ProductArt.tsx`), not photos.
   New products need an `ART_BY_SKU` entry or they fall back to a theme default.

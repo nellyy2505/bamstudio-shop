@@ -1,10 +1,10 @@
--- 0009_collection_charm_product.sql — a colourway's charm becomes a real product
+-- 0009_collection_charm_product.sql - a colourway's charm becomes a real product
 --
 -- Apply after 0008_wollongong.sql.
 --
 -- WHY.
 --
--- `collections` described its charm with `charm_art` and `charm_name` — a
+-- `collections` described its charm with `charm_art` and `charm_name` - a
 -- picture and a label. That was enough while the charm was included in the
 -- builder's bundle price and dropping it took a flat dollar off: the charm had
 -- no price of its own because it was never priced.
@@ -31,7 +31,7 @@
 -- one page where a customer is choosing.
 --
 -- NULLABLE, deliberately. A colourway with no charm product is a colourway that
--- cannot offer the add-on — the builder hides the option rather than guessing a
+-- cannot offer the add-on - the builder hides the option rather than guessing a
 -- price. That is the honest failure, and it is also what a newly inserted
 -- colourway looks like before anyone has chosen its charm.
 

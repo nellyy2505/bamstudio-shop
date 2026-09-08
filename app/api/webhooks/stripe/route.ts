@@ -10,7 +10,7 @@ import { PRINT_LEAD_TIME, SHIPPING, SHOP } from "@/lib/config";
 // market stall. It lives in lib/ and not in app/admin/data.ts, which is where
 // this route used to import it from: a customer-facing endpoint should not put
 // the staff area on its import graph to find out what a piece cost. Nor can it
-// live in app/admin/actions.ts — every export from a "use server" file becomes
+// live in app/admin/actions.ts - every export from a "use server" file becomes
 // a callable HTTP endpoint.
 import { unitCostsAtSale } from "@/lib/cost-basis";
 // A Lucky Scoop is sold before its contents are decided, so it is the one line
@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * `orders.email` is NOT NULL (supabase/migrations/0001_init.sql), so the
- * Stripe-rebuild insert cannot record "Stripe gave us no address" as a null —
+ * Stripe-rebuild insert cannot record "Stripe gave us no address" as a null -
  * it has to write something. This is that something, produced in exactly one
  * place, and it is a truthy string: a plain `if (!order.email)` accepts it as
  * a real mailbox. Every reader must go through `hasCustomerEmail` instead.
@@ -39,7 +39,7 @@ const NO_CUSTOMER_EMAIL = "unknown";
  *
  * `after()` for the same reason `queueOrderConfirmation` uses it: this route's
  * response is the signal that tells Stripe whether to retry, and it must not
- * wait on a third party. The fallback is a detached promise — weaker only in
+ * wait on a third party. The fallback is a detached promise - weaker only in
  * that the platform may not wait for it before freezing the instance, which on
  * a Fly machine with `auto_stop_machines = "off"` and a 30s `kill_timeout` it
  * will. `after()` throws outside a request scope, which is exactly the case
@@ -48,14 +48,14 @@ const NO_CUSTOMER_EMAIL = "unknown";
  * WHAT NEVER GOES IN A REPORT FROM THIS FILE, and it is not the obvious list:
  *
  *   * `session.id`. It looks like an opaque Stripe identifier and it is in
- *     fact a credential — `/order/confirmed?session_id=...` reads a
+ *     fact a credential - `/order/confirmed?session_id=...` reads a
  *     customer's name, address and basket back out of Stripe with nothing
  *     else, which is why that page sets `referrer: "no-referrer"`. It stays in
  *     the log, on infrastructure the studio controls, and goes no further.
  *   * the shipping address, the phone, the email, the customer's name.
  *
  * What DOES go: the internal order UUID and the customer-facing order number
- * (neither opens anything on its own — /track needs the number AND the
+ * (neither opens anything on its own - /track needs the number AND the
  * matching email), amounts in cents, order status, and provider failure
  * reasons. Enough to find the order in the studio and know what it cost.
  */
@@ -81,15 +81,15 @@ function hasCustomerEmail(email: string | null | undefined): email is string {
 }
 
 /**
- * Statuses an order never comes back from. `cancelled` is set by a person —
- * refunded, or the customer asked — and a late delivery must not undo that.
+ * Statuses an order never comes back from. `cancelled` is set by a person -
+ * refunded, or the customer asked - and a late delivery must not undo that.
  */
 const TERMINAL_STATUSES = new Set(["cancelled"]);
 
 /**
  * Asked by both `!== "pending"` repair branches in `confirmOrder`. Those
  * branches exist for an order that was confirmed and then abandoned mid-flight,
- * and they fall through to `finishConfirmation` — which would number a
+ * and they fall through to `finishConfirmation` - which would number a
  * cancelled order, spend its stock and email its customer a confirmation for an
  * order the shop has already pulled. Every other guard in this file is scoped
  * to `pending` to avoid exactly that; these two are scoped by this.
@@ -152,7 +152,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
   // This error used to be discarded, which made a transient read failure
   // indistinguishable from "nothing was staged": `staged` came back null, the
   // repair branch and the staged branch were both skipped, and control fell
-  // through to the fresh insert — which tripped `stripe_session_id unique` and
+  // through to the fresh insert - which tripped `stripe_session_id unique` and
   // was swallowed as a 200. Stripe stopped retrying and the real row stayed
   // `pending` forever, invisible to the customer and to the shop.
   //
@@ -165,7 +165,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
     throw new Error("staged order read failed");
   }
 
-  // A staged row with no line items is unusable — confirming it would leave a
+  // A staged row with no line items is unusable - confirming it would leave a
   // paid order with no record of what to print. Treat it exactly like a
   // missing row so the Stripe rebuild below fills it in instead.
   const stagedItems = (staged as { order_items?: unknown[] } | null)?.order_items;
@@ -181,7 +181,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
       if (isTerminal(staged.status)) {
         // Cancelled by hand between checkout and this (late) delivery.
         // Repairing it would number it, move stock and confirm to a customer
-        // whose order the shop has already pulled. None of that may happen —
+        // whose order the shop has already pulled. None of that may happen -
         // but the money did arrive, so the refund it owes is written down
         // where a person will see it before we return.
         await recordPaidWhileCancelled(supabase, session, staged.id, staged.status);
@@ -190,18 +190,18 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
       // Already confirmed but carrying no items: a previous delivery inserted
       // the order and then died before its items landed. Deleting it would
       // renumber a sale the customer has been emailed about, and returning
-      // would strand it forever — no order number, nothing to print, and
+      // would strand it forever - no order number, nothing to print, and
       // every later retry taking this same branch. Repair it in place; both
       // the item fill and finishConfirmation are safe to re-run.
       console.error(
-        `Order ${staged.id} is ${staged.status} with no items — repairing.`,
+        `Order ${staged.id} is ${staged.status} with no items, repairing.`,
       );
       await fillItemsFromStripe(supabase, staged.id, session);
       await finishConfirmation(supabase, staged.id);
       return;
     }
     console.error(
-      `Staged order ${staged.id} has no items — rebuilding from Stripe.`,
+      `Staged order ${staged.id} has no items, rebuilding from Stripe.`,
     );
     const { error: deleteError } = await supabase
       .from("orders")
@@ -211,7 +211,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
 
     // Discarding this error let a failed delete fall straight into the insert
     // below, where the row we meant to remove is still holding the unique
-    // `stripe_session_id` — turning a clean rebuild into a 23505 that has to
+    // `stripe_session_id` - turning a clean rebuild into a 23505 that has to
     // be untangled after the fact. Nothing has been written yet, so throwing
     // here costs only a retry and keeps the two paths from fighting.
     if (deleteError) {
@@ -234,7 +234,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
         await recordPaidWhileCancelled(supabase, session, staged.id, staged.status);
         return;
       }
-      // Already confirmed — but a previous delivery may have died between the
+      // Already confirmed - but a previous delivery may have died between the
       // confirming update and the follow-up work. Both steps compare-and-set
       // (a null order number, an unclaimed stock_applied), so running them
       // again is safe and is what makes the retry worth anything.
@@ -268,7 +268,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
     }
 
     // Zero rows means a concurrent delivery already confirmed this order.
-    // PostgREST reports no error for that, so the count is the only signal —
+    // PostgREST reports no error for that, so the count is the only signal -
     // without it, retries would decrement stock a second time.
     if (!updated || updated.length === 0) return;
 
@@ -276,7 +276,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
     return;
   }
 
-  // No staged row — the database was unreachable at checkout. Rebuild what we
+  // No staged row - the database was unreachable at checkout. Rebuild what we
   // can from Stripe so the sale is never lost.
   const { data: order, error } = await supabase
     .from("orders")
@@ -306,7 +306,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
   if (error || !order) {
     if (error?.code === "23505") {
       // A unique violation on `stripe_session_id` CAN mean a concurrent retry
-      // inserted this order first — genuinely already done by someone else, so
+      // inserted this order first - genuinely already done by someone else, so
       // 200 is right. But it fires just as readily when we only reached this
       // insert because the staged-row read failed, and a blanket 200 there is
       // what stranded paid orders: Stripe stops retrying and the row that
@@ -314,7 +314,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
       if (await orderIsFinished(supabase, session.id)) return;
       console.error(
         `Duplicate stripe_session_id ${session.id}, but that order is not ` +
-          "finished — asking Stripe to retry rather than closing the event.",
+          "finished, asking Stripe to retry rather than closing the event.",
       );
       throw new Error("order insert conflicted with an unfinished order");
     }
@@ -333,7 +333,7 @@ async function confirmOrder(session: Stripe.Checkout.Session) {
  *
  * A cancelled order that is paid anyway is a silent charge. The two branches
  * above are right to refuse to number it, move its stock or email its customer
- * — a person pulled that order — but the entire response used to be a
+ * - a person pulled that order - but the entire response used to be a
  * `console.error` saying "refund this one by hand" followed by a 200 to Stripe.
  * The customer is charged, receives nothing, and the only record is a log line
  * on a platform nobody reads. The refund stays manual, because refunding is a
@@ -366,7 +366,7 @@ async function recordPaidWhileCancelled(
       order_id: orderId,
       stripe_session_id: session.id,
       stripe_payment_intent: paymentIntent,
-      // What the customer was actually charged — the sum that has to go back.
+      // What the customer was actually charged - the sum that has to go back.
       amount_cents: session.amount_total ?? 0,
       kind: "paid_while_cancelled",
       order_status: status,
@@ -390,16 +390,16 @@ async function recordPaidWhileCancelled(
   // somewhere anyone is looking at 3am.
   console.error(
     `Order ${orderId} is ${status}; payment for session ${session.id} arrived ` +
-      "anyway. Recorded as a refund owed — issue it by hand in Stripe.",
+      "anyway. Recorded as a refund owed, issue it by hand in Stripe.",
   );
 
   // ...and neither is the studio overview somewhere anyone is looking at 3am,
   // which is the whole argument for this line. Money has been taken for goods
-  // that will not ship, and every existing signal — a log line, a row on a
-  // screen — requires somebody to go and look. `fatal` because the customer is
+  // that will not ship, and every existing signal - a log line, a row on a
+  // screen - requires somebody to go and look. `fatal` because the customer is
   // out of pocket until a person acts. No session id: see `report` above.
   report(() =>
-    captureMessage("Payment taken for a cancelled order — refund owed", {
+    captureMessage("Payment taken for a cancelled order, refund owed", {
       scope: "stripe-webhook",
       level: "fatal",
       route: "/api/webhooks/stripe",
@@ -417,7 +417,7 @@ async function recordPaidWhileCancelled(
  * Answers the one question the 23505 path needs: did somebody else genuinely
  * finish this order, or did we merely fail to find out?
  *
- * Finished means every step of confirmOrder + finishConfirmation has run —
+ * Finished means every step of confirmOrder + finishConfirmation has run -
  * the row exists, it is past `pending`, it carries a customer-facing number,
  * its stock claim is taken, and it has line items to print. Anything short of
  * that returns false and the caller throws, because 200 is Stripe's cue to
@@ -443,7 +443,7 @@ async function orderIsFinished(
   }
 
   // The unique constraint just fired, so a row with this session id exists. If
-  // we cannot see it, our view of the table is not the truth — never 200.
+  // we cannot see it, our view of the table is not the truth - never 200.
   if (!existing) return false;
 
   const items = (existing as { order_items?: unknown[] }).order_items;
@@ -479,7 +479,7 @@ function expandedProduct(item: Stripe.LineItem): Stripe.Product | null {
 
 /**
  * The product name for a line. `line_item.description` is documented as
- * defaulting to the product name, and that is all it ever is here — the
+ * defaulting to the product name, and that is all it ever is here - the
  * variant lives on the product's own description, which is why the listing is
  * expanded.
  */
@@ -496,8 +496,8 @@ function variantDescriptionOf(item: Stripe.LineItem): string | null {
  * The product slug checkout stamps on the line's inline product metadata.
  *
  * This is the only key on a Stripe line that identifies a product row
- * unambiguously: `short_name` is NOT unique in the schema — only `slug` and
- * `sku` are (supabase/migrations/0001_init.sql) — so two products sharing a
+ * unambiguously: `short_name` is NOT unique in the schema - only `slug` and
+ * `sku` are (supabase/migrations/0001_init.sql) - so two products sharing a
  * short name used to be indistinguishable here and the rebuild could link the
  * wrong row, printing and posting the wrong thing.
  *
@@ -514,26 +514,26 @@ function productSlugOf(item: Stripe.LineItem): string | null {
  *
  * THE DEFECT THIS CLOSES, before it existed. `fillItemsFromStripe` resolves
  * each Stripe line to a product row **by slug**, and `scoop_tiers.slug` and
- * `products.slug` are separate unique indexes on separate tables — nothing
+ * `products.slug` are separate unique indexes on separate tables - nothing
  * prevents a tier called `mixed-scoop` and a charm called `mixed-scoop` from
  * both existing. Without a marker, a rebuilt scoop line would look its tier's
  * slug up in `products`, find that charm, write the charm's `product_id` onto
  * the line, cost it from the charm's recipe, and then hand it to
- * `decrementStock` — which would take a charm off the shelf for a scoop nobody
+ * `decrementStock` - which would take a charm off the shelf for a scoop nobody
  * has drawn. The mutual-exclusion CHECK would not catch it, because the line
  * would carry a product id and no tier id: a scoop silently rebuilt as a
  * charm, on an order the customer has already paid for.
  *
  * So the tier's **id** rides on the line's own product metadata, which survives
  * the `expand: ['data.price.product']` this file already does, and this is the
- * first question asked about every line — before any lookup.
+ * first question asked about every line - before any lookup.
  *
  * The id rather than the slug on purpose: the id is what
  * `order_items.scoop_tier_id` needs, and a slug can be renamed between the
  * session being created and a delayed payment clearing days later.
  *
  * `pieces` is parsed defensively and falls back to the tier's own promise being
- * unstated rather than to a made-up number — see `fillItemsFromStripe`.
+ * unstated rather than to a made-up number - see `fillItemsFromStripe`.
  */
 function scoopOf(item: Stripe.LineItem): {
   tierId: string;
@@ -550,7 +550,7 @@ function scoopOf(item: Stripe.LineItem): {
   return {
     tierId,
     // Null, not 1 and not 5. A piece count we cannot read is a promise we
-    // cannot restate, and the label is left off rather than invented — see
+    // cannot restate, and the label is left off rather than invented - see
     // where it is used.
     pieces:
       Number.isInteger(rawPieces) && rawPieces > 0 ? rawPieces : null,
@@ -571,18 +571,18 @@ function scoopOf(item: Stripe.LineItem): {
  *
  * What Stripe genuinely does NOT carry, and is therefore left null on purpose:
  *
- *  - the builder colourway's `collection_slug` — only the collection's display
+ *  - the builder colourway's `collection_slug` - only the collection's display
  *    name reaches the Stripe line, so builder personalisation is written with
  *    `collection_name` (which is what the order detail page prints) and
  *    without the slug. Looking the slug up by name would be a second guess on
  *    top of a display string;
  *  - `colour` and `attachment_id` for any line whose product row we could not
- *    find — with no colour or attachment list there is nothing to validate a
+ *    find - with no colour or attachment list there is nothing to validate a
  *    segment against;
  *  - `colour` for a builder line where more than one segment is unaccounted
  *    for: the colourway is only taken when it is the single leftover;
  *  - the free-text `personalisation` of a line whose product is not in `text`
- *    mode, and letters for one not in `builder` mode — mislabelling a line as
+ *    mode, and letters for one not in `builder` mode - mislabelling a line as
  *    personalised also silently suppresses its stock movement.
  */
 function recoverVariant(
@@ -622,7 +622,7 @@ function recoverVariant(
 
     // A segment that matches BOTH a colour name and a finding's label names
     // two different things, and the string carries no clue which the customer
-    // chose. Trying the attachment list first — which is what this loop did —
+    // chose. Trying the attachment list first - which is what this loop did -
     // invented a cord or strap nobody ordered AND dropped the colour, so the
     // wrong thing would be picked and posted. Place it as neither:
     // `variant_label` still holds the raw string, so the packing list shows
@@ -667,7 +667,7 @@ function recoverVariant(
     unplaced.push(segment);
   }
 
-  // A builder product has no colour list of its own — its "colour" is a
+  // A builder product has no colour list of its own - its "colour" is a
   // colourway from the collections table, and checkout stores that name in
   // `colour`. It is the one segment nothing else claims, so accept it only
   // when exactly one is left over; two would be a guess.
@@ -714,7 +714,7 @@ async function fillItemsFromStripe(
     .limit(1);
 
   // This probe destructured only `data`, so a failed read looked exactly like
-  // "no items yet" and the insert below ran a second time on the retry —
+  // "no items yet" and the insert below ran a second time on the retry -
   // duplicating every line. That is not merely cosmetic: decrementStock
   // re-reads order_items, so duplicated lines double-count stock too.
   if (existingError) {
@@ -724,7 +724,7 @@ async function fillItemsFromStripe(
   if (existing && existing.length > 0) return;
 
   // `expand` is what makes a repaired order printable. Without it the only
-  // string available is `line_item.description`, which is the product NAME —
+  // string available is `line_item.description`, which is the product NAME -
   // so the variant (colour or colourway, finding, letters, printed text) was
   // lost and `variant_label` was written as "". The inline product's own
   // description is the exact string checkout composed for that line.
@@ -734,14 +734,14 @@ async function fillItemsFromStripe(
   );
 
   // An empty list used to insert nothing, report success and let the caller
-  // number the order and spend its stock claim — leaving a paid, confirmed,
+  // number the order and spend its stock claim - leaving a paid, confirmed,
   // numbered order with no record of what to print, and a 200 that told
   // Stripe to stop retrying. A paid Checkout Session always has line items,
   // so an empty list is a failed read of Stripe, not an empty basket: ask for
   // the delivery again rather than closing the event on nothing.
   if (lineItems.data.length === 0) {
     console.error(
-      `Stripe returned no line items for ${session.id} — refusing to finish ` +
+      `Stripe returned no line items for ${session.id}, refusing to finish ` +
         "an order with nothing to print.",
     );
     throw new Error("order items rebuild found no line items");
@@ -749,7 +749,7 @@ async function fillItemsFromStripe(
 
   // Two lookups, merged. Slugs are unique in the schema, so they are the only
   // trustworthy key: the ones checkout stamped on each line's product metadata
-  // plus the ones in the stock map. The stock map alone is not enough — it
+  // plus the ones in the stock map. The stock map alone is not enough - it
   // omits personalised lines by design, and those are exactly the ones that
   // most need a product row (without it there is no attachment list to turn a
   // finding's label back into its id, and no artwork). The line's product name
@@ -758,7 +758,7 @@ async function fillItemsFromStripe(
   //
   // SCOOP LINES ARE EXCLUDED FROM BOTH LOOKUPS. A scoop has no product row to
   // find, and its tier's slug and name can each collide with a real product's
-  // — `scoop_tiers` and `products` have their own unique indexes, and
+  // - `scoop_tiers` and `products` have their own unique indexes, and
   // `short_name` is not unique even within `products`. Letting a tier's strings
   // into these lists would not merely waste a lookup: `byName` is first-writer-
   // wins, so a tier called "Pet scoop" could claim that key and hand its row to
@@ -795,7 +795,7 @@ async function fillItemsFromStripe(
       .in(lookup.column, lookup.values);
 
     // Discarding this error defaulted every line on the order to
-    // art:"macaron", tint:"cream" and product_id null — a repaired order that
+    // art:"macaron", tint:"cream" and product_id null - a repaired order that
     // looks complete, links to nothing and prints the wrong artwork. There is
     // nothing to fall back to, so make Stripe retry instead.
     if (error) {
@@ -812,15 +812,15 @@ async function fillItemsFromStripe(
   }
 
   // The name index is the fallback, and it is inherently ambiguous:
-  // `short_name` is not unique, so first writer wins and the slug pass — the
-  // products checkout actually charged — is the one that gets to be first.
+  // `short_name` is not unique, so first writer wins and the slug pass - the
+  // products checkout actually charged - is the one that gets to be first.
   const byName = new Map<string, ProductRow>();
   for (const row of productRows) {
     if (!byName.has(row.short_name)) byName.set(row.short_name, row);
   }
 
   // THE DEFECT THIS CLOSES (defect 2): `unit_cost_cents` was written in
-  // exactly one place — the market-stall form in app/admin/actions.ts — so
+  // exactly one place - the market-stall form in app/admin/actions.ts - so
   // every website sale landed with a null making cost and /admin/reports had
   // nothing to subtract for the online channel. The cost is stamped here, at
   // the moment the sale is recorded, and never derived at read time: the
@@ -843,7 +843,7 @@ async function fillItemsFromStripe(
 
       /*
        * A LUCKY SCOOP. Asked first, before any product lookup, because a scoop
-       * must never be resolved against `products` at all — see `scoopOf`.
+       * must never be resolved against `products` at all - see `scoopOf`.
        *
        * Everything written here matches what checkout stages on the ordinary
        * path, and for the same reasons:
@@ -851,12 +851,12 @@ async function fillItemsFromStripe(
        *  - `scoop_tier_id` set, `product_id` NULL. Mutually exclusive in the
        *    schema, and the null product id is also what keeps this line out of
        *    `decrementStock`'s loop. A scoop's stock moves in the studio when
-       *    the pack is recorded, not here — at this moment nobody knows which
+       *    the pack is recorded, not here - at this moment nobody knows which
        *    products would even be decremented.
        *  - `product_name` is the tier's name as it was at the sale, read off
        *    the Stripe line rather than re-read from `scoop_tiers`. The name is
        *    editable in the studio, and what this customer bought is a fact
-       *    about this order — the same argument `unit_price` is copied under.
+       *    about this order - the same argument `unit_price` is copied under.
        *  - `unit_cost_cents` NULL. There is no recipe to cost a scoop from and
        *    the pack has not happened; a zero would read as 100% margin on
        *    something that has not been made yet.
@@ -891,7 +891,7 @@ async function fillItemsFromStripe(
       }
 
       // Slug first: it is the unique key and cannot pick the wrong row. The
-      // name fallback stays because Stripe replays history — a session created
+      // name fallback stays because Stripe replays history - a session created
       // before checkout began stamping the slug can still reach this webhook
       // afterwards (a delayed payment method clearing days later, or a retry of
       // an old delivery), and its lines carry no metadata.slug. Dropping the
@@ -906,7 +906,7 @@ async function fillItemsFromStripe(
         order_id: orderId,
         product_id: product?.id ?? null,
         // Explicitly null, and not merely omitted. PostgREST requires every
-        // object in a bulk insert to carry the SAME key set — a scoop line in
+        // object in a bulk insert to carry the SAME key set - a scoop line in
         // the same basket contributes `scoop_tier_id`, so leaving it off here
         // would fail the whole insert with "All object keys must match" and
         // strand a paid, mixed order with nothing to print. It is also the
@@ -921,7 +921,7 @@ async function fillItemsFromStripe(
         tint: product?.tint ?? "cream",
         unit_price: item.price?.unit_amount ?? 0,
         quantity: item.quantity ?? 1,
-        // Null wherever Stripe does not carry it — see recoverVariant.
+        // Null wherever Stripe does not carry it - see recoverVariant.
         colour: recovered.colour,
         attachment_id: recovered.attachment_id,
         personalisation: recovered.personalisation,
@@ -941,7 +941,7 @@ async function fillItemsFromStripe(
 /**
  * The steps that follow a successful confirm. Split out so a retry can pick
  * up an order that was confirmed but never got its number or its stock
- * movement — the window where the previous delivery crashed or timed out.
+ * movement - the window where the previous delivery crashed or timed out.
  */
 async function finishConfirmation(
   supabase: ReturnType<typeof createAdminClient>,
@@ -956,7 +956,7 @@ async function finishConfirmation(
   // it a one-shot: the order has a number ever after, so every later delivery
   // returned early and the mail was never re-queued. A machine restart, a
   // Resend 429 or `after()` being cut short therefore left a charged customer
-  // with a confirmed order and no email — and /track needs the order number
+  // with a confirmed order and no email - and /track needs the order number
   // that email carries.
   //
   // Now the retry is driven by a fact in the database rather than by who won a
@@ -980,7 +980,7 @@ async function finishConfirmation(
  * the customer has already been emailed about.
  *
  * Returns the order number when this order still needs its confirmation email,
- * and null when it does not — because one has already been recorded as sent, or
+ * and null when it does not - because one has already been recorded as sent, or
  * because a concurrent delivery is the one that will send it. The caller does
  * the queueing; see `finishConfirmation`.
  */
@@ -989,7 +989,7 @@ async function assignOrderNumber(
   orderId: string,
 ): Promise<string | null> {
   // Read before allocating. `nextOrderNumber` used to be awaited inside the
-  // update payload, so the sequence was consumed on EVERY call — including the
+  // update payload, so the sequence was consumed on EVERY call - including the
   // duplicate deliveries whose `is null` compare-and-set matches no rows. That
   // burned an order number per duplicate Stripe delivery, which is exactly the
   // gap-free numbering the design comment on nextOrderNumber exists to protect.
@@ -1009,7 +1009,7 @@ async function assignOrderNumber(
     console.error(`Order ${orderId} disappeared before numbering.`);
     throw new Error("order missing before numbering");
   }
-  // Already numbered — by an earlier delivery, or by the one that raced us.
+  // Already numbered - by an earlier delivery, or by the one that raced us.
   // That is not a reason to stop: the mail is the part that can be lost, and
   // the stamp is what says whether it was. Null there means nothing has ever
   // gone out for this order, so this delivery is entitled to send it.
@@ -1034,7 +1034,7 @@ async function assignOrderNumber(
   // `.select()` is what makes the assignment observable: PostgREST reports no
   // error when a compare-and-set matches nothing, so without it a silent
   // no-op and a real assignment looked identical. Zero rows here means a
-  // concurrent delivery numbered the order between our read and our update —
+  // concurrent delivery numbered the order between our read and our update -
   // its number stands and ours is discarded, costing one gap in that narrow
   // race instead of one per duplicate delivery.
   if (!updated || updated.length === 0) {
@@ -1053,7 +1053,7 @@ async function assignOrderNumber(
   //
   // What has NOT happened yet is the stock movement. `finishConfirmation`
   // calls this function BEFORE `decrementStock` and queues the mail in
-  // between, so the mail is queued while the stock claim is still unspent —
+  // between, so the mail is queued while the stock claim is still unspent -
   // and `after()` runs its task whatever status the handler goes on to return.
   // If `decrementStock` then throws, the customer gets their confirmation AND
   // Stripe gets a 500 and redelivers; the retry finds the order numbered and
@@ -1061,8 +1061,8 @@ async function assignOrderNumber(
   // email about an order whose stock never moved.
   //
   // That is the intended trade, and this is the ordering to keep. Everything
-  // the mail asserts — confirmed, here is your number, here is what you bought,
-  // here is the print lead time — is already true and stays true; the stock
+  // the mail asserts - confirmed, here is your number, here is what you bought,
+  // here is the print lead time - is already true and stays true; the stock
   // count is internal bookkeeping the mail never mentions. Numbering first is
   // also what gives the retry something to be idempotent against. The reverse
   // order would withhold a confirmation for a genuinely paid, genuinely
@@ -1082,7 +1082,7 @@ type ConfirmationItem = {
   personalisation: unknown;
   /**
    * Set on a Lucky Scoop line and null on every other. Read only to decide
-   * whether the email has to explain that the contents are not chosen yet —
+   * whether the email has to explain that the contents are not chosen yet -
    * the line itself renders from `product_name` and `variant_label` like any
    * other, because "Pet scoop / 5 pieces" is precisely what was bought.
    */
@@ -1099,14 +1099,14 @@ function hasScoop(items: ConfirmationItem[]): boolean {
  *
  * WHAT IT SAYS. That the pieces have not been chosen yet. Every other line on
  * this email describes a thing the customer picked; a scoop is the one they did
- * not, and a receipt that listed "Pet scoop — 5 pieces — $25.00" beside a
+ * not, and a receipt that listed "Pet scoop - 5 pieces - $25.00" beside a
  * keyring, with no further word, would read as though five named pieces were
  * already set aside. Under the Australian Consumer Law the description binds,
  * and "lucky" does not waive it, so the email restates the actual bargain.
  *
  * WHAT IT DELIBERATELY DOES NOT SAY. Nothing about a video. 0007 records that
  * whether every scoop is filmed is one of the decisions only the owner can
- * make, and it is not settled — `scoop_packs.video_url` is nullable precisely
+ * make, and it is not settled - `scoop_packs.video_url` is nullable precisely
  * so an order arriving at midnight is not unpostable until it has been filmed.
  * A promise of a video in a confirmation email is a term of sale nobody agreed
  * to. Nothing about returns either: whether a surprise is "made to order" for
@@ -1116,7 +1116,7 @@ function hasScoop(items: ConfirmationItem[]): boolean {
  */
 const SCOOP_NOTE =
   "Your Lucky Scoop is drawn and packed by hand after you order, from the " +
-  "pool shown on its page — so what's in it isn't decided yet.";
+  "pool shown on its page, so what's in it isn't decided yet.";
 
 type ConfirmationOrder = {
   email: string | null;
@@ -1128,7 +1128,7 @@ type ConfirmationOrder = {
   order_items?: ConfirmationItem[] | null;
 };
 
-/** "Standard" / "Express" — never inlined, so lib/config stays the one source. */
+/** "Standard" / "Express" - never inlined, so lib/config stays the one source. */
 function shippingLabel(methodId: string | null): string {
   const method = SHIPPING.methods.find((m) => m.id === methodId);
   return (method ?? SHIPPING.methods[0]).label;
@@ -1150,7 +1150,7 @@ function confirmationLines(items: ConfirmationItem[]) {
  * The plain-text confirmation. Everything in here has to be true of an order
  * that has just been paid for and numbered:
  *
- *  - no GST line — the business is not registered for it (SHOP.gstRegistered);
+ *  - no GST line - the business is not registered for it (SHOP.gstRegistered);
  *  - PRINT_LEAD_TIME is printing time, said as printing time, never delivery;
  *  - no promise of a dispatch or tracking email, because nothing sends one;
  *  - /track needs the order number AND the email used at checkout, so the
@@ -1165,12 +1165,12 @@ function confirmationText(
 ): string {
   const lines = confirmationLines(items);
   return [
-    `Thanks for your order — it's paid for and in the queue.`,
+    `Thanks for your order, it's paid for and in the queue.`,
     ``,
     `Order number: ${orderNumber}`,
     ``,
     `What you ordered`,
-    ...lines.map((line) => `  ${line.label} — ${line.amount}`),
+    ...lines.map((line) => `  ${line.label}, ${line.amount}`),
     ``,
     `  Subtotal: ${money(order.subtotal ?? 0)}`,
     `  Postage (${shippingLabel(order.shipping_method)}): ${money(order.shipping ?? 0)}`,
@@ -1178,12 +1178,12 @@ function confirmationText(
     ``,
     `What happens next`,
     `Everything is printed to order. Printing takes ${PRINT_LEAD_TIME.label} before`,
-    `your parcel is posted, and postage time is on top of that — the printing`,
+    `your parcel is posted, and postage time is on top of that, the printing`,
     `window is not a delivery date.`,
     ``,
     `Checking on your order`,
     `${siteUrl()}/track shows where it is up to. You'll need the order`,
-    `number above and the email address you ordered with — it takes both to`,
+    `number above and the email address you ordered with, it takes both to`,
     `find an order, so it's worth keeping this email.`,
     ``,
     `We don't send dispatch or tracking emails, so /track is the place to look.`,
@@ -1199,7 +1199,7 @@ function confirmationText(
       ? [``, `Something not right? Reply to this email or write to ${SHOP.supportEmail}.`]
       : []),
     ``,
-    `${SHOP.name} — ${SHOP.city}, ${SHOP.country}`,
+    `${SHOP.name}, ${SHOP.city}, ${SHOP.country}`,
   ].join("\n");
 }
 
@@ -1213,7 +1213,7 @@ function escapeHtml(value: string): string {
 
 /**
  * The same words as `confirmationText`, laid out. Inline styles only and no
- * images or external assets — mail clients strip stylesheets, and a broken
+ * images or external assets - mail clients strip stylesheets, and a broken
  * layout on a receipt reads as a broken shop.
  */
 function confirmationHtml(
@@ -1250,12 +1250,12 @@ function confirmationHtml(
 
   return [
     `<div style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#2b2b2b;max-width:560px;">`,
-    `<p style="margin:0 0 12px;">Thanks for your order — it's paid for and in the queue.</p>`,
+    `<p style="margin:0 0 12px;">Thanks for your order, it's paid for and in the queue.</p>`,
     `<p style="margin:0 0 16px;"><strong>Order number: ${escapeHtml(orderNumber)}</strong></p>`,
     `<table style="width:100%;border-collapse:collapse;margin:0 0 12px;">${rows}</table>`,
     `<table style="width:100%;border-collapse:collapse;margin:0 0 20px;">${totals}</table>`,
-    `<p style="margin:0 0 12px;"><strong>What happens next</strong><br>Everything is printed to order. Printing takes ${escapeHtml(PRINT_LEAD_TIME.label)} before your parcel is posted, and postage time is on top of that — the printing window is not a delivery date.</p>`,
-    `<p style="margin:0 0 12px;"><strong>Checking on your order</strong><br><a href="${escapeHtml(track)}" style="color:#b4506b;">${escapeHtml(track)}</a> shows where it is up to. You'll need the order number above and the email address you ordered with — it takes both to find an order, so it's worth keeping this email.</p>`,
+    `<p style="margin:0 0 12px;"><strong>What happens next</strong><br>Everything is printed to order. Printing takes ${escapeHtml(PRINT_LEAD_TIME.label)} before your parcel is posted, and postage time is on top of that, the printing window is not a delivery date.</p>`,
+    `<p style="margin:0 0 12px;"><strong>Checking on your order</strong><br><a href="${escapeHtml(track)}" style="color:#b4506b;">${escapeHtml(track)}</a> shows where it is up to. You'll need the order number above and the email address you ordered with, it takes both to find an order, so it's worth keeping this email.</p>`,
     `<p style="margin:0 0 12px;">We don't send dispatch or tracking emails, so /track is the place to look.</p>`,
     hasScoop(items)
       ? `<p style="margin:0 0 12px;"><strong>About your scoop</strong><br>${escapeHtml(SCOOP_NOTE)}</p>`
@@ -1264,7 +1264,7 @@ function confirmationHtml(
       ? `<p style="margin:0 0 12px;">Personalised pieces can't be returned unless they arrive faulty.</p>`
       : "",
     support,
-    `<p style="margin:0;color:#777;">${escapeHtml(SHOP.name)} — ${escapeHtml(SHOP.city)}, ${escapeHtml(SHOP.country)}</p>`,
+    `<p style="margin:0;color:#777;">${escapeHtml(SHOP.name)}, ${escapeHtml(SHOP.city)}, ${escapeHtml(SHOP.country)}</p>`,
     `</div>`,
   ].join("");
 }
@@ -1289,7 +1289,7 @@ async function sendOrderConfirmation(
       "email, subtotal, shipping, total, shipping_method, " +
         "confirmation_email_sent_at, " +
         // `scoop_tier_id` is here so the email can tell a Lucky Scoop from a
-        // charm. It is a marker and nothing more — no pack, no contents, no
+        // charm. It is a marker and nothing more - no pack, no contents, no
         // pieces. Those live in `scoop_packs`/`scoop_pack_items`, which are
         // service_role in and out, and at the moment this email is sent they do
         // not exist yet in any case.
@@ -1318,22 +1318,22 @@ async function sendOrderConfirmation(
   const order = data as ConfirmationOrder | null;
 
   // The retry path re-queues the mail for any numbered order with no stamp, so
-  // two deliveries can both reach this point. Re-reading the stamp here — after
-  // the queue gate, immediately before the send — narrows that window to the
+  // two deliveries can both reach this point. Re-reading the stamp here - after
+  // the queue gate, immediately before the send - narrows that window to the
   // few milliseconds between this read and the provider call. It is not a lock
   // and is not pretending to be one; the ordering trade is spelled out in
   // `finishConfirmation`.
   if (order?.confirmation_email_sent_at) return;
 
   if (!order || !hasCustomerEmail(order.email)) {
-    // Either the column is empty, or it holds NO_CUSTOMER_EMAIL — what the
+    // Either the column is empty, or it holds NO_CUSTOMER_EMAIL - what the
     // Stripe-rebuild insert writes when Stripe gave us no address at all. That
     // sentinel is a truthy string, so it has to be tested by name: a bare
     // `!order.email` let it straight through, and we handed Resend the word
     // "unknown" as a recipient, collected a 422, and logged `maskEmail`'s
-    // `***` — an unhelpful failure for the one case this guard exists for.
+    // `***` - an unhelpful failure for the one case this guard exists for.
     console.error(
-      `Order ${orderNumber} has no address to confirm to — nothing sent.`,
+      `Order ${orderNumber} has no address to confirm to, nothing sent.`,
     );
     report(() =>
       captureMessage("Paid order has no address to confirm to", {
@@ -1353,9 +1353,9 @@ async function sendOrderConfirmation(
   if (items.length === 0) {
     // A confirmation listing nothing is worse than no confirmation: it tells a
     // customer their order is fine when we cannot see what is on it.
-    console.error(`Order ${orderNumber} has no items — no confirmation sent.`);
+    console.error(`Order ${orderNumber} has no items, no confirmation sent.`);
     report(() =>
-      captureMessage("Paid order has no line items — no confirmation sent", {
+      captureMessage("Paid order has no line items, no confirmation sent", {
         scope: "stripe-webhook",
         level: "error",
         route: "/api/webhooks/stripe",
@@ -1367,7 +1367,7 @@ async function sendOrderConfirmation(
 
   const result = await sendEmail({
     to: order.email,
-    subject: `Order ${orderNumber} confirmed — ${SHOP.name}`,
+    subject: `Order ${orderNumber} confirmed, ${SHOP.name}`,
     text: confirmationText(orderNumber, order, items),
     html: confirmationHtml(orderNumber, order, items),
     // Only when there is a mailbox behind it; otherwise replies go wherever
@@ -1396,7 +1396,7 @@ async function sendOrderConfirmation(
 
     // Not thrown: this task is detached from the response and the mail has
     // already gone. An unrecorded success means a later delivery may send a
-    // second copy — the safe direction, and the direction this whole change
+    // second copy - the safe direction, and the direction this whole change
     // chooses on purpose.
     if (stampError) {
       console.error(
@@ -1415,7 +1415,7 @@ async function sendOrderConfirmation(
   // The 2am Resend 429 this whole round is named after. The customer has paid,
   // the order is correct, and the only notification they were ever going to
   // get did not arrive. The stamp is deliberately NOT written above, so a later
-  // Stripe delivery re-queues the send — but Stripe's retries run out, and
+  // Stripe delivery re-queues the send - but Stripe's retries run out, and
   // after that nobody finds out until the customer asks.
   //
   // The masked address is in the log line above and NOT here: `result.detail`
@@ -1457,8 +1457,8 @@ function queueOrderConfirmation(
   orderNumber: string,
 ) {
   // Unconfigured is a complete no-op: no task, no extra query, no log line.
-  // The shop's own copy is gated on `isEmailConfigured()` — this exact
-  // predicate, not a public mirror of it — so the claim and the capability can
+  // The shop's own copy is gated on `isEmailConfigured()` - this exact
+  // predicate, not a public mirror of it - so the claim and the capability can
   // no longer disagree: if this returns false, every page has already told the
   // customer no order email is coming, and the silence breaks nothing.
   if (!isEmailConfigured()) return;
@@ -1474,7 +1474,7 @@ function queueOrderConfirmation(
       // than a redelivered webhook, so it stops here.
       console.error(`Order ${orderNumber} confirmation email failed:`, error);
       // Detached from the request, so `onRequestError` in instrumentation.ts
-      // never sees this one — the runtime's unhandled-rejection handler would
+      // never sees this one - the runtime's unhandled-rejection handler would
       // be the only other witness. Nested `after()` is not available inside an
       // `after()` task, which is why `report` falls back to a bare promise.
       report(() =>
@@ -1492,7 +1492,7 @@ function queueOrderConfirmation(
     after(task);
   } catch (error) {
     // `after()` throws when it is called outside a request scope. A route
-    // handler always has one, so this is belt and braces — but the entire
+    // handler always has one, so this is belt and braces - but the entire
     // point of this function is that mail cannot break a confirmed order, and
     // that has to hold for the scheduling call itself. A detached promise
     // cannot propagate either; it is only weaker in that the platform may not
@@ -1558,7 +1558,7 @@ async function claimStock(
  * replaying a partially applied loop would double-count the products that
  * already succeeded.
  *
- * A failure to release is logged and swallowed on purpose — the caller is
+ * A failure to release is logged and swallowed on purpose - the caller is
  * already throwing, and the original failure is the one worth reporting. The
  * cost of a stuck claim is a stock count that has to be corrected by hand, not
  * a lost order.
@@ -1586,8 +1586,8 @@ async function releaseStockClaim(
  * Ready-to-ship stock only; made-to-order lines sit at zero already.
  *
  * Claims the work with a compare-and-set on `stock_applied` before touching
- * any counts, so a Stripe retry — or a retry finishing a half-completed
- * confirm — cannot decrement the same order twice.
+ * any counts, so a Stripe retry - or a retry finishing a half-completed
+ * confirm - cannot decrement the same order twice.
  *
  * The claim being taken first is what made the swallowed errors below
  * permanent: once `stock_applied` is true no later delivery re-enters this
@@ -1619,8 +1619,8 @@ async function decrementStock(
     /*
      * A LUCKY SCOOP MOVES NO STOCK HERE, AND THIS IS THE LINE THAT SAYS SO.
      *
-     * A scoop is sold before its contents are decided. At this moment — money
-     * taken, order numbered — nobody, the studio included, knows which products
+     * A scoop is sold before its contents are decided. At this moment - money
+     * taken, order numbered - nobody, the studio included, knows which products
      * are going in the bag, so there is nothing to decrement. Stock comes off
      * later, in the pack panel, one `decrement_stock` per piece actually drawn,
      * guarded by `scoop_packs.stock_applied` so a re-saved panel cannot take the
@@ -1629,7 +1629,7 @@ async function decrementStock(
      * The `!item.product_id` test below would already skip it, because a scoop
      * line's product id is null by CHECK constraint. That is an ACCIDENT of two
      * facts holding at once, not a decision, and it evaporates silently the day
-     * anyone backfills a product id or relaxes the constraint — after which
+     * anyone backfills a product id or relaxes the constraint - after which
      * every scoop sold would quietly take a charm off the shelf that nobody had
      * drawn. Asking the question directly is what makes the rule survive that.
      */
@@ -1644,7 +1644,7 @@ async function decrementStock(
       // claim already spent, so the drift was permanent and invisible. Release
       // the claim only while nothing has landed; once a decrement has gone
       // through, a replay would double-count it, and one order short of its
-      // stock movement — named here in the log — beats silent drift across
+      // stock movement - named here in the log - beats silent drift across
       // every product on it.
       console.error(
         `Stock decrement failed for order ${orderId}, product ` +
@@ -1660,7 +1660,7 @@ async function decrementStock(
     //
     // `decrement_stock` used to return void and clamp at zero, so selling the
     // last one twice succeeded twice and said nothing at all. It now returns
-    // the shortfall — how many units were sold that the buffer did not have —
+    // the shortfall - how many units were sold that the buffer did not have -
     // and accumulates it on `products.oversold_units` for the inventory screen.
     //
     // This is NOT an error and does not fail the delivery: the shop prints to
@@ -1672,7 +1672,7 @@ async function decrementStock(
     if (oversold > 0) {
       console.warn(
         `Order ${orderId} oversold product ${item.product_id} by ${oversold} ` +
-          "unit(s) — the buffer was short. Print these first; the count is on " +
+          "unit(s), the buffer was short. Print these first; the count is on " +
           "products.oversold_units.",
       );
     }
@@ -1728,7 +1728,7 @@ export async function POST(request: Request) {
   try {
     event = getStripe().webhooks.constructEvent(payload, signature, secret);
   } catch (error) {
-    // A signature mismatch means this did not come from Stripe — reject it.
+    // A signature mismatch means this did not come from Stripe - reject it.
     console.error("Webhook signature verification failed:", error);
     return NextResponse.json({ error: "invalid signature" }, { status: 400 });
   }
@@ -1765,8 +1765,8 @@ export async function POST(request: Request) {
     console.error(`Handling ${event.type} failed:`, error);
     // Every database failure in this file throws up to here, so this one line
     // covers order insert/update/read failures, stock claiming, item writes
-    // and order-number allocation. `onRequestError` will not fire — the throw
-    // is caught, and a caught error is invisible to Next's hook — so this is
+    // and order-number allocation. `onRequestError` will not fire - the throw
+    // is caught, and a caught error is invisible to Next's hook - so this is
     // the only place it can be reported from.
     //
     // Stripe retries with backoff for about three days and then stops. That is

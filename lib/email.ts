@@ -7,7 +7,7 @@
  * Two rules shape everything below.
  *
  * 1. **Sending never throws.** Email is a side effect of a checkout, a webhook
- *    or a form post — none of which may fail because a mail provider is slow,
+ *    or a form post - none of which may fail because a mail provider is slow,
  *    rate-limited or unconfigured. Every path returns an `EmailResult`; the
  *    caller decides what to tell the customer. A webhook that 500s because
  *    Resend was down would make Stripe retry a completed order.
@@ -43,11 +43,11 @@ export type EmailMessage = {
 };
 
 export type EmailFailureReason =
-  /** RESEND_API_KEY / EMAIL_FROM missing — nothing was attempted. */
+  /** RESEND_API_KEY / EMAIL_FROM missing - nothing was attempted. */
   | "not_configured"
   /** The provider did not answer inside SEND_TIMEOUT_MS. */
   | "timeout"
-  /** DNS/TLS/socket failure — the request never got an HTTP response. */
+  /** DNS/TLS/socket failure - the request never got an HTTP response. */
   | "network_error"
   /** Resend answered with a non-2xx. `status` carries the code. */
   | "provider_error";
@@ -65,11 +65,11 @@ export type EmailResult =
 
 /**
  * Whether this process can actually send. **The single source of truth for
- * "the shop can send email"** — the same condition `sendEmail` itself checks,
+ * "the shop can send email"** - the same condition `sendEmail` itself checks,
  * so nothing on the site can claim a capability the sender does not have.
  *
  * It gates three real flows: the itemised order confirmation from the Stripe
- * webhook (on this alone), and — together with `SHOP.hasSupportEmail` — the
+ * webhook (on this alone), and - together with `SHOP.hasSupportEmail` - the
  * contact-form enquiry and the newsletter sign-up notification. Supabase Auth's
  * signup-confirmation and password-reset mail is independent of all of it.
  *
@@ -103,7 +103,7 @@ export function isEmailConfigured(): boolean {
 let warnedUnconfigured = false;
 
 /**
- * `a***@example.com` — enough to tell two failures apart in a log without
+ * `a***@example.com` - enough to tell two failures apart in a log without
  * writing a customer's address to it.
  */
 export function maskEmail(address: string): string {
@@ -138,7 +138,7 @@ export async function sendEmail(message: EmailMessage): Promise<EmailResult> {
     if (!warnedUnconfigured) {
       warnedUnconfigured = true;
       console.info(
-        "[email] not configured — set RESEND_API_KEY and EMAIL_FROM to send. " +
+        "[email] not configured, set RESEND_API_KEY and EMAIL_FROM to send. " +
           "Nothing is queued; callers must not claim delivery.",
       );
     }

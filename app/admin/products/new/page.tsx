@@ -26,7 +26,7 @@ export default async function NewProductPage() {
       />
       <PageHead
         title="Add a product"
-        subtitle="Photographs come after it is saved — a photo needs something to belong to."
+        subtitle="Photographs come after it is saved, a photo needs something to belong to."
       />
       <ProductForm
         product={null}

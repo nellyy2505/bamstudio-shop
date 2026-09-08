@@ -1,9 +1,9 @@
 /**
  * The "can a customer reach us, and what do we actually send them" predicates.
  *
- * These used to be copy-pasted into nine files under three names —
+ * These used to be copy-pasted into nine files under three names -
  * `canReachStudio`, `HAS_CHANNEL` (the same mailbox-or-social test) and
- * `FORM_DELIVERS` — with several of the copies carrying a comment saying they
+ * `FORM_DELIVERS` - with several of the copies carrying a comment saying they
  * wanted to live here. A page that edits its own copy silently desynchronises
  * from the eight that did not, and every one of them gates a promise made to
  * someone who has already been charged. So there is one definition of each.
@@ -45,7 +45,7 @@ export const socialLinks: SocialLink[] = [
  *
  * Asserts: `SHOP.supportEmail` is an address a person reads, not the
  * `[HELLO@YOURDOMAIN]` placeholder. **Never print `SHOP.supportEmail` or build
- * a `mailto:` from it without checking this** — the placeholder reads as a real
+ * a `mailto:` from it without checking this** - the placeholder reads as a real
  * address and silently swallows a customer's faulty-goods claim.
  */
 export const hasStudioMailbox: boolean = SHOP.hasSupportEmail;
@@ -54,7 +54,7 @@ export const hasStudioMailbox: boolean = SHOP.hasSupportEmail;
 export const hasSocialAccount: boolean = socialLinks.length > 0;
 
 /**
- * Is there ANY door a customer can walk through under their own steam — a
+ * Is there ANY door a customer can walk through under their own steam - a
  * mailbox to write to, or an account to DM?
  *
  * Asserts: "get in touch and we'll put it right" names something that exists.
@@ -62,7 +62,7 @@ export const hasSocialAccount: boolean = socialLinks.length > 0;
  *
  * Deliberately does NOT count the on-site contact form. The form is not a
  * channel on its own: it delivers by emailing the studio mailbox, so it needs
- * both the mailbox and sending capability — see `formsReachStudio`. Using this
+ * both the mailbox and sending capability - see `formsReachStudio`. Using this
  * predicate to decide whether to render the form would put a box in front of a
  * customer whose message reaches nobody.
  */
@@ -75,17 +75,17 @@ export const canReachStudio: boolean = hasStudioMailbox || hasSocialAccount;
  * and `/api/newsletter` each email `SHOP.supportEmail` through Resend. Without
  * the mailbox there is nowhere to send it; without the secrets nothing is sent.
  *
- * WHAT THIS NO LONGER DECIDES: whether the submission survives. It used to —
+ * WHAT THIS NO LONGER DECIDES: whether the submission survives. It used to -
  * both routes kept nothing, so the send WAS the delivery. Since
  * `0006_enquiries.sql` each route writes a row first (`contact_enquiries`,
  * `newsletter_signups`) and the email is a notification about a row that
  * already exists. This is the "does the owner hear about it" test now, not the
  * "does it still exist tomorrow" test.
  *
- * It still gates whether the box is offered, and it still has to — but the
+ * It still gates whether the box is offered, and it still has to - but the
  * reason has narrowed, and the old one no longer holds. This used to say
- * "nothing in this codebase reads either table — there is no studio screen for
- * enquiries yet — so the notification is the only way anyone finds out one
+ * "nothing in this codebase reads either table - there is no studio screen for
+ * enquiries yet - so the notification is the only way anyone finds out one
  * arrived", and concluded that where this is false a message is "seen by
  * nobody". `/admin/enquiries` now lists both tables (`listEnquiries`,
  * `listSignups`), so a stored row IS readable: by owner and studio, who hold
@@ -94,7 +94,7 @@ export const canReachStudio: boolean = hasStudioMailbox || hasSocialAccount;
  * What is left is the difference between a message that arrives and a message
  * that waits. Where this is false the row survives and can be found, but
  * nobody is TOLD it exists, so it is seen whenever somebody next thinks to open
- * the screen — which for a faulty-goods claim is not the same as promptly.
+ * the screen - which for a faulty-goods claim is not the same as promptly.
  * That is still reason enough not to offer the box.
  *
  * @param canSendEmail `isEmailConfigured()`, read on the server. Passing a
@@ -103,8 +103,8 @@ export const canReachStudio: boolean = hasStudioMailbox || hasSocialAccount;
  *   offered, accepted, and nobody is ever told the enquiry arrived.
  *
  * Asserts: it is honest to render the form/sign-up box and to say "our contact
- * form reaches the same inbox". Misusing it — rendering the form when this is
- * false — leaves enquiries, faulty-goods claims included, sitting on
+ * form reaches the same inbox". Misusing it - rendering the form when this is
+ * false - leaves enquiries, faulty-goods claims included, sitting on
  * `/admin/enquiries` with nothing pointing at them, waiting on somebody
  * choosing to look.
  */
@@ -116,15 +116,15 @@ export function formsReachStudio(canSendEmail: boolean): boolean {
  * Does the shop email a customer an order confirmation when they pay?
  *
  * The Stripe webhook sends an itemised confirmation (line items, subtotal,
- * postage, total paid) on `isEmailConfigured()` **alone** — it has no
+ * postage, total paid) on `isEmailConfigured()` **alone** - it has no
  * dependency on the studio mailbox, which only decides whether the mail also
  * carries a reply-to. So this is that condition and nothing else.
  *
  * @param canSendEmail `isEmailConfigured()`, read on the server.
  *
  * Asserts: the shop sends the customer an automatic order email. Every "we do
- * not send order emails" sentence on the site — including the two in the legal
- * documents — must be gated on this being false, and every "your confirmation
+ * not send order emails" sentence on the site - including the two in the legal
+ * documents - must be gated on this being false, and every "your confirmation
  * is on its way" on it being true. Anding it with `hasStudioMailbox` (the old
  * `FORM_DELIVERS` test) is the specific mistake to avoid: it produces
  * configurations where the mail goes out and the privacy policy denies it.

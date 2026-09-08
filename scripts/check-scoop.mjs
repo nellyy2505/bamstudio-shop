@@ -1,5 +1,5 @@
 /**
- * Checks lib/scoop.ts — the Lucky Scoop rules.
+ * Checks lib/scoop.ts - the Lucky Scoop rules.
  *
  *   node scripts/check-scoop.mjs
  *
@@ -7,7 +7,7 @@
  * under test is pure, so it can be compiled and exercised on its own without a
  * database, a server or a browser. The expected values here are worked out in
  * the comments beside each case rather than taken from a fixture, because
- * unlike costing there is no spreadsheet to check against — these rules were
+ * unlike costing there is no spreadsheet to check against - these rules were
  * decided in 0007_lucky_scoop.sql and lib/scoop.ts, and what this script proves
  * is that the code does what those two say.
  *
@@ -27,7 +27,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 //
 // COMMONJS, unlike check-costing.mjs, and the difference is the import. The app
 // resolves modules the way a bundler does, so lib/scoop.ts writes
-// `from "./costing"` with no extension — which is what the rest of lib/ writes
+// `from "./costing"` with no extension - which is what the rest of lib/ writes
 // and what tsc emits verbatim. Node's ESM loader will not resolve an
 // extensionless specifier, so an esnext build of this file cannot be imported
 // here at all. CommonJS resolves it, `await import()` reads the named exports
@@ -70,7 +70,7 @@ const tier = (over = {}) => ({
 });
 
 // ---------------------------------------------------------------------------
-// drawablePieces — what a scoop can actually be drawn from
+// drawablePieces - what a scoop can actually be drawn from
 // ---------------------------------------------------------------------------
 const mixed = [
   piece("in-stock", 3),
@@ -84,7 +84,7 @@ eq(
 );
 
 // ---------------------------------------------------------------------------
-// scoopsAvailable — Σ min(cᵢ, m) ≥ m × pieceCount
+// scoopsAvailable - Σ min(cᵢ, m) ≥ m × pieceCount
 // ---------------------------------------------------------------------------
 //
 // Five products, one each: exactly one duplicate-free scoop of five.
@@ -95,7 +95,7 @@ eq(
 );
 
 // Four products with plenty of stock cannot fill a five-piece scoop from the
-// shelf alone, however deep the shelf is — a duplicate-free scoop of five needs
+// shelf alone, however deep the shelf is - a duplicate-free scoop of five needs
 // five distinct products with something in. This is arithmetic about the bowl,
 // NOT a sales rule: the tier keeps selling and the fifth piece gets printed
 // before the bag is packed. See lib/scoop.ts.
@@ -114,7 +114,7 @@ eq(
 );
 
 // The case a naive `floor(totalUnits / pieceCount)` gets wrong. Six products
-// holding 10,1,1,1,1,1 is 15 units — three scoops by division — but the deep
+// holding 10,1,1,1,1,1 is 15 units - three scoops by division - but the deep
 // one can only put a single piece in each bag, so the other five products have
 // to supply four pieces per scoop out of five units total. One scoop.
 eq(
@@ -139,7 +139,7 @@ eq(
 );
 
 // An empty bowl, an empty pool, and a nonsense piece count all answer 0 rather
-// than throwing — every one of these is a real state of a tier the studio has
+// than throwing - every one of these is a real state of a tier the studio has
 // half-built.
 eq("an empty pool fills nothing", m.scoopsAvailable([], 5), 0);
 eq("a bowl with no stock fills nothing",
@@ -148,7 +148,7 @@ eq("a piece count of zero fills nothing",
   m.scoopsAvailable([piece("a", 5)], 0), 0);
 
 // ---------------------------------------------------------------------------
-// tierAvailability — on sale, and how full the bowl is, kept apart
+// tierAvailability - on sale, and how full the bowl is, kept apart
 // ---------------------------------------------------------------------------
 const fullPool = [1, 2, 3, 4, 5].map((n) => piece(`p${n}`, 2));
 
@@ -178,7 +178,7 @@ eq("an unweighed tier is still on sale",
 //
 // There was a rule here that a tier stopped being sellable when its pool could
 // not fill a scoop off the shelf. It was wrong and it is gone: THE SHOP PRINTS
-// TO ORDER — decrement_stock returns a shortfall and keeps selling
+// TO ORDER - decrement_stock returns a shortfall and keeps selling
 // (0005_sale_integrity.sql) precisely because a piece that runs out is printed
 // again, and a scoop is no different. She scoops from the bowl, and prints the
 // rest before packing.
@@ -199,7 +199,7 @@ eq("an empty pool is not a sales question either",
   m.tierAvailability(tier(), []).sellable, true);
 
 // ---------------------------------------------------------------------------
-// activationBlockers — the same three rules 0007 enforces, asked in advance
+// activationBlockers - the same three rules 0007 enforces, asked in advance
 // ---------------------------------------------------------------------------
 eq("a fillable priced tier can be activated",
   m.activationBlockers({ pieceCount: 5, priceCents: 2500, packedWeightGrams: 120 }, 5), []);
@@ -215,7 +215,7 @@ eq("an empty shelf does not block activation",
   m.activationBlockers({ pieceCount: 2, priceCents: 2500, packedWeightGrams: 120 }, 5), []);
 
 // ---------------------------------------------------------------------------
-// packCost — the sum, and the null that matters
+// packCost - the sum, and the null that matters
 // ---------------------------------------------------------------------------
 const packed = [
   { productId: "a", quantity: 1, unitCostCents: 240 },
@@ -268,7 +268,7 @@ near("a five-piece scoop from a 40c pool suggests $7.50",
 
 // THE ASSERTION THIS WHOLE FILE IS FOR. Zero of forty-four products in this
 // catalogue have a measured cost, and a partially measured pool is where an
-// invented number would come from — an average over the two pieces somebody
+// invented number would come from - an average over the two pieces somebody
 // happened to time, shown beside the field she is about to price from.
 const partlyMeasured = [
   piece("a", 5, 30),

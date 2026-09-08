@@ -1,13 +1,13 @@
 /**
  * The bowl.
  *
- * Every other illustration in this shop is a product — `components/ProductArt`
+ * Every other illustration in this shop is a product - `components/ProductArt`
  * has seventeen of them, keyed by `ArtKey`, and nothing there is a container.
  * A scoop is not a product row and never will be (0007_lucky_scoop.sql), so it
  * has no `art` key to look up and needed its own drawing rather than borrowing
  * a macaron and hoping nobody read it as "you get macarons".
  *
- * Deliberately generic charms — a disc, a heart, a star. The pieces in any real
+ * Deliberately generic charms - a disc, a heart, a star. The pieces in any real
  * bowl are whatever the tier's pool says they are, and the pool is rendered
  * underneath as actual product cards. Drawing recognisable products here would
  * put a second, prettier, wrong answer above the real one.

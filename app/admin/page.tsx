@@ -95,7 +95,7 @@ export default async function AdminOverviewPage() {
       {summary.noOrdersYet ? (
         <div className="card border-line2 bg-cream p-5 text-[13.5px] text-muted">
           <b className="text-ink">No orders yet.</b> Reports stay empty until the
-          shop takes one — there is nothing to chart, and a chart of nothing is
+          shop takes one, there is nothing to chart, and a chart of nothing is
           worse than no chart. Sales you make at a market or on TikTok can be
           typed in from the Orders page and they count the same.
         </div>
@@ -114,7 +114,7 @@ export default async function AdminOverviewPage() {
  *    `console.error` in the webhook saying "refund this one by hand" and a 200
  *    to Stripe. The customer was charged, received nothing, and the only record
  *    was a line in a log nobody reads. The refund is still issued by hand in
- *    Stripe — that is a decision with a customer at the other end of it — but
+ *    Stripe - that is a decision with a customer at the other end of it - but
  *    it is now a row here until she says it is done.
  *  - An order confirmation that never sent left no trace at all, and /track
  *    needs the order number that email carries.
@@ -187,7 +187,7 @@ function NeedsAPerson({ attention }: { attention: StudioAttention }) {
           {pluralise(awaitingMail, "paid order")} {awaitingMail === 1 ? "has" : "have"}{" "}
           no confirmation email recorded against{" "}
           {awaitingMail === 1 ? "it" : "them"}. The webhook tries again on every
-          delivery Stripe makes, so this usually clears itself — if it does not,
+          delivery Stripe makes, so this usually clears itself, if it does not,
           those customers have no order number and cannot use /track.
         </Alert>
       ) : null}
@@ -198,7 +198,7 @@ function NeedsAPerson({ attention }: { attention: StudioAttention }) {
             {pluralise(attention.oversoldUnits, "piece")} sold beyond what was on
             the shelf.
           </b>{" "}
-          That is allowed — everything is printed to order — but these are the
+          That is allowed, everything is printed to order, but these are the
           ones to print first:{" "}
           {attention.oversoldProducts
             .map((product) => `${product.name} (${product.units})`)
@@ -283,7 +283,7 @@ async function OrderQueue({
               className="grid grid-cols-[128px_minmax(0,1fr)_auto] items-center gap-4 px-5 py-3.5 sm:grid-cols-[128px_minmax(0,1fr)_130px_100px_auto]"
             >
               <span className="font-mono text-[13px] font-semibold">
-                {order.orderNumber ?? "—"}
+                {order.orderNumber ?? "-"}
               </span>
               <span className="truncate text-[14.5px]">
                 {order.itemCount} {order.itemCount === 1 ? "item" : "items"}

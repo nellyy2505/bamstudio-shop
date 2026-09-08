@@ -36,7 +36,7 @@ export function Footer() {
    * no one is the false promise, not the wording on the button.
    *
    * This footer is a server component, so the capability is `isEmailConfigured()`
-   * — the same secrets the route checks per request. It used to be a public
+   * - the same secrets the route checks per request. It used to be a public
    * build flag, which could be false while the secrets were set, hiding a
    * sign-up box that would have worked.
    */
@@ -51,7 +51,7 @@ export function Footer() {
               Bam<span className="text-accent">Studio</span>
             </p>
             <p className="mb-4 max-w-[250px] text-[13.5px]">
-              Cute, clicky, 3D-printed keepsakes — designed by our family,
+              Cute, clicky, 3D-printed keepsakes, designed by our family,
               printed to order in {SHOP.city}.
             </p>
             <div className="flex flex-wrap gap-2">
@@ -86,7 +86,7 @@ export function Footer() {
               {canForwardSignups ? "Hear about new drops" : "New drops"}
             </h4>
             {/* No list exists yet, so no frequency and no "you're subscribed"
-                is promised anywhere — this asks the studio to note you down. */}
+                is promised anywhere - this asks the studio to note you down. */}
             {canForwardSignups ? (
               <>
                 <p className="mb-3 text-[13.5px]">

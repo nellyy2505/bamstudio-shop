@@ -9,20 +9,20 @@
  * ## Shape
  *
  * L1 is an in-process `Map` with a `sweep()`, deliberately the same shape as
- * `lib/rate-limit.ts` — per-process, reset by a restart or a deploy, which on
+ * `lib/rate-limit.ts` - per-process, reset by a restart or a deploy, which on
  * Fly is one always-on container. The same caveat applies as there: scale past
  * one machine and each machine keeps its own copy. For a cache rather than a
- * limiter that is harmless — the worst case is n times as many API calls, and
+ * limiter that is harmless - the worst case is n times as many API calls, and
  * n is small.
  *
- * ## The L2 seam — read this before adding the database layer
+ * ## The L2 seam - read this before adding the database layer
  *
  * `lookupRate` and `storeRate` are **async even though L1 is synchronous**.
  * That is the entire point: `quote.ts` already awaits them, so adding an L2
  * database tier changes this file and nothing else. Two clearly marked blocks
  * below are where it goes.
  *
- * The table exists — `public.shipping_rate_cache`, added by separate work in
+ * The table exists - `public.shipping_rate_cache`, added by separate work in
  * `supabase/migrations/0002_shipping.sql`:
  *
  *     key           text primary key   -- exactly what rateCacheKey() returns
@@ -40,7 +40,7 @@
  *    avoid repeating an API call. Persisting a fallback price would turn a
  *    two-second outage into six hours of deliberately-inflated quotes, and
  *    would outlive the outage that justified them.
- * 3. **RLS denies every row to anon and authenticated**, by design — this is
+ * 3. **RLS denies every row to anon and authenticated**, by design - this is
  *    internal pricing data. Read and write it through the server-side admin
  *    client only, the way `lib/supabase/` already does.
  *
@@ -70,7 +70,7 @@ const entries = new Map<string, CacheEntry>();
 /**
  * How long a rate is trusted.
  *
- * Retail rates change on the carrier's schedule — in practice once a year,
+ * Retail rates change on the carrier's schedule - in practice once a year,
  * announced. Six hours is not about their volatility, it is a bound on how
  * long a wrong entry could survive if one ever got in: at most a quarter of a
  * day, and a deploy clears it sooner. It also keeps the API call count at four
@@ -106,7 +106,7 @@ export type RateKeyInput = {
  * cache that loses money.
  *
  * Letters key on `letter` rather than on dimensions because the letter
- * calculator takes only a service code and a weight — including dimensions
+ * calculator takes only a service code and a weight - including dimensions
  * would fragment the cache across keys that all hold the same price.
  */
 export function rateCacheKey(input: RateKeyInput): string {
@@ -117,13 +117,13 @@ export function rateCacheKey(input: RateKeyInput): string {
   return `${input.serviceCode}|${band}|${dims}`;
 }
 
-/** The weight band a key was built from — needed to store alongside a price. */
+/** The weight band a key was built from - needed to store alongside a price. */
 export function weightBandGrams(weightGrams: number): number {
   return roundUpGrams(weightGrams, CACHE_WEIGHT_BAND_GRAMS);
 }
 
 /**
- * Read a rate. Async by contract, not by need — see the L2 seam note above.
+ * Read a rate. Async by contract, not by need - see the L2 seam note above.
  * Never throws; a miss and a broken cache are the same answer.
  */
 export async function lookupRate(key: string): Promise<CachedRate | null> {
@@ -156,7 +156,7 @@ export async function storeRate(key: string, value: CachedRate): Promise<void> {
   // Upsert into `public.shipping_rate_cache` on `key`, setting
   // `service_code`, `amount_cents`, `source = 'live'` and `fetched_at = now()`.
   // Only `quote.ts`'s live branch reaches this function, so 'live' is always
-  // the honest value — see point 2 in the file comment for why a fallback
+  // the honest value - see point 2 in the file comment for why a fallback
   // price must never be persisted. Swallow every error: a failed cache write
   // must never fail the quote that produced it.
   // ---------------------------------------------------------------------

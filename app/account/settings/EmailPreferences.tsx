@@ -15,8 +15,8 @@ type PreferenceKey =
  *
  * No sender reads them: there is no mailing list, no review reminder job and no
  * restock alert anywhere in this codebase, in any configuration. So each one is
- * described as what it is — a note of what you would like *if* we ever build it
- * — rather than as a subscription to mail that would never arrive.
+ * described as what it is - a note of what you would like *if* we ever build it
+ * - rather than as a subscription to mail that would never arrive.
  *
  * This is unconditional and separate from `canSendEmail` below. Setting the
  * Resend secrets turns on the order confirmation; it does not turn any of these
@@ -31,7 +31,7 @@ const PREFERENCES: {
     key: "marketing_opt_in",
     label: "New drops and offers",
     description:
-      "Say yes and we will count you in when there is a list to add you to — a note when a new colourway lands, no more than monthly.",
+      "Say yes and we will count you in when there is a list to add you to: a note when a new colourway lands, no more than monthly.",
   },
   {
     key: "review_reminders",
@@ -93,7 +93,7 @@ export function EmailPreferences({
 }: {
   userId: string;
   /**
-   * Whether the shop can send its own email — `isEmailConfigured()`, read on
+   * Whether the shop can send its own email - `isEmailConfigured()`, read on
    * the server by the settings page and handed down.
    *
    * It arrives as a prop and is never read here, for two reasons. The secrets
@@ -152,14 +152,14 @@ export function EmailPreferences({
           secrets or no secrets. So the denial is narrowed to these three
           switches and the mail that does go out is named. */}
       <p className="mt-1 text-[13.5px] text-muted">
-        We do not send any of these yet — there is no mailing list, no review
+        We do not send any of these yet. There is no mailing list, no review
         reminders and no restock alerts. Flicking a switch saves your choice for
         the day we can act on it, and nothing goes out in the meantime. The only
         mail you get from us is{" "}
         {canSendEmail
           ? "the order confirmation when you pay, and the emails that confirm your address or reset your password"
-          : "the emails that confirm your address or reset your password"}
-        , and none of it is affected by these switches.
+          : "the emails that confirm your address or reset your password"},
+        and none of it is affected by these switches.
       </p>
 
       <div className="mt-5 flex flex-col divide-y divide-line border-t border-line">
@@ -191,7 +191,7 @@ export function EmailPreferences({
             and tracking emails. Printing progress and tracking are never
             emailed in any configuration, so those stay denied outright. The
             order confirmation IS a receipt by any customer's reading, so the
-            denial of that half is gated — this line used to deny it flat while
+            denial of that half is gated - this line used to deny it flat while
             the shop was sending one. There is still nothing to switch: the
             confirmation is part of buying, not a subscription. */}
         <div className="py-4">

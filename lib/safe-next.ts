@@ -20,15 +20,15 @@
  *
  * So both the input and the output are checked, by parsing each exactly as
  * the consumers will and comparing the origin the parser arrived at. Anything
- * reaching a different origin — absolute, protocol-relative, whitespace
+ * reaching a different origin - absolute, protocol-relative, whitespace
  * -smuggled, dot-segment-smuggled, or a scheme like `javascript:` (origin
- * `null`) — is discarded. The value returned is always the reparsed path, so
+ * `null`) - is discarded. The value returned is always the reparsed path, so
  * no consumer can re-derive a different destination from what was validated.
  */
 
 /**
  * A base that cannot be a real origin, so `next` is judged identically in
- * every consumer — a server component with no request URL to hand, a route
+ * every consumer - a server component with no request URL to hand, a route
  * handler that has one, and the client router. `.invalid` is reserved by
  * RFC 2606 and can never resolve.
  */

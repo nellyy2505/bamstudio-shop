@@ -2,13 +2,13 @@ import type { MetadataRoute } from "next";
 import { siteUrl } from "@/lib/stripe";
 
 /**
- * /robots.txt — measured 404 on the live site before this file existed, so
+ * /robots.txt - measured 404 on the live site before this file existed, so
  * Google had no crawl directives at all and no pointer to a URL list.
  *
  * ── The origin ───────────────────────────────────────────────────────────
  * `Sitemap:` must be an absolute URL (the one directive in robots.txt that
  * cannot be relative), so it is the only place here that needs an origin, and
- * it takes it from `siteUrl()` — the same function `metadataBase` uses.
+ * it takes it from `siteUrl()` - the same function `metadataBase` uses.
  * `NEXT_PUBLIC_SITE_URL` is constant-folded into the server bundle at build
  * (CLAUDE.md, "Deployment"), so this line is baked with the origin the image
  * was built for, exactly like Stripe's `success_url` and every canonical.
@@ -34,13 +34,13 @@ import { siteUrl } from "@/lib/stripe";
  *
  *  2. A signed-out request never reaches the HTML. `/admin` and `/account`
  *     are exactly the two prefixes `proxy.ts` guards (`SIGNED_IN_ONLY`), and
- *     a signed-out visitor — which Googlebot always is — is redirected to
+ *     a signed-out visitor - which Googlebot always is - is redirected to
  *     /login before any page renders. Blocking the prefix removes nothing a
  *     crawler could have read and saves it walking a tree of redirects.
  *     `/admin` deliberately covers `/admin/join` WITHOUT naming it: that page
  *     carries its own `robots: { index: false, follow: false, nocache: true }`
  *     because an invitation link is a secret, and robots.txt is a public file
- *     — listing the invitation endpoint in it would publish the location of
+ *     - listing the invitation endpoint in it would publish the location of
  *     the staff-invitation flow to anyone who reads /robots.txt.
  *
  * ── What is deliberately NOT disallowed, and why ──────────────────────────
@@ -49,7 +49,7 @@ import { siteUrl } from "@/lib/stripe";
  *
  *  • `/order/confirmed` and `/search` already set `robots: { index: false }`.
  *    Disallowing them would guarantee Googlebot never reads that, and both
- *    are real URLs a browser lands on and a person can share — a Stripe
+ *    are real URLs a browser lands on and a person can share - a Stripe
  *    redirect target and a search-results link. Crawlable + noindex keeps
  *    them out of the index; disallowed + noindex would not.
  *  • `/cart`, `/login`, `/signup`, `/forgot-password` and `/reset-password`
@@ -58,10 +58,10 @@ import { siteUrl } from "@/lib/stripe";
  *    their own in the same change as this file, which is the directive that
  *    actually works for a linked page.
  *  • `/legal/privacy`, `/legal/terms` and `/legal/refunds` set no `robots`
- *    metadata and are meant to be found — a shop's policies are part of what
+ *    metadata and are meant to be found - a shop's policies are part of what
  *    makes it look real to a shopper and to Google. Nothing here may block
  *    them, and they are in the sitemap.
- *  • `/track` is a guest-friendly form page with no order data in its URL —
+ *  • `/track` is a guest-friendly form page with no order data in its URL -
  *    the lookup is a POST. It is an ordinary shopfront page and is indexed.
  *
  * Static by construction: no request-time API is touched, so this prerenders

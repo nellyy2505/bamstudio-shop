@@ -1,4 +1,4 @@
--- storage.sql — the bucket product photographs live in.
+-- storage.sql - the bucket product photographs live in.
 --
 -- NOT a migration, and deliberately not applied by scripts/verify-sql.sh.
 --
@@ -19,7 +19,7 @@
 -- listed, and it should say Public.
 
 -- The bucket. Public read, because these are pictures of things that are for
--- sale on a public web page — the shop renders them straight from the CDN URL
+-- sale on a public web page - the shop renders them straight from the CDN URL
 -- and there is nothing to protect. 5 MB and an explicit type list, because
 -- "public bucket the staff area can write to" is the shape of an open file
 -- host if it will accept anything of any size.
@@ -50,6 +50,6 @@ create policy "product photos are public"
 -- storage.objects denies by default, and the service-role key bypasses RLS
 -- entirely, so the only way a file lands in this bucket is through code that
 -- called requireStaff() first. Adding an "authenticated users can upload"
--- policy — the shape most tutorials show — would let any customer account with
+-- policy - the shape most tutorials show - would let any customer account with
 -- the anon key write files into a bucket the shop serves publicly.
 drop policy if exists "product photos are staff-written" on storage.objects;

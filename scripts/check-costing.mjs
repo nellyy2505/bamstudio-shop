@@ -4,7 +4,7 @@
  *   node scripts/check-costing.mjs
  *
  * The expected values are the ones Excel itself computed and cached in the
- * file — not values worked out by hand here, which would only prove this
+ * file - not values worked out by hand here, which would only prove this
  * script and that file agree with each other.
  */
 import { execFileSync } from "node:child_process";
@@ -15,7 +15,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Compiled by the project's own TypeScript rather than by stripping types with
 // a regex here. A hand-rolled stripper that gets one declaration wrong either
-// crashes — which is at least loud — or silently changes what is being tested.
+// crashes - which is at least loud - or silently changes what is being tested.
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = mkdtempSync(join(tmpdir(), "costing-"));
 execFileSync(
@@ -36,7 +36,7 @@ const S = {
   electricityPerKwhCents: 32.7,    // C10 $0.327
   filamentPerKgCents: 1600,        // C15 $16
   targetMargin: 0.7,               // C18
-  cardFeeRate: 0.016,              // C19 — see note below
+  cardFeeRate: 0.016,              // C19, see note below
   roundPriceToCents: 50,           // C20 $0.50
   packagingPerUnitCents: 13,       // C37 $0.13
 };
@@ -58,11 +58,11 @@ near("machine + power per hour (C12)", m.machineAndPowerPerHour(S), 17.03);
 // T5=0, X5=0.352725. Note J5 overrides filament price to $25/kg, but S5 (total
 // grams) is 0, so filament is 0 either way.
 const ex = m.unitCost(S, { printHours: 0.75, grams: 0, accessoryCents: 9.5 });
-near("worked example — filament (T5)", ex.filament, 0);
-near("worked example — machine+power (U5)", ex.machineAndPower, 12.7725);
-near("worked example — accessory (V5)", ex.accessory, 9.5);
-near("worked example — packaging (W5)", ex.packaging, 13);
-near("worked example — UNIT COST (X5)", ex.total, 35.2725);
+near("worked example, filament (T5)", ex.filament, 0);
+near("worked example, machine+power (U5)", ex.machineAndPower, 12.7725);
+near("worked example, accessory (V5)", ex.accessory, 9.5);
+near("worked example, packaging (W5)", ex.packaging, 13);
+near("worked example, UNIT COST (X5)", ex.total, 35.2725);
 
 // ---- Real rows, Excel's cached X column ------------------------------------
 // CLK-002: 1g Light Brown, keyring, no print time. X7 = 0.241
@@ -81,7 +81,7 @@ near(
   27.3,
 );
 
-// CLK-001: no grams at all. X6 = 0.225 — packaging + keyring and nothing else.
+// CLK-001: no grams at all. X6 = 0.225 - packaging + keyring and nothing else.
 const clk001 = m.unitCost(S, { printHours: null, grams: null, accessoryCents: 9.5 });
 near("CLK-001 unit cost (X6)", clk001.total, 22.5);
 console.log(
@@ -103,8 +103,8 @@ console.log(
 // 0.016 it was meant to be:
 //   Y = CEILING(0.352725 / (1 - 0.7 - 0.016), 0.5) = CEILING(1.24199…, 0.5) = 1.50
 //   AA = 1.50 * (1 - 0.016) - 0.352725 = 1.123275
-near("worked example — suggested price (Y5)", m.suggestedPrice(S, 35.2725), 150);
-near("worked example — profit per unit (AA5)", m.profitPerUnit(S, 150, 35.2725), 112.3275);
+near("worked example, suggested price (Y5)", m.suggestedPrice(S, 35.2725), 150);
+near("worked example, profit per unit (AA5)", m.profitPerUnit(S, 150, 35.2725), 112.3275);
 
 // A cost of zero is not a free product, it is an unpriced one.
 console.log(

@@ -21,16 +21,16 @@ export const metadata = { title: "Measure the catalogue · Studio" };
  * THE PROBLEM THIS EXISTS FOR. Nothing in the studio can price a piece until it
  * has a print time and a filament recipe, and on the day this was written none
  * of the forty-four products had either. Every unit cost, every margin, every
- * suggested price and the entire filament buy list were therefore dark — and
+ * suggested price and the entire filament buy list were therefore dark - and
  * the only way to turn one of them on was to open a product, scroll a long
  * form, fill two areas of it and save, forty-four times. This is that job as
  * one screen: a row per product, a print time, a colour, its grams, Save, next.
  *
  * WHY IT IS ALL SERVER-RENDERED. The row forms are the "Count it / Set" pattern
- * from the print queue next door — the fields inside `AdminForm` are passed in
+ * from the print queue next door - the fields inside `AdminForm` are passed in
  * as children, so no cost and no product reaches the browser bundle. The print
- * time, the first colour and its grams — the fast path, hours → colour → grams
- * → Enter — are plain server-rendered markup with nothing to hydrate.
+ * time, the first colour and its grams - the fast path, hours → colour → grams
+ * → Enter - are plain server-rendered markup with nothing to hydrate.
  *
  * WHAT CHANGED, and the numbers that forced it. Measured on the deployed page,
  * 44 products and 18 colours:
@@ -42,7 +42,7 @@ export const metadata = { title: "Measure the catalogue · Studio" };
  *     nodes       4,744
  *
  * Chrome's renderer timed out screenshotting it, and it scaled with the
- * catalogue — 200 products would be roughly 5 MB. Every row was rendering four
+ * catalogue - 200 products would be roughly 5 MB. Every row was rendering four
  * whole palettes, three of them inside a <details> that almost nobody opens
  * because almost every piece is one colour. Colours two to four now start as
  * hidden inputs and are built in the browser from one copy of the palette; see
@@ -50,8 +50,8 @@ export const metadata = { title: "Measure the catalogue · Studio" };
  *
  * WHY IT HANGS OFF INVENTORY BUT ASKS FOR "catalogue". Measuring is the thing
  * that makes the Inventory buy list true, which is where a person notices it is
- * needed and where the link is. What it WRITES is product rows — the two fields
- * every price in the shop is derived from — so it is guarded like the product
+ * needed and where the link is. What it WRITES is product rows - the two fields
+ * every price in the shop is derived from - so it is guarded like the product
  * form, not like a stock count. The long note on `saveMeasurement` in
  * actions.ts has the argument; the short version is that counting a shelf is an
  * observation and typing a print time is authoring the cost basis.
@@ -147,7 +147,7 @@ export default async function MeasurePage({
         note={
           showAll
             ? "Every product, measured or not, so a number typed wrong can be corrected."
-            : "One row each. Saving recalculates that product's cost, its place in the print queue and the filament buy list — and the row leaves this list the moment it has both numbers."
+            : "One row each. Saving recalculates that product's cost, its place in the print queue and the filament buy list, and the row leaves this list the moment it has both numbers."
         }
         actions={
           <Link
@@ -204,7 +204,7 @@ export default async function MeasurePage({
       </Panel>
 
       <p className="mt-4 text-[13px] text-muted">
-        Print time is hours as the slicer reports it — 0.75 is 45 minutes. Grams are for one
+        Print time is hours as the slicer reports it, 0.75 is 45 minutes. Grams are for one
         piece, per colour, because the buy list adds them up colour by colour. Leave either blank
         and the piece stays on this list rather than being priced from half a measurement.
       </p>
@@ -217,7 +217,7 @@ export default async function MeasurePage({
  *
  * THE MULTI-COLOUR DECISION, and why it is shaped like this.
  *
- * Grams have to be per colour — the buy list is "how many rolls of Sunset Coral
+ * Grams have to be per colour - the buy list is "how many rolls of Sunset Coral
  * do I order", so one grams-for-everything box would be a number that cannot
  * answer the question it exists for. But almost every piece here is one colour,
  * and forty-four rows that each make you open something before you can type are
@@ -226,7 +226,7 @@ export default async function MeasurePage({
  * So: the FIRST colour and its grams are always on the row, in the tab order,
  * server-rendered, and colours two to four are shut underneath unless the piece
  * already uses more than one. A single-colour piece is hours, colour, grams,
- * Enter — four keystrokes past the tab key and no clicks. A multi-colour piece
+ * Enter - four keystrokes past the tab key and no clicks. A multi-colour piece
  * has its extra slots already open. Every slot is submitted either way, open or
  * shut, which is what lets `saveMeasurement` insist on receiving all four and
  * refuse a payload that is missing them.
@@ -239,7 +239,7 @@ export default async function MeasurePage({
  *
  * The ceiling is four because the workbook's Products sheet had four fixed
  * Colour/g pairs and nothing in this catalogue exceeds it. `product_filament`
- * has no ceiling at all, so a fifth colour is legal — this row refuses to edit
+ * has no ceiling at all, so a fifth colour is legal - this row refuses to edit
  * such a piece and sends the person to the full product form, rather than
  * writing back the four it can see and silently dropping the fifth.
  */
@@ -301,7 +301,7 @@ function Row({
         {heading}
         <div className="flex items-center gap-3">
           <span className="text-[13px] text-muted">
-            {product.filament.length} colours — more than this screen can show.
+            {product.filament.length} colours, more than this screen can show.
           </span>
           <ButtonLink href={`/admin/products/${product.id}`} variant="soft" size="sm">
             Open it
@@ -313,7 +313,7 @@ function Row({
 
   const slots = Array.from({ length: MEASURE_COLOUR_SLOTS }, (_, i) => product.filament[i] ?? null);
   // A piece that already uses more than one colour shows them, always. Anything
-  // else opens on request — from the URL when JavaScript has not arrived yet.
+  // else opens on request - from the URL when JavaScript has not arrived yet.
   const pinned = product.filament.length > 1;
   const anchor = `#row-${product.id}`;
 
@@ -364,7 +364,7 @@ function Row({
  * Rendered as a fragment rather than a wrapper so the caller decides the grid:
  * this pair sits directly inside the row's own columns. It is the one slot that
  * has to be here, in the markup, in the tab order, with no waiting on a bundle
- * — it is the whole fast path. Slots two to four are ExtraColours.tsx, in the
+ * - it is the whole fast path. Slots two to four are ExtraColours.tsx, in the
  * browser, from one shared palette; that split is what took the page from
  * 3,344 <option>s to a nineteenth of them.
  */

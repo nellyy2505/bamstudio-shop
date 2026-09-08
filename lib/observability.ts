@@ -8,18 +8,18 @@
  * Every failure path in this shop ended at `console.error` on a 512 MB Fly
  * machine whose logs are not retained and which nobody is watching. A Resend
  * 429 at 2am meant the customer was charged, the order was correct, and the
- * first anyone heard of it was the customer's email — through a contact form
+ * first anyone heard of it was the customer's email - through a contact form
  * that may well have failed the same way, because it depends on the same
  * provider. Nothing in the repo turned a failure into a notification.
  *
  * ───────────────────────────────────────────────────────────────────────────
- * WHY NO `@sentry/nextjs` DEPENDENCY — measured, not assumed
+ * WHY NO `@sentry/nextjs` DEPENDENCY - measured, not assumed
  *
  * The obvious move is `npm i @sentry/nextjs`. It was resolved and installed in
  * a scratch project to see what it actually costs before it was rejected:
  *
  *   * **197 packages** added, ~115 MB of `node_modules` attributable to it
- *     (`@sentry` 75 MB, `@opentelemetry` 22 MB, `@babel` 11 MB, rollup 7 MB) —
+ *     (`@sentry` 75 MB, `@opentelemetry` 22 MB, `@babel` 11 MB, rollup 7 MB) -
  *     against 449 packages in this whole project today. It would be, by
  *     package count, the largest single thing in the tree after Next itself.
  *     21 MB of that is `@sentry/cli-linux-x64`, a prebuilt binary whose only
@@ -28,8 +28,8 @@
  *     every integration switched off bundles to 85 KB minified / **29 KB
  *     gzipped**; importing the namespace the way the docs show is 451 KB /
  *     150 KB gzipped. This shop is server-rendered and every error worth
- *     hearing about — a webhook that fails after payment, an email that does
- *     not send, a database write that is refused — happens on the server. The
+ *     hearing about - a webhook that fails after payment, an email that does
+ *     not send, a database write that is refused - happens on the server. The
  *     client SDK would be paid for on every page load by every visitor on a
  *     mobile connection, in exchange for nothing this task needs.
  *   * **It would touch the CSP.** The browser SDK POSTs events to
@@ -42,11 +42,11 @@
  *   * **`withSentryConfig` wraps next.config.ts** and injects a bundler plugin
  *     into a build that already peaks at ~1.6 GB RSS on a remote builder, and
  *     `output: "standalone"` then has to trace `@sentry/node`'s OpenTelemetry
- *     auto-instrumentation, which patches modules by `require` hook — exactly
+ *     auto-instrumentation, which patches modules by `require` hook - exactly
  *     the pattern file tracing is worst at.
  *
  * Against that: the wire format is one POST. The whole of what this file needs
- * — the DSN grammar, the envelope endpoint, the envelope serialisation — was
+ * - the DSN grammar, the envelope endpoint, the envelope serialisation - was
  * read out of `@sentry/core`'s own source (`utils/dsn.js`, `api.js`,
  * `utils/envelope.js`) rather than from memory, and it is fifty lines of it.
  * `lib/email.ts` made the same call about Resend for the same reason and the
@@ -104,8 +104,8 @@ const MAX_FRAMES = 30;
  * This is not tidiness. Sentry's free tier is 5,000 errors a month, and the
  * failures this shop actually produces arrive in bursts: Supabase goes away
  * and every request fails identically for as long as it is away. Without this,
- * one bad ten minutes spends a month's quota and the *next* failure — possibly
- * the one that matters — is dropped by Sentry rather than by us.
+ * one bad ten minutes spends a month's quota and the *next* failure - possibly
+ * the one that matters - is dropped by Sentry rather than by us.
  */
 const DEDUPE_WINDOW_MS = 60_000;
 
@@ -134,7 +134,7 @@ export type CaptureLevel = "warning" | "error" | "fatal";
  */
 export type CaptureContext = {
   /**
-   * Stable label for where this came from — "stripe-webhook", "track",
+   * Stable label for where this came from - "stripe-webhook", "track",
    * "contact". Becomes Sentry's `logger` and part of the fingerprint, so keep
    * it a fixed string and never interpolate anything variable into it.
    */
@@ -142,7 +142,7 @@ export type CaptureContext = {
   /** Defaults to "error". "fatal" is for money already taken. */
   level?: CaptureLevel;
   /**
-   * Route path for grouping — **no query string**. See `stripQuery`: the
+   * Route path for grouping - **no query string**. See `stripQuery`: the
    * confirmation page carries a Stripe session id in its URL, and that id
    * reads a customer's address back out of Stripe.
    */
@@ -152,7 +152,7 @@ export type CaptureContext = {
 };
 
 export type CaptureFailureReason =
-  /** SENTRY_DSN is unset — nothing was attempted, and that is normal. */
+  /** SENTRY_DSN is unset - nothing was attempted, and that is normal. */
   | "not_configured"
   /** SENTRY_DSN is set but is not a DSN. Logged once, then treated as unset. */
   | "invalid_dsn"
@@ -162,7 +162,7 @@ export type CaptureFailureReason =
   | "rate_limited"
   /** Sentry did not answer inside SEND_TIMEOUT_MS. */
   | "timeout"
-  /** DNS/TLS/socket failure — no HTTP response at all. */
+  /** DNS/TLS/socket failure - no HTTP response at all. */
   | "network_error"
   /** Sentry answered non-2xx. `status` carries the code (429 = quota). */
   | "provider_error";
@@ -180,18 +180,18 @@ export type CaptureResult =
 
 /**
  * Whether this process can actually report. **The single source of truth for
- * "the shop can report an error"** — the same condition `captureException`
+ * "the shop can report an error"** - the same condition `captureException`
  * itself checks, so nothing can claim a capability the reporter does not have.
  *
  * **Server-only, and it throws in the browser rather than lying.** `SENTRY_DSN`
  * is not `NEXT_PUBLIC_`, so Next replaces the read with `undefined` in a client
  * bundle and the answer would silently be `false` there while the server said
- * `true` — the same skew `isEmailConfigured()` in lib/email.ts guards against,
+ * `true` - the same skew `isEmailConfigured()` in lib/email.ts guards against,
  * and the same hand-rolled stand-in for `import "server-only"`, which is not a
  * dependency of this project.
  *
  * On the `NEXT_PUBLIC_` question specifically: a Sentry DSN is not really a
- * secret — the browser SDK ships one to every visitor by design — so this is
+ * secret - the browser SDK ships one to every visitor by design - so this is
  * not a leak guard. It is kept server-side because putting it in the client
  * bundle would mean browser events, which would mean widening `connect-src` in
  * next.config.ts to a third-party ingest host. Server-only reporting costs the
@@ -202,7 +202,7 @@ export function isReportingConfigured(): boolean {
     throw new Error(
       "isReportingConfigured() was called in the browser, where SENTRY_DSN is " +
         "undefined and it could only ever answer false. Error reporting in " +
-        "this shop is server-side only — see lib/observability.ts.",
+        "this shop is server-side only, see lib/observability.ts.",
     );
   }
   return Boolean(process.env.SENTRY_DSN);
@@ -281,7 +281,7 @@ function currentDsn(): Dsn | null {
 /**
  * Strips the shapes customer PII takes out of any text before it can be sent.
  *
- * A deny-list can only ever be the second line of defence — the first is that
+ * A deny-list can only ever be the second line of defence - the first is that
  * callers may not pass free-form data at all (see `CaptureContext`). This
  * exists because the text that reaches here is often *not* ours: PostgREST
  * quotes the value that violated a constraint, Stripe quotes the address it
@@ -297,7 +297,7 @@ function currentDsn(): Dsn | null {
  *   * URL query strings          → ?[redacted]
  *
  * Names and street lines have no shape and cannot be matched. They are handled
- * by never being passed — which is why the allow-list, not this function, is
+ * by never being passed - which is why the allow-list, not this function, is
  * the actual guarantee.
  */
 export function scrub(text: string): string {
@@ -313,8 +313,8 @@ export function scrub(text: string): string {
  * Drops the query string from a path.
  *
  * Load-bearing, not hygiene. Next's `onRequestError` hands over
- * `request.path` as "resource path, e.g. /blog?name=foo" — query string
- * included — and this shop has a page whose query string is a credential:
+ * `request.path` as "resource path, e.g. /blog?name=foo" - query string
+ * included - and this shop has a page whose query string is a credential:
  * `/order/confirmed?session_id=cs_...` reads the customer's name, address and
  * basket back out of Stripe. `app/order/confirmed/page.tsx` sets
  * `referrer: "no-referrer"` for exactly that reason. Sending that id to an
@@ -408,7 +408,7 @@ let hourStartedAt = 0;
 let sentThisHour = 0;
 let suppressedThisHour = 0;
 
-/** Cheap, stable, non-cryptographic — this only has to group like with like. */
+/** Cheap, stable, non-cryptographic - this only has to group like with like. */
 function fingerprint(parts: string[]): string {
   let hash = 5381;
   const text = parts.join("|");
@@ -430,7 +430,7 @@ function admit(key: string, now: number): CaptureFailureReason | null {
     if (suppressedThisHour > 0) {
       console.warn(
         `[observability] ${suppressedThisHour} further error report(s) were ` +
-          "suppressed in the last hour by the local cap — see " +
+          "suppressed in the last hour by the local cap, see " +
           "MAX_EVENTS_PER_HOUR in lib/observability.ts.",
       );
     }
@@ -518,7 +518,7 @@ async function send(
     if (!warnedUnconfigured) {
       warnedUnconfigured = true;
       console.info(
-        "[observability] not configured — set SENTRY_DSN to have failures " +
+        "[observability] not configured, set SENTRY_DSN to have failures " +
           "reported. Until then they are logged here and nowhere else.",
       );
     }
@@ -643,7 +643,7 @@ function baseEvent(context: CaptureContext, now: number): SentryEvent {
  * Report a thrown value. Resolves with a `CaptureResult`; never rejects.
  *
  * Awaiting it is safe on a path that has already failed and is about to return
- * an error response. Do NOT await it on a hot path — wrap it in `after()` from
+ * an error response. Do NOT await it on a hot path - wrap it in `after()` from
  * next/server, as the Stripe webhook does, so a slow ingest endpoint cannot
  * delay the response.
  *
@@ -713,7 +713,7 @@ export async function captureException(
 }
 
 /**
- * Report a fact that is not a thrown error — a paid order that cannot be
+ * Report a fact that is not a thrown error - a paid order that cannot be
  * honoured, a confirmation email a provider refused, a write that came back
  * with a constraint violation instead of an exception. Most of what goes wrong
  * in this shop is of this kind: nothing throws, a function returns `false`,

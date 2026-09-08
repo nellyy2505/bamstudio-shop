@@ -43,7 +43,7 @@ export function ReviewsSection({
   product: Product;
   reviews: Review[];
 }) {
-  // No review history yet, so no score, no stars and no distribution — and no
+  // No review history yet, so no score, no stars and no distribution - and no
   // claims about a review process that has not run once.
   const hasReviews = product.review_count > 0;
 
@@ -74,7 +74,7 @@ export function ReviewsSection({
                   publishes anything, and the review insert policy was
                   withdrawn from the schema entirely. What is left is a
                   statement about where a review may come from, which is a
-                  commitment the shop can keep — and it matches the empty state
+                  commitment the shop can keep - and it matches the empty state
                   below. If a review process is ever built, describe the one
                   that exists then. */}
               <p className="text-[13px] text-muted">
@@ -96,7 +96,7 @@ export function ReviewsSection({
               {/* This said "If you order it, we'll ask what you think once it
                   lands." Nothing asks. There is no review request anywhere in
                   the codebase, no review-submission page or route, and no
-                  insert policy behind one — so this promised a message that
+                  insert policy behind one - so this promised a message that
                   cannot be sent, to a customer with no way to answer it even if
                   it were. Unlike the neighbouring email claims it was not even
                   gated on isEmailConfigured(), and gating it would not have

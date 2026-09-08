@@ -5,8 +5,8 @@ import { useState } from "react";
 import { Icon } from "@/components/ui";
 
 /**
- * There is still no newsletter — no mailout, no welcome email and no
- * unsubscribe link anywhere on this site — so nothing here may promise one, or
+ * There is still no newsletter - no mailout, no welcome email and no
+ * unsubscribe link anywhere on this site - so nothing here may promise one, or
  * a frequency.
  *
  * What did change (0006_enquiries.sql) is that the address is now kept.
@@ -16,16 +16,16 @@ import { Icon } from "@/components/ui";
  * anything sends to.
  *
  * The two response flags say different things and both are used below.
- * `delivered` says only that the studio was emailed about the request — never
+ * `delivered` says only that the studio was emailed about the request - never
  * that anyone read it. `stored` says the address is on record and will still be
- * there tomorrow — never that it is subscribed to anything, because nothing
+ * there tomorrow - never that it is subscribed to anything, because nothing
  * sends to it. "That did not reach the studio and nothing was saved" was this
  * component's undelivered copy and is false whenever `stored` is true, which is
  * why the two cases are now worded apart.
  *
  * The Footer decides whether this form is offered at all; it renders only where
  * the request can actually reach someone. That decision needs the server-side
- * Resend secrets, which is why it is made there and not here — a client
+ * Resend secrets, which is why it is made there and not here - a client
  * component reads them as `undefined`. Nothing in this component depends on the
  * capability, so no prop is threaded in; if a claim about email is ever added
  * here it must arrive as one.
@@ -60,7 +60,7 @@ export function NewsletterForm() {
       });
       const body = await res.json().catch(() => null);
 
-      // 400/429 — the address was rejected or we are throttled. The route
+      // 400/429 - the address was rejected or we are throttled. The route
       // sends wording the customer can act on, so prefer it over our own.
       if (!res.ok || !body?.ok) {
         setError(
@@ -91,7 +91,7 @@ export function NewsletterForm() {
         <span>
           {stored
             ? "Your address is on record and the studio has been told. There is still no newsletter, so nothing goes out to it yet."
-            : "Passed on to the studio, though we could not put your address on record here — so it may not be kept. There is no newsletter yet either way."}
+            : "Passed on to the studio, though we could not put your address on record here, so it may not be kept. There is no newsletter yet either way."}
         </span>
       </p>
     );
@@ -148,7 +148,7 @@ export function NewsletterForm() {
           {state === "sending" ? "…" : "Ask"}
         </button>
       </div>
-      {/* Previously sr-only, so a failed submit looked like nothing happened —
+      {/* Previously sr-only, so a failed submit looked like nothing happened -
           the customer would assume they were signed up. */}
       {state === "error" && error ? (
         <p role="alert" className="text-[12.5px] text-[#E8B4A8]">

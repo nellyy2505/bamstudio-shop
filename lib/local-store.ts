@@ -6,7 +6,7 @@
  * in memory and only re-parsed when something actually writes.
  *
  * Server rendering has no storage, so `getServerSnapshot` returns the initial
- * value and the first client render matches it — no hydration mismatch.
+ * value and the first client render matches it - no hydration mismatch.
  */
 export type LocalStore<T> = {
   subscribe: (listener: () => void) => () => void;
@@ -16,7 +16,7 @@ export type LocalStore<T> = {
   /**
    * Pull the stored value into the cache without rendering anything, and
    * return it. `subscribe` does this for components; callers that need the
-   * real value outside a render — reconciling against a server, say — would
+   * real value outside a render - reconciling against a server, say - would
    * otherwise read the initial value on a page with no subscribed component.
    * Browser only, idempotent, and never emits: it seeds the cache rather than
    * changing it.
@@ -101,7 +101,7 @@ export function createLocalStore<T>(
       try {
         window.localStorage.setItem(key, JSON.stringify(next));
       } catch {
-        // Quota or private mode — state still works for this page view.
+        // Quota or private mode - state still works for this page view.
       }
       emit();
     },
@@ -111,7 +111,7 @@ export function createLocalStore<T>(
       try {
         window.localStorage.removeItem(key);
       } catch {
-        // Storage blocked — the in-memory cache is cleared either way.
+        // Storage blocked - the in-memory cache is cleared either way.
       }
       emit();
     },

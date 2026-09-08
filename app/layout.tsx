@@ -14,7 +14,7 @@ import { siteUrl } from "@/lib/stripe";
 import { SITE_OPEN_GRAPH } from "./seo";
 
 /**
- * §0.10: the description promised "Free Australian shipping from $49" — both
+ * §0.10: the description promised "Free Australian shipping from $49" - both
  * unqualified (shippingCost() only waives the standard rate; express is always
  * charged) and with the threshold typed out by hand. Both now come from
  * SHIPPING, and the method is found by asking shippingCost() which one goes
@@ -44,7 +44,7 @@ const nunito = Nunito_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
   title: {
-    default: `${SHOP.name} — cute 3D-printed clickers & charms`,
+    default: `${SHOP.name}: cute 3D-printed clickers & charms`,
     template: `%s · ${SHOP.name}`,
   },
   description:
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     FREE_SHIPPING_SENTENCE,
   /*
    * Shared with every page through `app/seo.ts`, because `openGraph` is
-   * REPLACED by the last segment that defines it rather than deep-merged —
+   * REPLACED by the last segment that defines it rather than deep-merged -
    * a page adding its own `og:url` here would otherwise drop siteName and
    * locale. No `url` at this level: og:url is per page, and one set here
    * would claim every page in the shop is the home page.
@@ -72,7 +72,7 @@ export default async function RootLayout({
    * promo bar, search, category nav and full footer, so a page for printing
    * parcels carried a "Free AU standard post from $49.00" banner and a link to
    * the returns policy. Worse, it read as a customer page with an admin panel
-   * pasted into it — exactly the confusion the dark STAFF bar exists to
+   * pasted into it - exactly the confusion the dark STAFF bar exists to
    * prevent.
    *
    * `app/admin/layout.tsx` draws its own header and its own sidebar, and it is
@@ -85,7 +85,7 @@ export default async function RootLayout({
    * Two facts the header needs, and the cost of getting them.
    *
    * `signedIn` picks Sign in vs Account. `isStaff` decides whether the Studio
-   * link appears at all — it has to be answered here because the `staff` table
+   * link appears at all - it has to be answered here because the `staff` table
    * is unreadable with the anon key the browser holds, so the Header component
    * could not work it out even if it wanted to.
    *
@@ -104,7 +104,7 @@ export default async function RootLayout({
     }
   } catch {
     // Supabase not configured yet, or unreachable. Render the signed-out
-    // header and no Studio link — a failed lookup must never grant anything.
+    // header and no Studio link - a failed lookup must never grant anything.
   }
 
   if (isStaffArea) {

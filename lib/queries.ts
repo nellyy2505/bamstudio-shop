@@ -25,7 +25,7 @@ export function isDatabaseConfigured(): boolean {
  * Load active product rows by slug, keyed by slug.
  *
  * Checkout and the cart's postage quote both need the *server's* copy of a
- * basket's products — for prices in one case and for weights in the other — and
+ * basket's products - for prices in one case and for weights in the other - and
  * they must agree about which rows exist. This lived privately inside
  * `app/api/checkout/route.ts` until postage needed it too; a second copy would
  * have been a second answer to "is this product still buyable", and a basket
@@ -67,8 +67,8 @@ export type ProductFilters = {
   max?: number;
   /**
    * `"rating"` was a member here, and both sorts below ordered by the `rating`
-   * column. Every product in the catalogue is `rating: 0` — the seed emits it
-   * and nothing can raise it, because there is no review path — so "Highest
+   * column. Every product in the catalogue is `rating: 0` - the seed emits it
+   * and nothing can raise it, because there is no review path - so "Highest
    * rated" ranked the shop by a column with a single value and presented
    * whatever order Postgres returned as a quality ranking, in a shop that
    * suppresses ratings on every other surface. It is gone from the type, from
@@ -76,7 +76,7 @@ export type ProductFilters = {
    *
    * It can still ARRIVE: app/shop/page.tsx casts `?sort=` straight out of the
    * URL, so a bookmark or a shared link carrying `?sort=rating` outlives this
-   * change. That is handled rather than rejected — an unrecognised value falls
+   * change. That is handled rather than rejected - an unrecognised value falls
    * through to the `default` branch in both sorts below and the shopper gets
    * Most popular, which is also what the Sort by menu shows for a value it
    * does not know. Keep both switches defaulting; do not make an unknown sort
@@ -144,7 +144,7 @@ export async function getProducts(
   // `attachments` is a jsonb array of objects, so the attachment filter is a
   // containment test: `attachments @> '[{"id":"strap"}]'`. jsonb containment
   // is partial for objects, so only the id has to match. This must run before
-  // .range() so the exact count and the page window agree — filtering the
+  // .range() so the exact count and the page window agree - filtering the
   // returned page in JS afterwards would leave `total` counting unfiltered
   // rows, over-reporting the header and inventing empty trailing pages.
   //
@@ -287,7 +287,7 @@ export async function searchProducts(term: string): Promise<Product[]> {
  * @param strict when true, a *query error* throws instead of quietly falling
  *   back to the bundled sample list. Checkout validates colourways against
  *   this, so it must never accept one that has been deactivated in the
- *   database — better to fail the checkout than to sell a retired colourway.
+ *   database - better to fail the checkout than to sell a retired colourway.
  *
  *   Running with no database at all is a different thing: it is the intended
  *   sample-catalogue mode, where the products being validated are themselves
@@ -371,7 +371,7 @@ export type OrderConfirmationSummary = {
 /**
  * Three outcomes, kept apart on purpose. "There is no such order" and "we
  * could not look it up" are different facts, and the confirmation page has to
- * say which one it means — telling a customer who has just been charged that
+ * say which one it means - telling a customer who has just been charged that
  * no order matches, when really the lookup itself failed, is the same class of
  * false statement this page is being fixed for.
  */
@@ -386,7 +386,7 @@ export type OrderConfirmationLookup =
  * The order number for a Stripe Checkout session.
  *
  * Runs on the ADMIN client by necessity. `orders` RLS is `auth.uid() =
- * user_id`, so a guest — who has no session at all — can never read their own
+ * user_id`, so a guest - who has no session at all - can never read their own
  * order through the anon client; that is why the guest order was untrackable
  * (WORKLOG §0.1). `order_confirmation_summary` is security definer and granted
  * to `service_role` only, so it is not callable over PostgREST with the public
@@ -395,7 +395,7 @@ export type OrderConfirmationLookup =
  * The Stripe session id is the authorisation. It is unguessable and only ever
  * reaches the browser that completed this checkout. The function returns the
  * order number and status and nothing else, so even a leaked URL cannot yield
- * an address, an email or a total — the column list is the security boundary,
+ * an address, an email or a total - the column list is the security boundary,
  * which is why this helper asks it for nothing more.
  *
  * **Never throws.** It renders on the page a customer sees immediately after
@@ -409,7 +409,7 @@ export async function getOrderConfirmationSummary(
 
   // Absence of a database is not a query error (CLAUDE.md): in the bundled
   // sample-catalogue mode there is no orders table to consult, so nothing is
-  // known — which is not the same as "no such order", hence `unavailable`.
+  // known - which is not the same as "no such order", hence `unavailable`.
   // The service-role key is checked here rather than left to
   // createAdminClient()'s throw, so the normal no-key path is a plain return.
   if (!isDatabaseConfigured() || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -457,7 +457,7 @@ export async function getOrderConfirmationSummary(
  * A tier as the shopfront needs it: the row, its pool, and how full the bowl
  * happens to be.
  *
- * `availability.sellable` asks ONE thing — is this tier switched on and priced,
+ * `availability.sellable` asks ONE thing - is this tier switched on and priced,
  * i.e. for sale at all. It is deliberately blind to stock. It used to gate on
  * the pool's stock as well, and that was wrong: the shop prints to order, so a
  * short bowl is a print job before packing, not a closed listing. See
@@ -476,7 +476,7 @@ export type ScoopTierListing = ScoopTierWithPool & {
  * pure join table, so the pool comes back as an array of wrappers each holding
  * one product; `mapScoopTier` flattens them.
  *
- * Nothing here asks for `active` or `price_cents is not null` — the RLS policy
+ * Nothing here asks for `active` or `price_cents is not null` - the RLS policy
  * in 0007_lucky_scoop.sql already refuses to publish a draft, and repeating the
  * filter in the query would make it look as though the policy were optional.
  */
@@ -505,7 +505,7 @@ function mapScoopTier(row: unknown): ScoopTierListing {
       // Anything the anon key can see is active by policy; read rather than
       // assumed, so this keeps working if the studio ever reads through here.
       active: product.active !== false,
-      // Cost is never published — the costing tables are service_role only —
+      // Cost is never published - the costing tables are service_role only -
       // and the shopfront has no use for it. Null keeps that explicit rather
       // than letting a zero look like a measured piece.
       unitCostCents: null,
@@ -513,8 +513,8 @@ function mapScoopTier(row: unknown): ScoopTierListing {
   );
 
   // Rebuilt field by field rather than spread, so the join rows cannot ride
-  // along beside the flattened pool — two spellings of one list is two things
-  // that can disagree — and so a column that is renamed in the schema shows up
+  // along beside the flattened pool - two spellings of one list is two things
+  // that can disagree - and so a column that is renamed in the schema shows up
   // here rather than reaching a page as `undefined`.
   return {
     id: record.id,
@@ -537,7 +537,7 @@ function mapScoopTier(row: unknown): ScoopTierListing {
 /**
  * Every published scoop tier, in the studio's own order.
  *
- * Empty when Supabase is unconfigured, like every other read here — and
+ * Empty when Supabase is unconfigured, like every other read here - and
  * deliberately WITHOUT a bundled fallback. `FALLBACK_PRODUCTS` exists so a
  * fresh clone has a catalogue to render; a fallback tier would need a made-up
  * price, and "nothing is priced in code" is the whole point of this feature.
@@ -560,7 +560,7 @@ export async function getScoopTiers(): Promise<ScoopTierListing[]> {
 }
 
 /**
- * Published tiers by slug, keyed by slug — the scoop counterpart of
+ * Published tiers by slug, keyed by slug - the scoop counterpart of
  * `loadProductsBySlug` above, and here for the same reason.
  *
  * Checkout and the cart's postage quote both need the SERVER's copy of a
@@ -576,7 +576,7 @@ export async function getScoopTiers(): Promise<ScoopTierListing[]> {
  * simply is not in the result, so a slug typed into a checkout body cannot
  * reach a draft. The service-role key would bypass exactly the check that
  * matters. Checkout tests `availability.sellable` as well, so that the answer
- * does not rest on one policy staying exactly as it is — but it is the SAME
+ * does not rest on one policy staying exactly as it is - but it is the SAME
  * question asked twice, not a second, stock-flavoured one.
  *
  * Empty when Supabase is unconfigured, matching `getScoopTiers` and for the
@@ -596,7 +596,7 @@ export async function loadScoopTiersBySlug(
 
   if (error) {
     // An empty map on a read failure looks identical to "none of these tiers is
-    // published", and both callers turn that into a refusal — which is the safe
+    // published", and both callers turn that into a refusal - which is the safe
     // direction, because no money moves on a refusal. The log is the only thing
     // that tells the two apart, so it is not optional.
     console.error("loadScoopTiersBySlug failed:", error.message);

@@ -3,8 +3,8 @@
  *
  * `constructEvent` does not verify the signature: signature verification is
  * Stripe's own code and asserting on it would be testing their library rather
- * than this shop's handler. Everything after it — which is all of the behaviour
- * that can lose a customer's money — is real.
+ * than this shop's handler. Everything after it - which is all of the behaviour
+ * that can lose a customer's money - is real.
  */
 
 export const stripeState = {

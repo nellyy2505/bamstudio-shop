@@ -17,20 +17,20 @@ import type { OrderStatus, PublicTrackedOrder } from "@/lib/types";
 
 /**
  * The API allow-lists the fields it publishes, so the browser type is the
- * published shape itself — notably it carries no `phone`, which this page has
+ * published shape itself - notably it carries no `phone`, which this page has
  * never rendered and must not start rendering.
  */
 type TrackedOrder = PublicTrackedOrder;
 
 /*
- * `canReachStudio` — is there a mailbox or a social account behind "send us the
- * order number and we will find it" — is imported from lib/contact.ts. It is
+ * `canReachStudio` - is there a mailbox or a social account behind "send us the
+ * order number and we will find it" - is imported from lib/contact.ts. It is
  * built from NEXT_PUBLIC_ config only, so it is identical on the server and in
  * the browser and is safe in this client component.
  *
  * Nothing on this page depends on whether the shop can SEND email, so no
  * capability prop is threaded in from /track. If a claim about email is ever
- * added here, it must arrive as a prop from the server page — reading the
+ * added here, it must arrive as a prop from the server page - reading the
  * secrets in the browser is the skew this codebase was just cleaned of.
  */
 
@@ -46,7 +46,7 @@ const STEP_COPY: Record<OrderStatus, { label: string; body: string }> = {
   },
   printing: {
     label: "Printing",
-    body: `On the printer now — printing runs ${PRINT_LEAD_TIME.label} before anything is dispatched.`,
+    body: `On the printer now. Printing runs ${PRINT_LEAD_TIME.label} before anything is dispatched.`,
   },
   packed: {
     label: "Packed",
@@ -54,7 +54,7 @@ const STEP_COPY: Record<OrderStatus, { label: string; body: string }> = {
   },
   /*
    * This used to read "Handed to Australia Post. Tracking is live once they
-   * scan it in." — an unconditional promise of a tracking number, printed to
+   * scan it in." - an unconditional promise of a tracking number, printed to
    * every shipped order. It is not true for every parcel: `quoteBasket()`
    * returns `tracked: false` for a Large Letter, `transitLabel()` takes
    * tracking as a required argument precisely so nothing hardcodes the word,
@@ -62,7 +62,7 @@ const STEP_COPY: Record<OrderStatus, { label: string; body: string }> = {
    * answer. /track stands in for a confirmation email the shop may not be able
    * to send, so this was the worst place in the shop to promise a number that
    * may never exist. The step now states only what is true of every dispatch;
-   * the number — or its absence — is rendered from the order's own
+   * the number - or its absence - is rendered from the order's own
    * `tracking_number` below.
    */
   shipped: {
@@ -83,8 +83,8 @@ const STEP_COPY: Record<OrderStatus, { label: string; body: string }> = {
  * A sale typed in at a market is written straight to `delivered` with
  * `shipping_method` of `in_person` (`recordSale` in app/admin/actions.ts), and
  * it can be looked up here whenever a real email was taken at the stall. Two
- * steps then describe something that never happened — nothing was handed to
- * Australia Post and no carrier marked anything delivered — so they are read
+ * steps then describe something that never happened - nothing was handed to
+ * Australia Post and no carrier marked anything delivered - so they are read
  * off the method rather than assumed, exactly as the studio's own dispatch
  * panel does it.
  */
@@ -94,7 +94,7 @@ function isInPerson(order: TrackedOrder): boolean {
 
 function stepBody(step: OrderStatus, order: TrackedOrder): string {
   if (isInPerson(order)) {
-    if (step === "shipped") return "Handed over in person — nothing was posted.";
+    if (step === "shipped") return "Handed over in person. Nothing was posted.";
     if (step === "delivered") return "Handed over in person.";
   }
   return STEP_COPY[step].body;
@@ -174,7 +174,7 @@ export function TrackForm() {
       <div className="card p-7 sm:p-8">
         <h2 className="text-xl">Find your order</h2>
         {/* The order number comes off /order/confirmed, which prints it on the
-            page — this must never send anyone to an email that is not sent,
+            page - this must never send anyone to an email that is not sent,
             because the number is what makes this page usable at all. */}
         <p className="mt-1.5 text-[14.5px] text-muted">
           Use the order number from your confirmation page, plus the email
@@ -245,7 +245,7 @@ function NotFoundCard() {
       </span>
       <h2 className="mt-4 text-xl">No order matched those details</h2>
       <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">
-        Nothing to worry about yet — it is almost always a typo in the order
+        Nothing to worry about yet. It is almost always a typo in the order
         number, or a different email address than the one used at checkout (a
         partner&apos;s, or the one attached to your payment account). Check both
         against your confirmation page and try again.
@@ -267,7 +267,7 @@ function NotFoundCard() {
 }
 
 /**
- * 429. Nothing was looked up, so nothing may be said about the order — least
+ * 429. Nothing was looked up, so nothing may be said about the order - least
  * of all that it could not be found. The limit is ten attempts per IP per
  * minute and Australian mobile carriers put many customers behind one address,
  * so a first attempt really can be refused because of strangers; saying so is
@@ -281,7 +281,7 @@ function ThrottledCard({ seconds }: { seconds: number | null }) {
       </span>
       <h2 className="mt-4 text-xl">Too many lookups just now</h2>
       <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">
-        We did not check your order — this page limits how often it will look
+        We did not check your order. This page limits how often it will look
         one up, and that limit counts everyone sharing your internet connection,
         which on a mobile network can be a lot of people. Nothing is wrong with
         your order or the details you typed.
@@ -305,7 +305,7 @@ function ThrottledCard({ seconds }: { seconds: number | null }) {
 }
 
 /**
- * 400. The route rejected the body before any lookup — an order number under
+ * 400. The route rejected the body before any lookup - an order number under
  * three characters or over forty, or something that is not an email address.
  * Again: no search happened, so "no order matched" would be a claim about a
  * search that was never run.
@@ -423,7 +423,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                     }
                   >
                     {STEP_COPY[step].label}
-                    {current ? " — happening now" : ""}
+                    {current ? ": happening now" : ""}
                   </p>
                   <p className="mt-0.5 max-w-[52ch] text-[13.5px] text-muted">
                     {stepBody(step, order)}
@@ -444,7 +444,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                       </p>
                     ) : (
                       <p className="mt-1.5 max-w-[52ch] text-[13.5px] text-muted">
-                        No tracking number was recorded for this parcel — some
+                        No tracking number was recorded for this parcel. Some
                         orders go by untracked letter post, so there is nothing
                         to follow.
                       </p>
@@ -472,7 +472,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
               </>
             ) : (
               <>
-                Estimated arrival <b className="text-ink">{eta}</b> — printing
+                Estimated arrival <b className="text-ink">{eta}</b>, printing
                 ({PRINT_LEAD_TIME.label}) plus{" "}
                 {transitRangeLabel(order.shipping_method) || "carrier transit"}.
                 Estimates are not guarantees; Australia Post has its own
@@ -489,7 +489,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
        *
        * A scoop line carries the TIER'S name in `product_name` and its promise
        * in `variant_label`, so it comes through this loop as "Pet scoop /
-       * 5 pieces · Qty 1" — precisely what the customer bought, and everything
+       * 5 pieces · Qty 1" - precisely what the customer bought, and everything
        * that was knowable at the moment they bought it. Nothing on this page has
        * to learn what a scoop is for that to be true.
        *
@@ -500,7 +500,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
        * number and the email it was placed with, and an order number is a public
        * sequence plus four hex characters. Every field added to that function is
        * a field a brute-forcer is handed too, and "what was in this person's
-       * parcel" is not one to add — least of all for a page whose only throttle
+       * parcel" is not one to add - least of all for a page whose only throttle
        * is one process's memory (WORKLOG §0.I). The contents live in
        * `scoop_pack_items`, which 0007_lucky_scoop.sql keeps service_role in and
        * out, and the customer learns them the way the product intends: by

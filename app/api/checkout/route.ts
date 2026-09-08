@@ -27,7 +27,7 @@ import { toShippingLines } from "@/lib/shipping/lines";
 // market stall. It lives in lib/ and not in app/admin/data.ts, which is where
 // this route used to import it from: a customer-facing endpoint should not put
 // the staff area on its import graph to find out what a piece cost. Nor can it
-// live in app/admin/actions.ts — every export from a "use server" file becomes
+// live in app/admin/actions.ts - every export from a "use server" file becomes
 // a callable HTTP endpoint.
 import { unitCostsAtSale } from "@/lib/cost-basis";
 import {
@@ -47,7 +47,7 @@ const LineSchema = z.object({
   colour: z.string().nullable().optional(),
   attachment_id: z.string().nullable().optional(),
   quantity: z.number().int().min(1).max(BASKET_LIMITS.maxLineQuantity),
-  /** "text" mode personalisation — one printed line, e.g. a pet's name. */
+  /** "text" mode personalisation - one printed line, e.g. a pet's name. */
   personalisation_text: z.string().max(PERSONALISATION_TEXT_MAX).optional(),
   custom: z
     .object({
@@ -70,14 +70,14 @@ const LineSchema = z.object({
  * There is no price here, no piece count and no weight, because there is
  * nothing on this wire the server would believe: the tier row supplies all
  * three, exactly as `products` supplies a product's price. Nor is there a
- * colour, a finding or personalisation — a scoop has none of those, and a field
+ * colour, a finding or personalisation - a scoop has none of those, and a field
  * that accepted one would invite a caller to think it might.
  *
  * Separate from `LineSchema` rather than folded into it. `scoop_tiers.slug` and
  * `products.slug` are separate unique indexes on separate tables, so the same
  * string may exist in both; one array of bare slugs would leave this route
  * deciding which table a line meant, and deciding wrong charges a tier's price
- * for a charm — or worse, decrements a charm for a tier.
+ * for a charm - or worse, decrements a charm for a tier.
  */
 const ScoopLineSchema = z.object({
   slug: z.string().min(1).max(120),
@@ -88,13 +88,13 @@ const BodySchema = z
   .object({
     // Both caps come from lib/config.ts. They used to be literals here and in
     // /api/shipping/quote, with a third transcription in the cart, and nothing
-    // held the three copies together — a basket the client would build and this
+    // held the three copies together - a basket the client would build and this
     // schema would refuse comes back as a blanket "Invalid basket." naming no
     // line. One definition, imported by every surface that has to respect it.
     //
     // `min(1)` has moved off this array onto the refinement below, because a
     // basket of nothing but scoops has no product lines at all. The refinement
-    // preserves both halves of what `min(1).max(maxLines)` said — a body with
+    // preserves both halves of what `min(1).max(maxLines)` said - a body with
     // neither kind of line is still "Invalid basket.", and the line cap is now
     // counted across the whole basket rather than per array, so forty of each
     // cannot become eighty.
@@ -132,7 +132,7 @@ type SummaryLine = {
  * `stockMap()`, which builds the `slug:qty` map the webhook's rebuild path
  * decrements from, and `unitCostsAtSale()`, which looks a product's making cost
  * up by id. A scoop has no shelf to come off and no recipe to cost, so both
- * would be wrong for it — `stockMap` catastrophically so, since the slug it
+ * would be wrong for it - `stockMap` catastrophically so, since the slug it
  * would emit could match a real product and take that product off the shelf.
  *
  * Keeping the two lists apart makes that structural. A filter would work today
@@ -141,7 +141,7 @@ type SummaryLine = {
  *
  * Note the fields that are absent rather than nulled: no `colour`, no
  * `attachment_id`, no `personalisation`. And note `unit_cost_cents` is nowhere
- * here at all — it is written as NULL at the insert, and the studio stamps the
+ * here at all - it is written as NULL at the insert, and the studio stamps the
  * real figure when the pack is recorded.
  */
 type ScoopSummaryLine = {
@@ -157,7 +157,7 @@ type ScoopSummaryLine = {
 /**
  * Packs the basket into Stripe's 500-character metadata budget as
  * "slug:qty,slug:qty". Entries are dropped whole rather than the string being
- * sliced — a cut mid-entry would hand the webhook a truncated slug and
+ * sliced - a cut mid-entry would hand the webhook a truncated slug and
  * silently skip that product's stock movement.
  */
 const STOCK_METADATA_LIMIT = 480;
@@ -172,7 +172,7 @@ function stockMap(items: SummaryLine[]): string {
     const cost = entry.length + (parts.length > 0 ? 1 : 0);
     if (length + cost > STOCK_METADATA_LIMIT) {
       console.warn(
-        `Stock metadata full — ${item.slug} omitted; its stock will not move ` +
+        `Stock metadata full, ${item.slug} omitted; its stock will not move ` +
           "if the webhook has to rebuild this order.",
       );
       continue;
@@ -205,7 +205,7 @@ async function savePendingOrder(input: {
   /**
    * What was quoted, as opposed to what was charged. `shipping` above can be 0
    * because of the free-postage promotion while the studio still pays the
-   * carrier — these three are what makes that reconcilable, and what makes a
+   * carrier - these three are what makes that reconcilable, and what makes a
    * postage bill checkable against the orders that caused it. Null means the
    * order predates postage quoting.
    */
@@ -247,7 +247,7 @@ async function savePendingOrder(input: {
     orderId = order.id;
 
     // THE DEFECT THIS CLOSES (defect 2): `unit_cost_cents` was written in
-    // exactly one place — the market-stall form in app/admin/actions.ts — so
+    // exactly one place - the market-stall form in app/admin/actions.ts - so
     // every website sale landed with a null making cost and /admin/reports had
     // nothing to subtract for the online channel.
     //
@@ -255,7 +255,7 @@ async function savePendingOrder(input: {
     // the column exists to say what the piece cost WHEN IT SOLD, and computing
     // it later would rewrite every historical margin the next time filament or
     // electricity changed price. Minutes separate this from the payment, and
-    // the alternative — waiting for the webhook — would leave the ordinary,
+    // the alternative - waiting for the webhook - would leave the ordinary,
     // staged path with no cost at all.
     //
     // Never blocks a sale. A cost that cannot be worked out is a null, which
@@ -282,7 +282,7 @@ async function savePendingOrder(input: {
         unit_price: item.unit_price,
         quantity: item.quantity,
         personalisation: item.personalisation,
-        // Null for a product nobody has measured — an honest gap the reports
+        // Null for a product nobody has measured - an honest gap the reports
         // count and say out loud, rather than a zero that reads as 100% margin.
         unit_cost_cents: costs.get(item.product_id) ?? null,
       })),
@@ -300,7 +300,7 @@ async function savePendingOrder(input: {
        *  - `unit_cost_cents` is NULL, and stays null until the pack is recorded.
        *    There is no recipe to cost a scoop from at this moment, so any figure
        *    written here would be invented. `unitCostsAtSale()` is never called
-       *    with a tier id — it could only answer for a product.
+       *    with a tier id - it could only answer for a product.
        *  - `personalisation` is null. A scoop is not made to a customer's spec;
        *    marking it personalised would also, in this codebase, suppress its
        *    stock movement, which is the right outcome reached by a wrong reason.
@@ -350,7 +350,7 @@ async function savePendingOrder(input: {
 /**
  * Creates a Stripe Checkout Session.
  *
- * Prices are recomputed here from the database — the client only says WHICH
+ * Prices are recomputed here from the database - the client only says WHICH
  * product and how many. A tampered basket cannot change what is charged.
  */
 export async function POST(request: Request) {
@@ -360,7 +360,7 @@ export async function POST(request: Request) {
   // `rateLimitDurable`, not `rateLimit`: a deploy or a restart used to hand the
   // loop a clean allowance, and this is the endpoint where that costs rows in
   // the orders table rather than a wasted query. `await` is the whole
-  // difference and dropping it is not a lint error here — the config carries no
+  // difference and dropping it is not a lint error here - the config carries no
   // type-aware `no-misused-promises`, so `limit.ok` would read `undefined`,
   // `!limit.ok` would be true, and every checkout in the shop would answer 429.
   // The store call is bounded at 500ms with a circuit breaker and falls back to
@@ -401,7 +401,7 @@ export async function POST(request: Request) {
   // and the webhook would 500 on every delivery, recording nothing. Refuse up
   // front rather than discovering it in the Stripe dashboard.
   if (isDatabaseConfigured() && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error("SUPABASE_SERVICE_ROLE_KEY is missing — refusing checkout.");
+    console.error("SUPABASE_SERVICE_ROLE_KEY is missing, refusing checkout.");
     return NextResponse.json(
       { error: "Checkout is temporarily unavailable. Please try again later." },
       { status: 503 },
@@ -410,19 +410,19 @@ export async function POST(request: Request) {
 
   // (b) The mirror of (a): live Stripe, no database at all. savePendingOrder()
   // returns ok early when the database is unconfigured, so nothing downstream
-  // catches this — the charge succeeds, no order row is ever written, and
+  // catches this - the charge succeeds, no order row is ever written, and
   // /order/confirmed still tells the customer their order is confirmed. Money
   // taken, nothing to print, nothing to track.
   //
   // The NODE_ENV check is deliberate and load-bearing. DO NOT "tidy" it away
-  // into an unconditional guard — that has already been done, and re-fixed,
+  // into an unconditional guard - that has already been done, and re-fixed,
   // twice (WORKLOG §5 rounds 3 and 4), and round 4's rule is the constraint: a
   // guard may reject a query *error*, never the *absence* of a database.
   // Running with no database at all is an intended mode (CLAUDE.md), and it is
   // exactly what the only verification flow this project has depends on: a
   // dummy Stripe key, no Supabase env, and the real CartView payloads replayed
-  // against this route (scripts/replay-checkout.mjs), where 502 — reached
-  // Stripe — is the pass. An unconditional guard turns every one of those
+  // against this route (scripts/replay-checkout.mjs), where 502 - reached
+  // Stripe - is the pass. An unconditional guard turns every one of those
   // cases into a 503 that never reaches the validation being tested, and three
   // previous regressions were caught only by that replay. Outside production
   // the key in use is a test key and no real money can move, so the trade is
@@ -430,7 +430,7 @@ export async function POST(request: Request) {
   // is not.
   if (process.env.NODE_ENV === "production" && !isDatabaseConfigured()) {
     console.error(
-      "Supabase is not configured in production — refusing checkout: a real " +
+      "Supabase is not configured in production, refusing checkout: a real " +
         "charge would leave no order record and nothing to print.",
     );
     return NextResponse.json(
@@ -441,7 +441,7 @@ export async function POST(request: Request) {
 
   const [products, tiers] = await Promise.all([
     loadProductsBySlug(body.lines.map((l) => l.slug)),
-    // Read through RLS on purpose — see loadScoopTiersBySlug. A draft or
+    // Read through RLS on purpose - see loadScoopTiersBySlug. A draft or
     // unpriced tier is simply not in this map, so it can never be charged for.
     loadScoopTiersBySlug(body.scoop_lines.map((l) => l.slug)),
   ]);
@@ -469,7 +469,7 @@ export async function POST(request: Request) {
    *
    * Loaded here and not with the lines above because which product it is comes
    * from the *collection*, which is only known once the colourways are in hand.
-   * The client sends `with_charm: true` and nothing else — it never names the
+   * The client sends `with_charm: true` and nothing else - it never names the
    * charm and never names a price, so the worst a tampered basket can do is ask
    * for a charm on a colourway that has none, which is refused below.
    */
@@ -493,8 +493,8 @@ export async function POST(request: Request) {
         // `slug` is the unique key that lets the webhook's rebuild path find the
         // row a line was charged for. The scoop keys (see SCOOP_METADATA in
         // lib/scoop-line.ts) are what let it tell a tier's slug from a
-        // product's — the two live in different tables and can be the same
-        // string — so the index signature is what carries them without every
+        // product's - the two live in different tables and can be the same
+        // string - so the index signature is what carries them without every
         // ordinary line pretending it might have them.
         metadata: Record<string, string>;
       };
@@ -518,7 +518,7 @@ export async function POST(request: Request) {
     let description: string;
 
     // A `custom` block carries builder bundle pricing, so it must only ever
-    // reach a builder product — otherwise an $18 item could be bought for $3.
+    // reach a builder product - otherwise an $18 item could be bought for $3.
     if (line.custom && product.personalisation_mode !== "builder") {
       return NextResponse.json(
         { error: `“${product.short_name}” is not built in the designer.` },
@@ -577,7 +577,7 @@ export async function POST(request: Request) {
        * Caps, plus the charm if one was asked for, plus the finding.
        *
        * The charm's price comes from its own product row less
-       * BUILDER_CHARM_BUNDLE_DISCOUNT — never from the client, and never from a
+       * BUILDER_CHARM_BUNDLE_DISCOUNT - never from the client, and never from a
        * copy stored on the collection. A charm asked for on a colourway that
        * has none, or whose product has since been retired, is refused: adding
        * nothing would hand over a charm for free, and the packing list would
@@ -599,7 +599,7 @@ export async function POST(request: Request) {
         charmPrice = builderCharmPrice(charm.price);
       }
 
-      // Every builder finding is free today, but honour the delta anyway —
+      // Every builder finding is free today, but honour the delta anyway -
       // otherwise adding a paid one to a builder product would give it away.
       unitPrice = bundle + charmPrice + (builderAttachment?.price_delta ?? 0);
 
@@ -673,7 +673,7 @@ export async function POST(request: Request) {
         product_data: {
           name: product.short_name,
           ...(description ? { description } : {}),
-          // `short_name` is NOT unique in the schema — only `slug` and `sku`
+          // `short_name` is NOT unique in the schema - only `slug` and `sku`
           // are (supabase/migrations/0001_init.sql). The webhook's rebuild
           // path, used when the database was unreachable here and no order was
           // staged, has to map each Stripe line back to a product row, and
@@ -713,8 +713,8 @@ export async function POST(request: Request) {
   for (const line of body.scoop_lines) {
     const tier = tiers.get(line.slug);
 
-    // Not published. RLS is the first gate and it has already been applied —
-    // an inactive or unpriced tier never entered the map — so an absence here
+    // Not published. RLS is the first gate and it has already been applied -
+    // an inactive or unpriced tier never entered the map - so an absence here
     // means the tier is a draft, was retired, or never existed. The 409 wording
     // matches the product branch above: same shape of problem, same answer.
     if (!tier) {
@@ -725,13 +725,13 @@ export async function POST(request: Request) {
     }
 
     /*
-     * IS IT FOR SALE AT ALL — switched on, and priced. Nothing else.
+     * IS IT FOR SALE AT ALL - switched on, and priced. Nothing else.
      *
      * THERE WAS A STOCK GATE HERE AND IT WAS WRONG. It refused the sale when
      * the tier's pool could not fill a scoop off the shelf, on the reasoning
      * that a scoop promises pieces that exist now. It does not: THE SHOP PRINTS
      * TO ORDER. She scoops from the bowl, and if the bowl is short she prints
-     * the rest before packing — exactly what `decrement_stock` assumes for
+     * the rest before packing - exactly what `decrement_stock` assumes for
      * every other line on this order when it returns a shortfall and keeps
      * selling (0005_sale_integrity.sql). The gate's only possible effect was to
      * take a paid product off the shop because a shelf count dipped. Do not put
@@ -745,7 +745,7 @@ export async function POST(request: Request) {
      *
      * `blockers` are written for the studio ("not active"), so they are logged
      * and not shown. The customer gets a sentence about the thing they were
-     * trying to buy — and no "sold out", which is now never the reason.
+     * trying to buy - and no "sold out", which is now never the reason.
      */
     if (!tier.availability.sellable) {
       console.warn(
@@ -762,7 +762,7 @@ export async function POST(request: Request) {
     }
 
     /*
-     * The price, recomputed from the tier row — never from the browser, exactly
+     * The price, recomputed from the tier row - never from the browser, exactly
      * as a product's is. `price_cents` is nullable in the column and in the
      * type, and both RLS and `availability.sellable` have already refused a
      * null, so this is unreachable. It is written anyway because the thing it
@@ -772,7 +772,7 @@ export async function POST(request: Request) {
     const price = tier.price_cents;
     if (price === null || price <= 0) {
       console.error(
-        `Tier ${tier.slug} is sellable but has no usable price — refusing.`,
+        `Tier ${tier.slug} is sellable but has no usable price, refusing.`,
       );
       return NextResponse.json(
         { error: `“${tier.name}” is not on sale just now.` },
@@ -791,14 +791,14 @@ export async function POST(request: Request) {
         currency: "aud",
         unit_amount: price,
         product_data: {
-          // The tier's name — what the customer chose and what every screen
+          // The tier's name - what the customer chose and what every screen
           // that renders this order will print.
           name: tier.name,
           description: variant,
           // Carries the tier id, the piece count and the theme as well as the
           // slug, so the webhook's Stripe-rebuild path can write a scoop line
           // that is identical to the one staged below without looking anything
-          // up — and, critically, without mistaking a tier slug for a product
+          // up - and, critically, without mistaking a tier slug for a product
           // slug and decrementing a charm. See SCOOP_METADATA.
           metadata: scoopLineMetadata(tier),
         },
@@ -821,7 +821,7 @@ export async function POST(request: Request) {
    * Postage, from Australia Post, priced on the *server's* copy of the basket.
    *
    * `quoteBasket()` is the single entry point and `POST /api/shipping/quote`
-   * — what the cart calls — goes through the same function on the same
+   * - what the cart calls - goes through the same function on the same
    * server-loaded rows, so the figure shown in the basket and the figure Stripe
    * charges come from one expression rather than two that agree by coincidence.
    *
@@ -833,7 +833,7 @@ export async function POST(request: Request) {
    * Who pays it is a separate question, and deliberately so:
    * `shippingCharge()` is the shop's own promotion over the subtotal, while
    * `quoteBasket()` is what the post office wants. Waiving or halving the
-   * charge must not change what was quoted — the provenance columns staged
+   * charge must not change what was quoted - the provenance columns staged
    * below record the real weight and service even on a free-postage order,
    * which is the only way to reconcile a carrier bill later. On a half-paid
    * order that reconciliation matters more, not less: the studio is now paying
@@ -844,9 +844,9 @@ export async function POST(request: Request) {
       ...toShippingLines(body.lines, products),
       /*
        * A scoop has no product row and so no weight of its own. The TIER
-       * carries a worst-case packed weight, and `toScoopShippingLines` — the
+       * carries a worst-case packed weight, and `toScoopShippingLines` - the
        * same builder `POST /api/shipping/quote` uses, so the cart's figure and
-       * this one cannot come from two expressions — turns it into a line
+       * this one cannot come from two expressions - turns it into a line
        * `quoteBasket()` weighs alongside the charms.
        *
        * It also makes the whole basket a parcel. `scoop_tiers` deliberately has
@@ -915,7 +915,7 @@ export async function POST(request: Request) {
         // Small enough for Stripe's 500-char cap, and the one piece of the
         // basket the webhook cannot rebuild from line items.
         gift_note: (body.gift_note ?? "").slice(0, 450),
-        // "slug:qty,slug:qty" — the only way the webhook's rebuild path can
+        // "slug:qty,slug:qty" - the only way the webhook's rebuild path can
         // find products to decrement. Personalised lines are omitted: they
         // hold no ready-to-ship stock.
         //
@@ -924,7 +924,7 @@ export async function POST(request: Request) {
         // `scoopSummary`, and the compiler will not let one be passed for the
         // other. It matters more than it looks. A tier slug in this map would
         // be looked up in `products` by the webhook, and `scoop_tiers.slug` and
-        // `products.slug` are separate unique indexes — a tier and a charm may
+        // `products.slug` are separate unique indexes - a tier and a charm may
         // share a string. A scoop's stock does not move here in any case: it
         // moves in the studio, one decrement per piece, when the pack is
         // recorded (0007_lucky_scoop.sql).
@@ -944,7 +944,7 @@ export async function POST(request: Request) {
       scoopItems: scoopSummary,
       quoteSource: quote.source,
       quotedWeightGrams: quote.weightGrams,
-      // Empty only for an empty basket, which cannot reach here — checkout
+      // Empty only for an empty basket, which cannot reach here - checkout
       // requires at least one line. Stored as null rather than "" so a reader
       // cannot mistake a missing service for a real one.
       quotedServiceCode: quote.serviceCode || null,
@@ -960,7 +960,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "We couldn't start your order just now. Nothing has been charged — please try again in a moment.",
+            "We couldn't start your order just now. Nothing has been charged, please try again in a moment.",
         },
         { status: 503 },
       );

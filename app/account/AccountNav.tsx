@@ -14,7 +14,7 @@ const LINKS: { href: string; label: string; icon: IconName }[] = [
 /**
  * @param isStaff decided on the server by the layout above. This component
  *   cannot ask: the `staff` table is invisible to the key that reaches the
- *   browser, by design. Hiding the link is presentation — /admin does its own
+ *   browser, by design. Hiding the link is presentation - /admin does its own
  *   checking.
  */
 export function AccountNav({ isStaff = false }: { isStaff?: boolean }) {

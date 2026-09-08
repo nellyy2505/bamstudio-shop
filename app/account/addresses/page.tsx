@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 // scratch (`shipping_address_collection` in app/api/checkout/route.ts), so
 // nothing saved here reaches it. Prefilling means creating a Stripe Customer
 // for the shopper, keeping its `shipping` in step with the default address
-// below, and passing `customer` on the Checkout Session — until that lands,
+// below, and passing `customer` on the Checkout Session - until that lands,
 // the copy on this page must not promise a filled-in checkout.
 
 export default async function AddressesPage() {
@@ -33,7 +33,7 @@ export default async function AddressesPage() {
       addresses = (data ?? []) as SavedAddress[];
     }
   } catch {
-    // Database unreachable — the manager starts from an empty list.
+    // Database unreachable - the manager starts from an empty list.
   }
 
   return (
@@ -42,7 +42,7 @@ export default async function AddressesPage() {
       <p className="mb-7 text-sm text-muted">
         An address book for the places you post to most, so you can copy one
         across instead of digging out a postcode. Checkout still asks for the
-        delivery address itself — these are not filled in for you yet.
+        delivery address itself. These are not filled in for you yet.
       </p>
 
       <AddressManager initial={addresses} userId={user.id} />

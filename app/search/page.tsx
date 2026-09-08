@@ -67,7 +67,7 @@ export default async function SearchPage({
             <Icon name="search" size={28} />
           </span>
           <h2 className="mt-5 text-xl">
-            Nothing matches “{term}” — yet
+            Nothing matches “{term}”, yet
           </h2>
           <p className="mt-2 max-w-md text-sm text-muted">
             We might not make it yet. Several catalogue pieces started as
@@ -90,7 +90,7 @@ export default async function SearchPage({
           <div className="flex-1">
             <b className="text-base">Searching for something we don&apos;t make?</b>
             <p className="mt-1 text-[13.5px] text-muted">
-              We take custom requests — the dumbbell clicker started as one.
+              We take custom requests. The dumbbell clicker started as one.
             </p>
           </div>
           <ButtonLink href="/contact" variant="ghost" size="sm">

@@ -8,12 +8,12 @@ import { isSupabaseConfigured } from "@/lib/supabase/client";
  * project is connected, so the promise below is true in production and stays
  * word for word. It is only gated: while the shop has no Supabase project this
  * page was telling the customer, ungated, that a link was on its way and that
- * it expires in 30 minutes — for an email nothing had even attempted to send
+ * it expires in 30 minutes - for an email nothing had even attempted to send
  * (the submit threw before reaching Supabase at all). Gate the claim on the
  * capability, the same way `SHOP.gstRegistered` gates every GST surface.
  *
  * `isSupabaseConfigured()` reads only `NEXT_PUBLIC_*` vars, so this server
- * component and the client component it renders reach the identical answer —
+ * component and the client component it renders reach the identical answer -
  * see the note on `CAN_RESET` in ForgotPasswordForm.tsx.
  */
 const CAN_RESET = isSupabaseConfigured();

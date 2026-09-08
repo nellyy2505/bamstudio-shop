@@ -33,7 +33,7 @@ export function BuyAgainButton({
     >
       <Icon name="bag" size={15} />
       Buy again
-      <span className="sr-only"> — items from order {orderNumber}</span>
+      <span className="sr-only">: items from order {orderNumber}</span>
     </Button>
   );
 }

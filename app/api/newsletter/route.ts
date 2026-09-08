@@ -17,7 +17,7 @@ const BodySchema = z.object({
     // the key deduplicates nothing and an address taken off the list comes
     // back under the other spelling. `newsletter_signups` has a CHECK that
     // refuses anything not already lower-cased, so this cannot be forgotten
-    // silently — the insert fails loudly instead. The 200 matches its bound.
+    // silently - the insert fails loudly instead. The 200 matches its bound.
     .transform((value) => value.trim().toLowerCase()),
 });
 
@@ -26,7 +26,7 @@ const BodySchema = z.object({
  *
  * WHAT CHANGED, AND WHAT DID NOT. This route used to forward a notification to
  * the studio inbox and keep nothing at all, so an unconfigured provider or a
- * Resend 5xx discarded the request outright — the same defect `/api/contact`
+ * Resend 5xx discarded the request outright - the same defect `/api/contact`
  * had, on a smaller payload. The address is now written to
  * `public.newsletter_signups` before the notification is attempted, so the
  * request survives the mail failing.
@@ -34,7 +34,7 @@ const BodySchema = z.object({
  * What has NOT changed is what may be promised. That table is a record of who
  * asked and when; it is not a list that anything sends to. There is no
  * newsletter, no welcome email, no unsubscribe link and no code anywhere in
- * this project that mails a subscriber — so the footer copy still must not
+ * this project that mails a subscriber - so the footer copy still must not
  * offer any of them, and `delivered` still says only whether the studio was
  * notified. See WORKLOG §0.9 and the table comment in 0006_enquiries.sql.
  *
@@ -42,7 +42,7 @@ const BodySchema = z.object({
  * membership and a message is a piece of work. The membership is unique (asking
  * twice is one fact stated twice, so the address is the primary key and a
  * repeat submission is idempotent) and ends in an unsubscribe; the message
- * repeats freely — a customer who follows up has said a second thing — and ends
+ * repeats freely - a customer who follows up has said a second thing - and ends
  * in a reply. One table would leave half its columns null for half its rows,
  * could not express the uniqueness rule, and would make clearing out answered
  * enquiries delete the mailing list.
@@ -52,8 +52,8 @@ const BodySchema = z.object({
  * Records the request. Returns whether the address is now on record.
  *
  * `ignoreDuplicates` makes this `insert ... on conflict do nothing`: a second
- * sign-up from the same address is not an error and not a new row, and — this
- * is the part that matters — it does not overwrite `unsubscribed_at`. Somebody
+ * sign-up from the same address is not an error and not a new row, and - this
+ * is the part that matters - it does not overwrite `unsubscribed_at`. Somebody
  * who has been taken off the list stays off, whatever the footer box is told
  * afterwards. A duplicate still counts as stored, because the true statement
  * ("we have your address") holds either way.
@@ -72,7 +72,7 @@ async function storeSignup(email: string): Promise<boolean> {
       });
 
     if (error) {
-      // PostgREST text about the statement, never the address — the log stream
+      // PostgREST text about the statement, never the address - the log stream
       // is not a mailing list (§0.9).
       console.error("[newsletter] request NOT stored", {
         address: maskEmail(email),
@@ -82,7 +82,7 @@ async function storeSignup(email: string): Promise<boolean> {
       // MASKED address because it is on infrastructure the studio controls and
       // it is what lets a "I signed up and heard nothing" complaint be matched
       // to a failure. The error report gets NO address at all, masked or
-      // otherwise — it leaves the country and lands in a third party's system,
+      // otherwise - it leaves the country and lands in a third party's system,
       // so the rule there is stricter, not the same.
       void captureMessage("Newsletter sign-up could not be stored", {
         scope: "newsletter",
@@ -112,7 +112,7 @@ async function storeSignup(email: string): Promise<boolean> {
 /**
  * Stamps the row as notified, only if it has not been already: a second
  * sign-up from an address the studio was told about a month ago should not
- * rewrite the date the studio first heard. Best-effort — the address is
+ * rewrite the date the studio first heard. Best-effort - the address is
  * already on record and a lost stamp costs one duplicate prompt.
  */
 async function markNotified(email: string): Promise<void> {
@@ -130,7 +130,7 @@ async function markNotified(email: string): Promise<void> {
 
 export async function POST(request: Request) {
   // Durable when a shared store is configured, identical to before when it
-  // is not — see lib/rate-limit.ts.
+  // is not - see lib/rate-limit.ts.
   const limit = await rateLimitDurable(clientKey(request, "newsletter"), 5, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
@@ -148,14 +148,14 @@ export async function POST(request: Request) {
     );
   }
 
-  // Store first, then notify — same order and same reason as /api/contact.
+  // Store first, then notify - same order and same reason as /api/contact.
   const stored = await storeSignup(body.email);
 
   let delivered = false;
   let failure: string | null = null;
 
   // The same condition the footer uses to decide whether to offer the box at
-  // all — lib/contact.ts `formsReachStudio(isEmailConfigured())`. It now
+  // all - lib/contact.ts `formsReachStudio(isEmailConfigured())`. It now
   // decides only whether the owner is told, not whether the request survives.
   if (isEmailConfigured() && SHOP.hasSupportEmail) {
     const result = await sendEmail({
@@ -166,7 +166,7 @@ export async function POST(request: Request) {
         "",
         stored
           ? "It is recorded in the studio, so this mail can be deleted. There"
-          : "THIS IS THE ONLY COPY — the studio could not record it. There",
+          : "THIS IS THE ONLY COPY, the studio could not record it. There",
         "is still no newsletter and nothing goes out to this address.",
       ].join("\n"),
       // Lets the owner reply to confirm, and keeps the address out of the
@@ -201,13 +201,13 @@ export async function POST(request: Request) {
       address: maskEmail(body.email),
     });
   } else {
-    console.error("[newsletter] request LOST — neither recorded nor forwarded", {
+    console.error("[newsletter] request LOST, neither recorded nor forwarded", {
       address: maskEmail(body.email),
       reason: failure,
     });
     // Somebody asked to hear about new drops and there is no record of it
-    // anywhere. No address in the payload — see the note in `storeSignup`.
-    void captureMessage("Newsletter sign-up lost — neither recorded nor forwarded", {
+    // anywhere. No address in the payload - see the note in `storeSignup`.
+    void captureMessage("Newsletter sign-up lost, neither recorded nor forwarded", {
       scope: "newsletter",
       level: "error",
       route: "/api/newsletter",
@@ -220,9 +220,9 @@ export async function POST(request: Request) {
   //
   // WHAT THE TWO FLAGS MAY BE USED TO CLAIM:
   //
-  //   delivered — the studio was emailed that someone asked. Not that anyone
+  //   delivered - the studio was emailed that someone asked. Not that anyone
   //     read it, and never that a newsletter exists.
-  //   stored — the address is on record and is still there tomorrow. **Not
+  //   stored - the address is on record and is still there tomorrow. **Not
   //     that it is subscribed to anything**, because nothing sends to it.
   //     "We have your address, and there is no newsletter yet" is the whole of
   //     what this permits; "you're on the list" is not.

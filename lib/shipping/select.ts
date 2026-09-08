@@ -8,7 +8,7 @@
  *
  * A basket is letter-eligible only if **all four** rules below hold. They are
  * evaluated together, not short-circuited, so the caller can see which one
- * bound — that is what makes this debuggable when the studio disagrees with a
+ * bound - that is what makes this debuggable when the studio disagrees with a
  * quote.
  *
  *   1. Every line's product is marked `letter_eligible`.
@@ -23,8 +23,8 @@
  * be. Six 12 mm charms stacked are 72 mm thick, not 12.
  *
  * It is defensible **only because rule 3 exists**. Rule 3 requires the total
- * footprint — every item's length × width, times quantity, times a packing
- * factor — to fit inside a single 240 × 340 mm rectangle. If it fits, the
+ * footprint - every item's length × width, times quantity, times a packing
+ * factor - to fit inside a single 240 × 340 mm rectangle. If it fits, the
  * items can be laid out side by side in one layer, and a single layer is one
  * item deep everywhere: the thickest item sets the thickness. If it does not
  * fit, rule 3 has already failed and the basket is a parcel, so `max()` is
@@ -70,7 +70,7 @@ export type LetterRuleChecks = {
 
 export type PackagingSelection = {
   kind: PackagingKind;
-  /** Weight in the mailer actually chosen — letter and parcel mailers differ. */
+  /** Weight in the mailer actually chosen - letter and parcel mailers differ. */
   weightGrams: number;
   /** Σ(length × width × qty) × packing factor, in mm². */
   footprintMm2: number;
@@ -100,7 +100,7 @@ function safeQuantity(quantity: number): number {
 /**
  * Outer dimensions for a parcel quote.
  *
- * Thickness **sums** here — the opposite of rule 4 — because a parcel is
+ * Thickness **sums** here - the opposite of rule 4 - because a parcel is
  * exactly the case where the single-layer argument does not apply. The numbers
  * are then clamped into the range Australia Post will accept: below the
  * minimum the API is quoting something it would not carry, above 105 cm it
@@ -176,18 +176,18 @@ export function selectPackaging(lines: ShippingLine[]): PackagingSelection {
     };
   }
 
-  // Rule 1 — every product, not most of them. One pet bowl makes the whole
+  // Rule 1 - every product, not most of them. One pet bowl makes the whole
   // order a parcel however many charms are riding along with it.
   const allProductsEligible = active.every(
     (line) => line.product.letter_eligible === true,
   );
 
-  // Rule 2 — weighed in the *letter* mailer, because that is the package we
+  // Rule 2 - weighed in the *letter* mailer, because that is the package we
   // would actually be posting if the answer turns out to be yes.
   const letterWeight = basketWeight(active, "letter");
   const withinWeight = letterWeight <= LETTER_WORKING.weightGrams;
 
-  // Rule 3 — one flat layer. Two halves: the total area has to fit the
+  // Rule 3 - one flat layer. Two halves: the total area has to fit the
   // rectangle, and no single item may overhang it however small the basket.
   let footprintRaw = 0;
   let maxItemLengthMm = 0;
@@ -209,7 +209,7 @@ export function selectPackaging(lines: ShippingLine[]): PackagingSelection {
     maxItemLengthMm <= LETTER_WORKING.lengthMm &&
     maxItemWidthMm <= LETTER_WORKING.widthMm;
 
-  // Rule 4 — max, not sum. Legitimate only while rule 3 holds; see the file
+  // Rule 4 - max, not sum. Legitimate only while rule 3 holds; see the file
   // comment. The verdict below ANDs them, so `max()` never survives a
   // footprint failure.
   const thicknessMm = maxThicknessMm + PACKAGING.mailerThicknessMm;

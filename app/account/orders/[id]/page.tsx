@@ -42,7 +42,7 @@ type DetailItem = OrderItem & {
    *
    * WHAT THIS PAGE SHOWS FOR A SCOOP, AND WHAT IT DELIBERATELY DOES NOT.
    *
-   * It shows what was bought — "Pet scoop", "5 pieces", the price — which comes
+   * It shows what was bought - "Pet scoop", "5 pieces", the price - which comes
    * out of `product_name` and `variant_label` with no special handling, because
    * the tier's name and its promise are exactly what the customer chose. This
    * flag adds one sentence and nothing else: that the pieces are drawn after
@@ -54,7 +54,7 @@ type DetailItem = OrderItem & {
    *
    *  1. The contents live in `scoop_packs` / `scoop_pack_items`, which
    *     0007_lucky_scoop.sql puts behind RLS with NO policy and an explicit
-   *     revoke — service_role in and out. Publishing them means granting a read
+   *     revoke - service_role in and out. Publishing them means granting a read
    *     to `authenticated` and writing a policy that joins packs → order_items →
    *     orders → user_id. That is a new door onto the table that records what
    *     every named customer received, opened for a feature nobody has asked
@@ -62,8 +62,8 @@ type DetailItem = OrderItem & {
    *     in a way nobody notices.
    *  2. It would have to be built twice and one of the two cannot be built
    *     safely. /track reaches the same order with an order number and an email
-   *     — a credential weak enough that `lookup_order`'s column list is treated
-   *     as a security boundary — so a customer who checked out as a guest could
+   *     - a credential weak enough that `lookup_order`'s column list is treated
+   *     as a security boundary - so a customer who checked out as a guest could
    *     only see it there, where it least belongs.
    *  3. The parcel is the reveal. The scoop is a surprise that arrives in the
    *     post; a page that listed the pieces the day before it landed would spoil
@@ -92,7 +92,7 @@ const STEP_LABEL_TEXT = {
 /**
  * Whether the shop can send at all, read once from the server-side secrets.
  * This is a server component, so `isEmailConfigured()` is safe here and is the
- * same condition the senders themselves check — no public mirror to drift.
+ * same condition the senders themselves check - no public mirror to drift.
  */
 const CAN_SEND_EMAIL = isEmailConfigured();
 
@@ -154,7 +154,7 @@ function Reach({ detail }: { detail: string }) {
 
   return (
     <>
-      We have not published a contact address yet — any channel we open will be
+      We have not published a contact address yet. Any channel we open will be
       listed on our{" "}
       <Link href="/contact" className={LINK}>
         contact page
@@ -288,7 +288,7 @@ export default async function OrderDetailPage({
         {order.status === "cancelled" ? (
           <div className="mt-5">
             <Alert tone="error">
-              This order was cancelled — nothing was printed or posted.
+              This order was cancelled. Nothing was printed or posted.
             </Alert>
           </div>
         ) : null}
@@ -324,7 +324,7 @@ export default async function OrderDetailPage({
                       {/* No claim about a video, and none about returns: both
                           are undecided (0007), and a receipt is the wrong place
                           to decide them by implication. */}
-                      Drawn and packed by hand from this scoop&apos;s pool —
+                      Drawn and packed by hand from this scoop&apos;s pool,
                       the pieces are chosen after the order.
                     </p>
                   ) : null}
@@ -429,7 +429,7 @@ export default async function OrderDetailPage({
             <p className="mt-2 text-[13px] text-faint">
               Order contact: {order.email}
               {SENDS_CONFIRMATION
-                ? " — any order email we send goes to this address."
+                ? ". Any order email we send goes to this address."
                 : ""}
             </p>
           </section>

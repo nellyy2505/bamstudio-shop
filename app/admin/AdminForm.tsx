@@ -9,7 +9,7 @@ import type { FormState } from "./actions";
  * The one form wrapper the staff area uses.
  *
  * React 19's `useActionState` needs a client component, but only the wrapper
- * does — the fields inside are passed as children from a server component, so
+ * does - the fields inside are passed as children from a server component, so
  * nothing about a product, an order or a cost ends up in the client bundle.
  * That is why this takes `children` rather than rendering fields itself.
  *
@@ -50,7 +50,7 @@ export function AdminForm({
  * A submit button that disables itself while the action is in flight.
  *
  * `useFormStatus` only reports on the form it is *inside*, which is why this is
- * a separate component rather than a prop on AdminForm — a hook called in the
+ * a separate component rather than a prop on AdminForm - a hook called in the
  * same component that renders the <form> reads the parent form's status, not
  * this one's, and would never show pending at all.
  */

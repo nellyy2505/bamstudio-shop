@@ -10,7 +10,7 @@ import { createAdminClient, getUser } from "@/lib/supabase/server";
  * A role is NOT a column on `profiles`. 0001_init.sql grants every signed-in
  * account UPDATE on its own profile row across all columns, so a role there
  * would be self-assignable over PostgREST with the anon key that ships in the
- * browser bundle — one HTTP request and a customer is an admin. RLS cannot
+ * browser bundle - one HTTP request and a customer is an admin. RLS cannot
  * restrict a policy to a subset of columns, so the fix is a separate table.
  *
  * `public.staff` therefore has RLS on, NO policy, and an explicit revoke from
@@ -23,7 +23,7 @@ import { createAdminClient, getUser } from "@/lib/supabase/server";
  * cheap first gate that establishes "signed in at all"; the real check is
  * `requireStaff()`, and it has to be called by every page, route handler and
  * server action under /admin. A Next.js layout is not a security boundary for
- * route handlers — nothing about being nested under `app/admin/` protects an
+ * route handlers - nothing about being nested under `app/admin/` protects an
  * API route. Call it yourself, every time.
  * ────────────────────────────────────────────────────────────────────────────
  */
@@ -47,7 +47,7 @@ export type Capability =
  * less than studio" invites an off-by-one that quietly grants something, while
  * a list you have to type into is a list someone has to read.
  *
- * `packing` is orders and nothing else — no costs, no prices, no catalogue —
+ * `packing` is orders and nothing else - no costs, no prices, no catalogue -
  * so the person helping you post parcels never sees your margins.
  */
 const CAPABILITIES: Record<StaffRole, readonly Capability[]> = {
@@ -71,8 +71,8 @@ export function can(role: StaffRole, capability: Capability): boolean {
 /** Human wording for a role, for anything a person reads. */
 export const ROLE_LABEL: Record<StaffRole, string> = {
   owner: "Owner",
-  studio: "Studio — everything",
-  packing: "Packing — orders only",
+  studio: "Studio, everything",
+  packing: "Packing, orders only",
 };
 
 function assertServer(fn: string) {
@@ -104,7 +104,7 @@ export async function getStaffRole(): Promise<StaffMember | null> {
   if (!user) return null;
 
   // The service-role client, because `staff` is unreadable with any other key.
-  // The lookup is keyed on the id from the verified session — never on
+  // The lookup is keyed on the id from the verified session - never on
   // anything a request body or header could supply.
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -114,7 +114,7 @@ export async function getStaffRole(): Promise<StaffMember | null> {
     .maybeSingle();
 
   // A failed read is not a grant. If the database is unreachable, nobody is
-  // staff for the duration — the shop keeps serving customers either way.
+  // staff for the duration - the shop keeps serving customers either way.
   if (error || !data) return null;
 
   return {
@@ -128,7 +128,7 @@ export async function getStaffRole(): Promise<StaffMember | null> {
  * Require staff access, optionally with a specific capability.
  *
  * Redirects rather than throwing so a signed-out visitor lands on the sign-in
- * page and a signed-in customer lands back on the shop — neither is told that
+ * page and a signed-in customer lands back on the shop - neither is told that
  * a staff area exists, which is one fewer thing to go looking for.
  */
 export async function requireStaff(capability?: Capability): Promise<StaffMember> {
@@ -150,8 +150,8 @@ export async function requireStaff(capability?: Capability): Promise<StaffMember
  * the studio was one paste. It read well, and it was wrong.
  *
  * MEASURED, by loading the built server as an ordinary signed-in customer with
- * no staff row: every single /admin URL — /admin/settings, /admin/access, all
- * of them — returned 200 and that page, because "is the table empty" is a
+ * no staff row: every single /admin URL - /admin/settings, /admin/access, all
+ * of them - returned 200 and that page, because "is the table empty" is a
  * question about the DATABASE, not about who is asking. Any customer with an
  * account saw that a staff area existed and was unclaimed. Nothing could be
  * done with it, but it was never theirs to see, and it was visible in exactly

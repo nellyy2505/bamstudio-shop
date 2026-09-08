@@ -4,8 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 /**
  * "Highest rated" was here and is gone. It sorted `products.rating`, which is
- * 0 for every product in the catalogue and cannot be anything else — there is
- * no review path — so it offered the customer a quality ranking that was
+ * 0 for every product in the catalogue and cannot be anything else - there is
+ * no review path - so it offered the customer a quality ranking that was
  * really an arbitrary order, in a shop that hides ratings everywhere else.
  * `lib/queries.ts` dropped the matching case from both sorts.
  */
@@ -25,7 +25,7 @@ export function SortSelect({ current }: { current: string }) {
   /*
    * `current` comes from `?sort=` in the URL, uncontrolled and unvalidated
    * (app/shop/page.tsx casts it), so a bookmark or a shared link from before
-   * this change can still say `sort=rating` — and any other string can be
+   * this change can still say `sort=rating` - and any other string can be
    * typed in by hand. A <select> whose value matches no <option> renders
    * blank in some browsers and silently shows the first option in others,
    * either way disagreeing with the grid underneath it. getProducts() sends an

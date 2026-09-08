@@ -17,8 +17,8 @@ import { acceptInvitation } from "@/app/admin/actions";
  * while the first press is in flight. On success the action redirects to
  * /admin, so there is no success message to render here.
  *
- * The token rides along in a hidden field. That is not a leak — it is already
- * in the address bar of the page this form is on — and the action does not
+ * The token rides along in a hidden field. That is not a leak - it is already
+ * in the address bar of the page this form is on - and the action does not
  * trust it: it re-hashes it and re-checks every rule from the database before
  * writing anything. Nothing about the role, the email or the invitation is
  * sent from here, because anything in a form is something a person can retype.

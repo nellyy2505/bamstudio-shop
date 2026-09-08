@@ -10,7 +10,7 @@ import { scoopArt, scoopVariantLabel } from "@/lib/scoop-line";
 import type { ScoopTierListing } from "@/lib/queries";
 
 /**
- * The buy control for one Lucky Scoop tier — quantity, and add to basket.
+ * The buy control for one Lucky Scoop tier - quantity, and add to basket.
  *
  * Modelled on `app/product/[slug]/ProductBuy.tsx`, and the differences are all
  * consequences of one fact: A SCOOP IS SOLD BEFORE ITS CONTENTS ARE DECIDED.
@@ -20,11 +20,11 @@ import type { ScoopTierListing } from "@/lib/queries";
  *    decides only which pieces come out of it (0007_lucky_scoop.sql explains
  *    why the theme is chosen and not drawn).
  *  - Nothing here computes a price. `tier.price_cents` is the row's own figure
- *    and it is displayed, never derived — and checkout recomputes it from the
+ *    and it is displayed, never derived - and checkout recomputes it from the
  *    same row before charging anything, so what is on this screen is a preview
  *    of a server calculation rather than an input to one.
  *  - There is no stock question. A scoop is capped by `BASKET_LIMITS` and
- *    nothing else, exactly like every other product — see the note on the
+ *    nothing else, exactly like every other product - see the note on the
  *    stepper below, and `lib/scoop.ts` for why.
  *
  * The prop contract is `{ tier: ScoopTierListing }` and it is fixed: the tier
@@ -41,8 +41,8 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
   const [basketError, setBasketError] = useState<string | null>(null);
 
   /*
-   * The upper bound on this stepper is `BASKET_LIMITS.maxLineQuantity` — what
-   * the shop will send of one item in one order — AND NOTHING ELSE.
+   * The upper bound on this stepper is `BASKET_LIMITS.maxLineQuantity` - what
+   * the shop will send of one item in one order - AND NOTHING ELSE.
    *
    * It used to be the smaller of that and `availability.scoopsAvailable`, the
    * number of whole scoops the pool could fill off the shelf. That cap is gone.
@@ -56,7 +56,7 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
   const atMax = quantity >= maxQuantity;
 
   // Nullable in the column and in the type. RLS never publishes an unpriced
-  // tier, so this is belt and braces — but a price is the one field where a
+  // tier, so this is belt and braces - but a price is the one field where a
   // fallback would be a lie, so there is none: an absent price renders as no
   // price at all.
   const price = tier.price_cents;
@@ -94,7 +94,7 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
 
     setBasketError(
       result === "clamped"
-        ? `Your basket now holds ${BASKET_LIMITS.maxLineQuantity} of these — the most ` +
+        ? `Your basket now holds ${BASKET_LIMITS.maxLineQuantity} of these, the most ` +
             "we can send in a single order."
         : null,
     );
@@ -105,7 +105,7 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
   }
 
   /*
-   * NO PRICE, SAID PLAINLY — and this is the ONLY thing that stops the control
+   * NO PRICE, SAID PLAINLY - and this is the ONLY thing that stops the control
    * rendering. There is no longer an empty-bowl branch: a bowl that needs
    * topping up is a print job, not a closed shop (`lib/scoop.ts`).
    *
@@ -139,7 +139,7 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
             unknown, and it is why the pool is public (0007). Stated as a count
             here; the tier page shows the pieces themselves. */}
         Every piece comes out of this scoop&apos;s own pool of{" "}
-        {pluralise(tier.pool.length, "piece")}. You choose the theme — the draw
+        {pluralise(tier.pool.length, "piece")}. You choose the theme, the draw
         chooses the pieces, after you order.
       </p>
 
@@ -199,7 +199,7 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
       </div>
 
       {/* Rendered only once the cap actually binds, so nothing moves until it
-          is reached. One cap, one sentence — and it is about what one parcel
+          is reached. One cap, one sentence - and it is about what one parcel
           can carry, never about what is on a shelf. */}
       {atMax ? (
         <p id={capNoteId} role="status" className="mt-3 text-xs text-muted">

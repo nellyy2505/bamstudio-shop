@@ -6,8 +6,8 @@ import { unitCost, type CostSettings } from "@/lib/costing";
  * what a piece costs to make **right now**.
  *
  * WHY THIS IS IN lib/ AND NOT IN app/admin/. `unitCostsAtSale()` below used to
- * live in `app/admin/data.ts`, and two customer-facing API routes —
- * `/api/checkout` and `/api/webhooks/stripe` — imported it from there. Both
+ * live in `app/admin/data.ts`, and two customer-facing API routes -
+ * `/api/checkout` and `/api/webhooks/stripe` - imported it from there. Both
  * stamp `order_items.unit_cost_cents` as a sale is recorded, so they genuinely
  * need the studio's one definition of what a piece cost; what they do not need
  * is a dependency on the staff area. A checkout route reaching into
@@ -22,8 +22,8 @@ import { unitCost, type CostSettings } from "@/lib/costing";
  * loaded the shop can find in the client bundle. A costing function that reads
  * with the service-role key must not be one.
  *
- * Everything here reads through `createAdminClient()` — the service-role key,
- * bypassing RLS — because the costing tables are deliberately unreadable with
+ * Everything here reads through `createAdminClient()` - the service-role key,
+ * bypassing RLS - because the costing tables are deliberately unreadable with
  * the key that ships to browsers. Nothing here takes a user id, a role or any
  * other authority from an argument; callers decide who is allowed to ask.
  */
@@ -35,7 +35,7 @@ import { unitCost, type CostSettings } from "@/lib/costing";
  * and fail at runtime somewhere far away from the mistake.
  *
  * Deliberately its own copy rather than one imported from `app/admin/data.ts`
- * — importing a guard from the module this one exists to stop depending on
+ * - importing a guard from the module this one exists to stop depending on
  * would put the dependency straight back. `lib/auth/staff.ts` carries the same
  * six lines for the same reason. It guards a module boundary, so it belongs to
  * the module.
@@ -76,7 +76,7 @@ export type Settings = CostSettings & {
  *
  * Postgres returns `numeric` as a *string* through PostgREST, to avoid the
  * precision loss of a float. Every one of these goes through Number() for that
- * reason — read `target_margin` straight and you get "0.700", and
+ * reason - read `target_margin` straight and you get "0.700", and
  * `1 - "0.700" - 0.016` is NaN, which then propagates silently into every price
  * on the screen.
  */
@@ -167,8 +167,8 @@ export async function getAccessories(): Promise<Accessory[]> {
  * What each of these products costs to make **right now**, in whole cents, for
  * stamping onto `order_items.unit_cost_cents` as a sale is recorded.
  *
- * WHY THIS EXISTS. `unit_cost_cents` was written in exactly one place — the
- * market-stall form in `recordSale` — so every website sale landed with a null
+ * WHY THIS EXISTS. `unit_cost_cents` was written in exactly one place - the
+ * market-stall form in `recordSale` - so every website sale landed with a null
  * cost and /admin/reports had nothing to subtract for the online channel. The
  * reports page is honest about it (it counts the lines carrying no cost and
  * says the profit understates what was spent), but "honest about a hole" is not
@@ -178,11 +178,11 @@ export async function getAccessories(): Promise<Accessory[]> {
  * WHY IT IS STAMPED AND NOT DERIVED. The column is a record of what the piece
  * cost *when it sold*. Working it out at read time would rewrite every
  * historical margin the next time filament, electricity or a keyring changed
- * price — which is the exact failure the comment on that column in
+ * price - which is the exact failure the comment on that column in
  * 0003_admin.sql exists to prevent.
  *
- * Null for any product that has never been measured — no print time, or no
- * filament recipe — because `unitCost` marks that breakdown `unknown` and its
+ * Null for any product that has never been measured - no print time, or no
+ * filament recipe - because `unitCost` marks that breakdown `unknown` and its
  * total is packaging alone. A 13c "cost" is a 97% margin on a piece nobody has
  * timed. Null is the honest answer and the reports already know how to say so.
  *

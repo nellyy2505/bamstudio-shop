@@ -13,7 +13,7 @@ export const metadata = { title: "Inventory · Studio" };
  * The print queue and the filament it needs.
  *
  * This is the workbook's Filament sheet. It reads the whole catalogue, not a
- * page of it — a buy list that only covers what fits on one screen is a buy
+ * page of it - a buy list that only covers what fits on one screen is a buy
  * list that sends you home short.
  */
 export default async function InventoryPage() {
@@ -21,7 +21,7 @@ export default async function InventoryPage() {
 
   /*
    * The measuring screen writes product rows, so it asks for "catalogue" rather
-   * than "inventory" — the argument is on `saveMeasurement` in actions.ts. The
+   * than "inventory" - the argument is on `saveMeasurement` in actions.ts. The
    * two capabilities are held by exactly the same roles today, but a link that
    * bounces a person straight back to /admin is worse than no link, so it is
    * shown only to someone the screen will actually let in. Hiding a link is
@@ -37,7 +37,7 @@ export default async function InventoryPage() {
    *
    * `oversold_units` is a running total of units sold that the ready-to-ship
    * buffer did not have (0005_sale_integrity.sql). The shop prints to order, so
-   * that is allowed and is not an error — but it is somebody who has already
+   * that is allowed and is not an error - but it is somebody who has already
    * paid, waiting on a piece that was not on the shelf, which makes it the
    * strongest print-this-first signal there is. It was surfaced on /admin and
    * nowhere else; this is the screen where it changes what she does next.
@@ -89,14 +89,14 @@ export default async function InventoryPage() {
           label="ROLLS TO BUY"
           value={
             inventory.unmeasured > 0 && inventory.totalRollsToBuy === 0
-              ? "—"
+              ? "-"
               : String(inventory.totalRollsToBuy)
           }
           note={
             inventory.unmeasured > 0
               ? inventory.totalRollsToBuy > 0
-                ? `at least ${money(inventory.totalBuyCostCents)} — ${unmeasuredNote}`
-                : `not measured — ${unmeasuredNote}`
+                ? `at least ${money(inventory.totalBuyCostCents)}, ${unmeasuredNote}`
+                : `not measured, ${unmeasuredNote}`
               : inventory.totalRollsToBuy > 0
                 ? `about ${money(inventory.totalBuyCostCents)}`
                 : "the shelf covers the queue"
@@ -119,8 +119,8 @@ export default async function InventoryPage() {
               <>
                 <Link href="/admin/inventory/measure" className="underline">
                   Measure them
-                </Link>{" "}
-                — a print time and the grams, one row each — and this page becomes trustworthy.
+                </Link>,{" "}
+               a print time and the grams, one row each, and this page becomes trustworthy.
               </>
             ) : (
               "Add the grams on each product and this page becomes trustworthy."
@@ -135,10 +135,10 @@ export default async function InventoryPage() {
           note={
             /*
              * The sentence about ordering is here only when a row in this table
-             * actually carries an oversell — not merely when the catalogue has
+             * actually carries an oversell - not merely when the catalogue has
              * one somewhere, which can be true while every oversold piece has
              * already been printed and left the queue. A standing explanation
-             * of a column reading "—" on every row is a warning about nothing.
+             * of a column reading "-" on every row is a warning about nothing.
              */
             oversoldInQueue
               ? "Sold but not yet posted, plus your buffer, less what is on the shelf. Oversold pieces come first: somebody has already paid for those."
@@ -161,7 +161,7 @@ export default async function InventoryPage() {
                     <th className="px-3 py-3 text-right">Sold</th>
                     {/* The count the shelf could not cover. Named "Oversold"
                         rather than "Short" because it is a running total of
-                        demand that ran ahead of the shelf, not today's gap —
+                        demand that ran ahead of the shelf, not today's gap -
                         "To print" is the gap. */}
                     <th className="px-3 py-3 text-right">Oversold</th>
                     <th className="px-3 py-3 text-right">Buffer</th>
@@ -187,8 +187,8 @@ export default async function InventoryPage() {
                       <td className="px-3 py-3 text-right tabular-nums">{row.ordered}</td>
                       {/* An em dash for nothing to report, the same as the "To
                           buy" and "Cost" columns below. A 0 printed here would
-                          read as a measured fact — "we checked, none were
-                          oversold" — on a row where it is just the absence of
+                          read as a measured fact - "we checked, none were
+                          oversold" - on a row where it is just the absence of
                           an incident. */}
                       <td className="px-3 py-3 text-right tabular-nums">
                         {row.product.oversoldUnits > 0 ? (
@@ -196,7 +196,7 @@ export default async function InventoryPage() {
                             {row.product.oversoldUnits}
                           </span>
                         ) : (
-                          "—"
+                          "-"
                         )}
                       </td>
                       <td className="px-3 py-3 text-right tabular-nums">{row.product.bufferStock}</td>
@@ -232,7 +232,7 @@ export default async function InventoryPage() {
             * Oversold pieces the queue above cannot show.
             *
             * `rows` only carries products with something to print, and
-            * `oversold_units` is a running total that nothing decrements — so a
+            * `oversold_units` is a running total that nothing decrements - so a
             * piece that was oversold, printed and counted back up leaves the
             * queue with its counter still standing. Dropping it silently would
             * make the one screen that is meant to surface an oversell the one
@@ -260,7 +260,7 @@ export default async function InventoryPage() {
           {needed.length === 0 ? (
             <NoRows>
               {inventory.unmeasured > 0
-                ? `Nothing recorded to buy — ${unmeasuredNote}, so this list is empty because the grams are missing, not because the shelf covers the queue.`
+                ? `Nothing recorded to buy, ${unmeasuredNote}, so this list is empty because the grams are missing, not because the shelf covers the queue.`
                 : "Nothing to buy. Either the queue is empty, or the rolls you have cover it."}
             </NoRows>
           ) : (
@@ -292,10 +292,10 @@ export default async function InventoryPage() {
                       <td className="px-3 py-3 text-right tabular-nums">{colour.rollsNeeded}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{colour.rollsOnHand}</td>
                       <td className="px-3 py-3 text-right font-display text-[17px] font-semibold tabular-nums">
-                        {colour.rollsToBuy > 0 ? colour.rollsToBuy : "—"}
+                        {colour.rollsToBuy > 0 ? colour.rollsToBuy : "-"}
                       </td>
                       <td className="px-3 py-3 text-right tabular-nums">
-                        {colour.rollsToBuy > 0 ? money(colour.costToBuyCents) : "—"}
+                        {colour.rollsToBuy > 0 ? money(colour.costToBuyCents) : "-"}
                       </td>
                       <td className="px-5 py-3">
                         <AdminForm action={setRolls} className="!flex-row items-center gap-2">

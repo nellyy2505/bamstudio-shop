@@ -3,13 +3,13 @@ import { captureMessage } from "@/lib/observability";
 /**
  * Rate limiting for unauthenticated endpoints, in two layers.
  *
- * `rateLimit()` — in-process, synchronous, per-machine. Deliberately simple: a
+ * `rateLimit()` - in-process, synchronous, per-machine. Deliberately simple: a
  * restart or a deploy resets it. On Fly that is now one always-on container, so
  * the allowance no longer multiplies across serverless instances the way it did
- * on Vercel — but scale the app past one machine and it does again. Unchanged
+ * on Vercel - but scale the app past one machine and it does again. Unchanged
  * by this round, and still the whole story on a deploy with no shared store.
  *
- * `rateLimitDurable()` — the same decision, taken in a shared store when one is
+ * `rateLimitDurable()` - the same decision, taken in a shared store when one is
  * configured, so a restart, a deploy or a second machine no longer hands an
  * attacker a fresh allowance. Falls back to `rateLimit()` when the store is
  * absent, slow or unreachable.
@@ -20,7 +20,7 @@ import { captureMessage } from "@/lib/observability";
  * This module was a plain `Map`, and it is the ONLY thing in front of
  * `POST /api/track`, which returns a customer's postal address for an order
  * number plus the matching email. Order numbers are a public incrementing
- * sequence plus four hex characters — roughly 65k guesses — so "you may keep
+ * sequence plus four hex characters - roughly 65k guesses - so "you may keep
  * guessing after every restart" is not a theoretical weakness. `fly.toml` pins
  * the app to one always-on machine partly because of this file, and HANDOFF.md
  * has carried "move it to Upstash/Redis" as an unmet pre-launch item for
@@ -29,12 +29,12 @@ import { captureMessage } from "@/lib/observability";
  * ───────────────────────────────────────────────────────────────────────────
  * WHY THE OLD COMMENT'S PROMISE COULD ONLY HALF BE KEPT
  *
- * The comment that stood here said: "move this to Upstash Redis — the call site
+ * The comment that stood here said: "move this to Upstash Redis - the call site
  * does not change." That is true of the **arguments and the result shape**,
  * which are identical below, and false of **synchrony**: a decision taken over
  * the network has to be awaited, and there is no honest way around it. One
- * trick was considered and rejected — returning a value that is both a thenable
- * and carries a synchronous best-effort answer — because a reader could not
+ * trick was considered and rejected - returning a value that is both a thenable
+ * and carries a synchronous best-effort answer - because a reader could not
  * tell which of the two answers they had been given, and a limiter nobody can
  * read is a limiter nobody can trust.
  *
@@ -44,7 +44,7 @@ import { captureMessage } from "@/lib/observability";
  * a Promise at seven call sites, `limit.ok` would be `undefined`, `!limit.ok`
  * would be true, and **every request to checkout, shipping quotes, search
  * suggestions, order tracking, the contact form, the newsletter box and the
- * confirmation page would answer 429** — a silent total outage from a one-word
+ * confirmation page would answer 429** - a silent total outage from a one-word
  * change, in files this round does not own.
  *
  * Migrating a call site is therefore exactly one keyword:
@@ -72,7 +72,7 @@ import { captureMessage } from "@/lib/observability";
  * TCP connection pool to keep warm, nothing to reconnect after a Fly machine
  * restart, and no cold-start penalty on a 512 MB box. The official
  * `@upstash/redis` client is a `fetch` wrapper over that same endpoint plus a
- * command-typing layer this file does not need — the whole interaction is one
+ * command-typing layer this file does not need - the whole interaction is one
  * pipeline of three commands. `lib/email.ts` made the same call about Resend
  * and `lib/observability.ts` about Sentry.
  */
@@ -116,14 +116,14 @@ export function rateLimit(
  * This used to take the **first** value of `x-forwarded-for`. That was safe on
  * Vercel, whose proxy overwrites the header, and is unsafe on Fly, whose proxy
  * *appends* to whatever the caller sent ("x-forwarded-for supports appending
- * IPs to the previous header" — Fly staff, community.fly.io/t/3278). So on Fly
+ * IPs to the previous header" - Fly staff, community.fly.io/t/3278). So on Fly
  * the first value is just a string the caller chose: send
  * `X-Forwarded-For: 1.2.3.4`, get a bucket of your own, send a different one
  * next request and get another. Unlimited attempts, dressed as a rate limit.
  *
  * That is not academic. This limiter is now the *only* thing in front of
  * `/api/track`, which returns a customer's postal address to anyone holding an
- * order number and the matching email — and an order number is a sequence plus
+ * order number and the matching email - and an order number is a sequence plus
  * four hex characters, i.e. guessable if you are allowed to keep guessing.
  *
  * So: trust `Fly-Client-IP`, and only that, when we are actually running on
@@ -143,16 +143,16 @@ export function rateLimit(
  *   speed bump and the fix is a real store, not a different header.
  * - Behind *another* reverse proxy in front of Fly (Cloudflare, say),
  *   `Fly-Client-IP` becomes that proxy's address and every visitor collapses
- *   into one bucket — documented Fly behaviour, and a throttle far too tight
+ *   into one bucket - documented Fly behaviour, and a throttle far too tight
  *   rather than too loose. Adding such a proxy means revisiting this function.
  * - The `x-forwarded-for` fallback takes the **last** hop, not the first: the
  *   value appended by the proxy nearest the app is the only one the app did
  *   not let the caller write. It is for hosts that are not Fly. On Fly the
  *   last value is the app's own shared or dedicated address (again, Fly's
- *   docs) — the same string for every caller — which is why the header is a
+ *   docs) - the same string for every caller - which is why the header is a
  *   fallback here and not the answer.
  *
- * Durability is now available — `rateLimitDurable()` below — but this function
+ * Durability is now available - `rateLimitDurable()` below - but this function
  * is unchanged in what it reads. Identity and durability were always two
  * separate problems and the shared store does not make a forged header true.
  */
@@ -168,7 +168,7 @@ export function clientKey(request: Request, scope: string): string {
     .map((hop) => hop.trim())
     .filter(Boolean);
 
-  // Last, never first — see above.
+  // Last, never first - see above.
   const ip = hops[hops.length - 1] ?? "unknown";
   return `${scope}:${cap(ip)}`;
 }
@@ -176,7 +176,7 @@ export function clientKey(request: Request, scope: string): string {
 /**
  * Bucket keys are built from a header, and off Fly that header is whatever the
  * caller sent. An IPv6 address with a zone id is 45 characters; anything longer
- * is not an address, it is somebody feeding the `Map` — and now a Redis key —
+ * is not an address, it is somebody feeding the `Map` - and now a Redis key -
  * a megabyte at a time. Truncating can only ever merge two callers into one
  * bucket, which throttles harder rather than softer, so the failure direction
  * is the safe one.
@@ -191,7 +191,7 @@ function cap(value: string): string {
  * How long a rate-limit decision may take before the request stops waiting.
  *
  * This is the number that decides whether a slow store can hang a checkout,
- * and it is the tightest of any timeout in the codebase on purpose — 500ms
+ * and it is the tightest of any timeout in the codebase on purpose - 500ms
  * against `lib/email.ts`'s 8s and `lib/observability.ts`'s 2s. Upstash's
  * ap-southeast region answers a pipeline in single-digit milliseconds from
  * Sydney; anything approaching half a second means the store is unwell, and a
@@ -204,7 +204,7 @@ const STORE_TIMEOUT_MS = 500;
  * `BREAKER_COOLDOWN_MS` and serve from memory.
  *
  * Without a breaker, an Upstash outage costs every single request a full
- * `STORE_TIMEOUT_MS` — for as long as the outage lasts, on every endpoint,
+ * `STORE_TIMEOUT_MS` - for as long as the outage lasts, on every endpoint,
  * including checkout. Three strikes is enough to distinguish a genuine outage
  * from one unlucky packet.
  */
@@ -216,7 +216,7 @@ let breakerOpenUntil = 0;
 
 /**
  * Whether a shared store is configured. **The single source of truth for "this
- * limiter survives a restart"** — the same condition `rateLimitDurable()`
+ * limiter survives a restart"** - the same condition `rateLimitDurable()`
  * itself checks, in the shape `isEmailConfigured()` established in
  * lib/email.ts, so nothing can claim a durability the limiter does not have.
  *
@@ -244,8 +244,8 @@ export type RateLimitDecision = {
   ok: boolean;
   retryAfter: number;
   /**
-   * Which layer answered. Additive — `{ ok, retryAfter }` destructuring at an
-   * existing call site is untouched — and it exists so a route can log that it
+   * Which layer answered. Additive - `{ ok, retryAfter }` destructuring at an
+   * existing call site is untouched - and it exists so a route can log that it
    * is running unprotected-across-restarts without having to guess.
    */
   store: "shared" | "memory";
@@ -317,12 +317,12 @@ async function askStore(
 
   // PTTL is -1 for a key with no expiry and -2 for one that is already gone.
   // Either means the window is not what we think it is, so repair it and fall
-  // back to the full window for Retry-After — never a plausible-looking zero.
+  // back to the full window for Retry-After - never a plausible-looking zero.
   return { count, ttlMs: Number.isFinite(ttl) && ttl > 0 ? ttl : -1 };
 }
 
 /**
- * Note that the store failed, and — the first time it trips the breaker —
+ * Note that the store failed, and - the first time it trips the breaker -
  * make that visible somewhere other than a log line nobody reads.
  *
  * Reported once per outage, not once per request: the reporter has its own
@@ -336,7 +336,7 @@ function noteFailure(reason: string, now: number): void {
 
   breakerOpenUntil = now + BREAKER_COOLDOWN_MS;
   console.error(
-    `[rate-limit] shared store unreachable (${reason}) — falling back to the ` +
+    `[rate-limit] shared store unreachable (${reason}), falling back to the ` +
       `in-process limiter for ${BREAKER_COOLDOWN_MS / 1000}s. Throttling still ` +
       "applies per machine; it no longer survives a restart.",
   );
@@ -363,12 +363,12 @@ function noteSuccess(): void {
  * `rateLimit()`; `await` it.
  *
  * ───────────────────────────────────────────────────────────────────────────
- * WHAT HAPPENS WHEN THE STORE IS UNREACHABLE MID-REQUEST — and why
+ * WHAT HAPPENS WHEN THE STORE IS UNREACHABLE MID-REQUEST - and why
  *
  * The three candidate answers, and what each costs on THIS shop:
  *
  *   * **Fail open** (allow everything). Removes the protection silently, and
- *     removes it precisely when an attacker would most like it removed —
+ *     removes it precisely when an attacker would most like it removed -
  *     anyone who can make Upstash slow can then guess order numbers at
  *     `/api/track` without limit. Rejected.
  *   * **Fail closed** (deny everything). Locks out real customers over a
@@ -380,7 +380,7 @@ function noteSuccess(): void {
  *     closed: it degrades to exactly the protection this shop has been running
  *     on for its whole life, which is a real fixed-window limiter on a machine
  *     `fly.toml` pins to a single always-on instance. What is lost during the
- *     outage is durability across restarts — not the throttle.
+ *     outage is durability across restarts - not the throttle.
  *
  * The fallback is only as good as its counters, so **the in-process bucket is
  * incremented on every call, whether the store answers or not.** That is the
@@ -426,7 +426,7 @@ export async function rateLimitDurable(
     if (answer.count > limit) {
       return {
         ok: false,
-        // A missing TTL falls back to the full window rather than to 0 — a
+        // A missing TTL falls back to the full window rather than to 0 - a
         // zero here would tell a client to retry immediately, forever.
         retryAfter: Math.ceil(
           (answer.ttlMs > 0 ? answer.ttlMs : windowMs) / 1000,
@@ -436,7 +436,7 @@ export async function rateLimitDurable(
     }
     return { ok: true, retryAfter: 0, store: "shared" };
   } catch (error) {
-    // Timeout, DNS, TLS, a 500 from Upstash, a malformed body — all the same
+    // Timeout, DNS, TLS, a 500 from Upstash, a malformed body - all the same
     // decision. AbortSignal.timeout surfaces as a DOMException named
     // TimeoutError, as in lib/email.ts.
     const timedOut =

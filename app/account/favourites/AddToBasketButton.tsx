@@ -54,7 +54,7 @@ export function AddToBasketButton({ product }: { product: Product }) {
           {needsChoice ? "Choose options" : "Add to basket"}
         </>
       )}
-      <span className="sr-only"> — {product.short_name}</span>
+      <span className="sr-only">: {product.short_name}</span>
     </Button>
   );
 }

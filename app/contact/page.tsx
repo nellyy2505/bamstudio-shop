@@ -30,7 +30,7 @@ export const metadata: Metadata = {
  * secrets to the host without triggering a rebuild gets order-confirmation
  * emails going out from the Stripe webhook while this page still says none
  * are sent. A stale bake would offer or withhold the contact form on a
- * capability the server no longer has — the form is the thing most likely to
+ * capability the server no longer has - the form is the thing most likely to
  * carry a faulty-goods claim. Low traffic; it can afford the render.
  */
 export const dynamic = "force-dynamic";
@@ -38,14 +38,14 @@ export const dynamic = "force-dynamic";
 /**
  * /api/contact writes the enquiry to `public.contact_enquiries` and then emails
  * the studio mailbox about it (0006_enquiries.sql). The row means a message now
- * outlives a mail provider that is unconfigured or down — but nothing on this
+ * outlives a mail provider that is unconfigured or down - but nothing on this
  * site reads that table, so the email is still the only way anyone finds out an
  * enquiry arrived. Without sending capability *and* a mailbox, a submitted
  * message is stored and seen by nobody. Offering the box anyway is how a
  * faulty-goods claim gets silently swallowed, so where this is false the page
  * shows the channels that do work instead.
  *
- * This is a server component, so the capability is `isEmailConfigured()` — the
+ * This is a server component, so the capability is `isEmailConfigured()` - the
  * same secrets /api/contact checks per request. It used to be a public build
  * flag, which could be true with the secrets absent: the form was rendered, the
  * route answered `delivered:false`, and five other pages promised the box
@@ -118,7 +118,7 @@ export default function ContactPage() {
             measures or guarantees a turnaround, and a page that cannot promise
             a channel certainly cannot promise a clock. */}
         <p className="text-muted">
-          There is no support team here — it is the three of us.
+          There is no support team here. It is the three of us.
           {canReachStudio
             ? " Reach us any of the ways below and you get an actual answer from someone who printed the thing."
             : " We have not published a way to reach us yet, so here is what you can do in the meantime."}
@@ -129,7 +129,7 @@ export default function ContactPage() {
         {canReceiveMessages ? <ContactForm /> : <ReachUsCard />}
 
         <aside className="flex flex-col gap-4">
-          {/* No mailbox configured means no email channel to advertise — an
+          {/* No mailbox configured means no email channel to advertise - an
               "Email" card with nowhere to write to is the false promise. */}
           {hasStudioMailbox ? (
             <section className="card p-6">
@@ -148,7 +148,7 @@ export default function ContactPage() {
                 . Include your order number if you have one.
               </p>
               {/* Was "Replies weekdays. Market weekends run a day or two
-                  behind." — a turnaround promise with nothing behind it. This
+                  behind." - a turnaround promise with nothing behind it. This
                   sets the same expectation without committing to a clock. */}
               <p className="mt-2 text-[12.5px] text-faint">
                 We answer these ourselves, between print runs and market
@@ -158,7 +158,7 @@ export default function ContactPage() {
           ) : null}
 
           {/* A link labelled "Instagram" that goes somewhere else is its own
-              small false promise, so an unset handle renders no link — the
+              small false promise, so an unset handle renders no link - the
               same choice the footer makes. With neither handle set there is no
               social presence to describe, so the card goes entirely. */}
           {hasSocialAccount ? (
@@ -169,7 +169,7 @@ export default function ContactPage() {
               <h2 className="mt-4 text-lg">Social</h2>
               <p className="mt-1.5 text-[14px] text-muted">
                 New designs, print fails and restock news go up first on social.
-                We read our DMs too — they just take us a bit longer.
+                We read our DMs too, they just take us a bit longer.
               </p>
               <div className="mt-3 flex flex-wrap gap-3 text-sm font-bold">
                 {SHOP.socials.instagram ? (
@@ -205,11 +205,11 @@ export default function ContactPage() {
                 placeholder. Naming a market we have not booked would be worse
                 than naming none, so this says only what holds. */}
             <p className="mt-2 text-[14px] text-muted">
-              Dates move around week to week — we are not at the same market
+              Dates move around week to week, and we are not at the same market
               every weekend, so it is worth checking before you make the trip.
             </p>
             <p className="mt-2 text-[12.5px] text-faint">
-              We are online-only otherwise — there is no shopfront to visit.
+              We are online-only otherwise, so there is no shopfront to visit.
             </p>
           </section>
 
@@ -222,7 +222,7 @@ export default function ContactPage() {
                 follow when no channel exists, so only the part about how the
                 printing works is left standing in that case. */}
             <p className="mt-1.5 text-[14px] text-muted">
-              Party favours, a name run for a classroom, or a stockist order —
+              Party favours, a name run for a classroom, or a stockist order:
               {canReachStudio
                 ? " tell us the quantity and the date you need it by."
                 : " these are all things we do."}{" "}
@@ -250,7 +250,7 @@ export default function ContactPage() {
             >
               help centre
             </Link>{" "}
-            first{canReachStudio ? " — it is often faster than waiting for us." : "."}
+            first{canReachStudio ? ". It is often faster than waiting for us." : "."}
           </p>
         </aside>
       </div>

@@ -28,7 +28,7 @@ import {
  * so that a mail provider having a bad afternoon costs the owner a prompt
  * rather than costing the customer their message. It did the storing half. Then
  * nothing in the shop could read either table, so the notification email went
- * back to being the only way anybody learned a message had arrived — which is
+ * back to being the only way anybody learned a message had arrived - which is
  * the exact failure that migration was written to stop. A row nobody can open
  * is not much better than no row.
  *
@@ -37,7 +37,7 @@ import {
  * that they should not wait on a reply. Shipping this without that edit would
  * have left a legal page making a false statement about the shop.
  *
- * WHO CAN OPEN IT. `reports` — owner and studio, not Packing. See the comment
+ * WHO CAN OPEN IT. `reports` - owner and studio, not Packing. See the comment
  * above `setEnquiryHandled` in actions.ts for the argument and for what a
  * future `"enquiries"` capability would improve.
  *
@@ -93,7 +93,7 @@ export default async function EnquiriesPage({
   /*
    * Whether a notification was ever going to be attempted. On a deploy with no
    * mail provider every `notified_at` is null and that is correct rather than
-   * broken — so the screen says which of the two it is instead of showing a
+   * broken - so the screen says which of the two it is instead of showing a
    * column of blanks and letting the reader guess.
    */
   const canNotify = isEmailConfigured() && SHOP.hasSupportEmail;
@@ -122,9 +122,9 @@ export default async function EnquiriesPage({
       {!canNotify ? (
         <Alert>
           This deployment has no mail provider or no support address, so no
-          notification email goes out when a message arrives. Nothing is lost —
-          every message below was written down before any email was attempted —
-          but this screen is the only thing that will tell you one is here.
+          notification email goes out when a message arrives. Nothing is lost:
+          every message below was written down before any email was attempted.
+          But this screen is the only thing that will tell you one is here.
         </Alert>
       ) : null}
 
@@ -175,7 +175,7 @@ export default async function EnquiriesPage({
 
       <Panel
         title={filtered ? "Matching messages" : "Messages"}
-        note="Newest first. Replying happens in your own mail app — this screen never sends anything."
+        note="Newest first. Replying happens in your own mail app, this screen never sends anything."
         padded={false}
       >
         {enquiries.rows.length === 0 ? (
@@ -231,19 +231,19 @@ export default async function EnquiriesPage({
   );
 }
 
-/** One message, in full. Nothing is truncated — the words are the point. */
+/** One message, in full. Nothing is truncated - the words are the point. */
 function Enquiry({ enquiry, canNotify }: { enquiry: EnquiryRow; canNotify: boolean }) {
   const handled = enquiry.handledAt !== null;
 
   /*
    * One click to a reply. The subject carries the order number when the
    * customer gave one, so the mail lands in the same conversation as anything
-   * else about that order, and the body is left empty — a pre-written opening
+   * else about that order, and the body is left empty - a pre-written opening
    * would be the shop putting words in her mouth.
    */
   const subject = enquiry.orderNumber
-    ? `${SHOP.name} — your message about ${enquiry.orderNumber}`
-    : `${SHOP.name} — your message`;
+    ? `${SHOP.name}, your message about ${enquiry.orderNumber}`
+    : `${SHOP.name}, your message`;
   // Escaped, because this string came from a stranger and lands in an href.
   // The `@` is put back: it is legal unencoded in a mailto: address and a few
   // mail clients still open `%40` as a malformed recipient.
@@ -270,7 +270,7 @@ function Enquiry({ enquiry, canNotify }: { enquiry: EnquiryRow; canNotify: boole
         {enquiry.orderNumber ? (
           /*
             * The customer typed this into a text box, so it is what they
-            * believe their order number is — not a foreign key, and not
+            * believe their order number is - not a foreign key, and not
             * necessarily an order that exists. It searches the orders list
             * rather than linking straight at a row, because a link to an
             * order that is not there is worse than a search that finds
@@ -297,7 +297,7 @@ function Enquiry({ enquiry, canNotify }: { enquiry: EnquiryRow; canNotify: boole
           ? `You were emailed about this on ${formatDate(enquiry.notifiedAt)}.`
           : canNotify
             ? "No notification email went out for this one, so this screen is where it was found."
-            : "No notification email was attempted — this shop is not set up to send one."}
+            : "No notification email was attempted, this shop is not set up to send one."}
       </p>
 
       {handled ? (
@@ -331,7 +331,7 @@ function Enquiry({ enquiry, canNotify }: { enquiry: EnquiryRow; canNotify: boole
           <Field
             label="What you did about it"
             htmlFor={`note-${enquiry.id}`}
-            hint="Optional, and only for you — the customer never sees it. Leave it blank if there is nothing to add."
+            hint="Optional, and only for you, the customer never sees it. Leave it blank if there is nothing to add."
           >
             <input
               id={`note-${enquiry.id}`}
@@ -361,7 +361,7 @@ function Enquiry({ enquiry, canNotify }: { enquiry: EnquiryRow; canNotify: boole
  * the distinction 0006_enquiries.sql is built on.
  *
  * Nothing here offers to mail anybody. There is no newsletter, no welcome
- * email and no unsubscribe link, and the copy must not imply otherwise — see
+ * email and no unsubscribe link, and the copy must not imply otherwise - see
  * `setSignupSubscribed` for why a "take this address off" control is
  * nevertheless both honest and necessary.
  */
@@ -419,7 +419,7 @@ function Signups({
                     <td className="px-5 py-3.5 whitespace-nowrap text-muted">{signup.source}</td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-muted">
                       {/* A dash, never a fabricated date. Null means no
-                          notification went out for this one — on a deploy with
+                          notification went out for this one - on a deploy with
                           no mail provider that is every row, and the banner at
                           the top of the page is where that is explained. */}
                       {formatDate(signup.notifiedAt)}

@@ -9,15 +9,15 @@ import { DEFAULT_NEXT, safeNext } from "@/lib/safe-next";
  *
  * Defect this closes: the subtitle promised "track orders, see favourites and
  * check out faster" while the form directly beneath it now says plainly that
- * signing in isn't switched on — the contradiction sat in one card, two lines
+ * signing in isn't switched on - the contradiction sat in one card, two lines
  * apart. None of the three is possible with no accounts system behind the
  * shop. Same class as WORKLOG §0.1: a customer-facing claim not gated on the
  * capability behind it.
  *
  * Safe in a server component, and guaranteed to agree with the client form
  * below: `isSupabaseConfigured()` reads only `NEXT_PUBLIC_SUPABASE_URL` and
- * `NEXT_PUBLIC_SUPABASE_ANON_KEY`. There is no secret here — the anon key is
- * public by design and Next inlines both into the client bundle — so server
+ * `NEXT_PUBLIC_SUPABASE_ANON_KEY`. There is no secret here - the anon key is
+ * public by design and Next inlines both into the client bundle - so server
  * and browser evaluate the same two values and cannot diverge. (The
  * server-only `isDatabaseConfigured()` would give the same answer here but not
  * in LoginForm, which is why both sides use this one helper.)
@@ -61,10 +61,10 @@ export default async function LoginPage({
   // a customer who wandered in on their own, not a shared constant the shop is
   // obliged to use. See the note on SIGNUP_FALLBACK in app/signup/page.tsx.
   const next = safeNext(one(params.next), DEFAULT_NEXT);
-  // Whether somebody was sent here from somewhere that wants them back — which
+  // Whether somebody was sent here from somewhere that wants them back - which
   // decides whether the link across to sign-up has to carry `next` too.
   const carried = next !== DEFAULT_NEXT;
-  // Map the callback's error code to our own copy — never render text that
+  // Map the callback's error code to our own copy - never render text that
   // arrived in the URL.
   const AUTH_ERRORS: Record<string, string> = {
     denied: "Sign-in was cancelled. You can try again below.",
@@ -110,7 +110,7 @@ export default async function LoginPage({
             </>
           ) : (
             <>
-              Nothing to sign in to yet —{" "}
+              Nothing to sign in to yet, but you can{" "}
               <Link
                 href="/shop"
                 className="font-bold text-accent underline underline-offset-2 hover:text-accent-dark"

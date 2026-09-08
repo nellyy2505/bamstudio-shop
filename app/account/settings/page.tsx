@@ -29,7 +29,7 @@ export default async function SettingsPage() {
       profile = (data ?? null) as Profile | null;
     }
   } catch {
-    // Database unreachable — the cards fall back to empty defaults.
+    // Database unreachable - the cards fall back to empty defaults.
   }
 
   const email = user.email ?? "";
@@ -38,7 +38,7 @@ export default async function SettingsPage() {
    * The single read of "can this shop send email", for this whole page.
    *
    * Server component, so it reads the `RESEND_API_KEY` / `EMAIL_FROM` secrets
-   * directly — the same condition the Stripe webhook and /api/contact check.
+   * directly - the same condition the Stripe webhook and /api/contact check.
    * The three cards below are client components and CANNOT read it: a
    * non-public env var is `undefined` in the browser, so they would render
    * "we send no email" after hydration over a server render that said the
@@ -51,7 +51,7 @@ export default async function SettingsPage() {
     <div>
       <h1 className="mb-1.5 text-3xl md:text-4xl">Settings</h1>
       {/* Kept deliberately free of any claim about what does or does not land
-          in an inbox — that belongs in EmailPreferences, which is gated on the
+          in an inbox - that belongs in EmailPreferences, which is gated on the
           capability. What is true here in every configuration is only that
           these are the settings. */}
       <p className="mb-7 text-sm text-muted">
@@ -71,7 +71,7 @@ export default async function SettingsPage() {
         <PasswordCard email={email} />
 
         {/* Every one of these defaults to off. A preference the customer never
-            set must not read back as consent they never gave — the same rule
+            set must not read back as consent they never gave - the same rule
             that leaves the sign-up checkbox unticked. */}
         <EmailPreferences
           userId={user.id}

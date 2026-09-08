@@ -45,7 +45,7 @@ export default async function FavouritesPage() {
       });
     }
   } catch {
-    // Database unreachable — fall through to the empty state below.
+    // Database unreachable - fall through to the empty state below.
   }
 
   if (products.length === 0) {
@@ -62,7 +62,7 @@ export default async function FavouritesPage() {
             </span>
           }
           title="Nothing saved yet"
-          body="Tap the heart on any product and it lands here — handy for keeping an eye on a colourway before you commit."
+          body="Tap the heart on any product and it lands here, handy for keeping an eye on a colourway before you commit."
         >
           <ButtonLink href="/shop">Browse the range</ButtonLink>
         </EmptyState>

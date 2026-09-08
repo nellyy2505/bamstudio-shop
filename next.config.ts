@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
  * The Supabase project's origin, or null before Supabase is configured.
  *
  * This is the one external origin the *browser* talks to. Everything else the
- * shop calls out to — Stripe's API, Australia Post, Resend — is called from
+ * shop calls out to - Stripe's API, Australia Post, Resend - is called from
  * the server, so none of it belongs in a policy the browser enforces.
  *
  * Evidence, not assumption: after `next build`, the only absolute http(s)
@@ -41,7 +41,7 @@ function supabaseOrigin(): string | null {
  * shop moved from bamstudio-shop.fly.dev to bamstudioshop.com once already.
  *
  * Returns null when the variable is missing or malformed, and also when the
- * canonical host is ITSELF a www host — redirecting www to www is a loop, and
+ * canonical host is ITSELF a www host - redirecting www to www is a loop, and
  * a loop in a redirect is a dead site, not a slightly wrong one. Localhost and
  * the fly.dev hostname simply never match, so this costs development nothing.
  */
@@ -64,7 +64,7 @@ const isProduction = process.env.NODE_ENV === "production";
  * rather than copied from a template.
  *
  * Every directive below is ENFORCED. Nothing is shipped report-only, because
- * nothing here is a guess — see `script-src` for the one place the policy is
+ * nothing here is a guess - see `script-src` for the one place the policy is
  * weaker than it should be, and what tightening it would cost.
  *
  *  default-src 'self'
@@ -95,7 +95,7 @@ const isProduction = process.env.NODE_ENV === "production";
  *  img-src 'self' data: blob: <supabase>
  *      Product art is inline SVG (components/ProductArt.tsx), so most images
  *      are never fetched at all. The Supabase origin is for product
- *      photographs, served from the public `product-photos` storage bucket —
+ *      photographs, served from the public `product-photos` storage bucket -
  *      `${NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/product-photos`,
  *      built in app/admin/products/[id]/page.tsx. `data:` and `blob:` cover
  *      favicons and any client-side preview.
@@ -108,7 +108,7 @@ const isProduction = process.env.NODE_ENV === "production";
  *
  *  connect-src 'self' <supabase>
  *      Our own API routes, plus Supabase auth/rest/storage from the browser
- *      client (lib/supabase/client.ts). Nothing uses Supabase Realtime today —
+ *      client (lib/supabase/client.ts). Nothing uses Supabase Realtime today -
  *      add the `wss://` form of the same origin if that ever changes, or the
  *      socket fails silently.
  *
@@ -120,8 +120,8 @@ const isProduction = process.env.NODE_ENV === "production";
  *      the reporter against Sentry's HTTP envelope endpoint instead of taking
  *      `@sentry/nextjs`, whose client SDK would have needed either
  *      `https://*.ingest.sentry.io` here or a `tunnelRoute` that forwards
- *      caller-supplied bodies onward. The trade — no browser-side error
- *      reporting at all — is argued in full in that file. If browser reporting
+ *      caller-supplied bodies onward. The trade - no browser-side error
+ *      reporting at all - is argued in full in that file. If browser reporting
  *      is ever genuinely wanted, this is the line it has to change, and
  *      `script-src` still must not be touched.
  *
@@ -170,7 +170,7 @@ const nextConfig: NextConfig = {
    * `node_modules` would mean a 629 MB layer of which the running server needs
    * almost none; standalone traces the modules actually imported and writes a
    * minimal `node_modules` plus a generated `server.js` into
-   * `.next/standalone` — ~72 MB of deployable tree, 24 MB gzipped.
+   * `.next/standalone` - ~72 MB of deployable tree, 24 MB gzipped.
    *
    * Two consequences the Dockerfile has to honour, and does:
    *
@@ -179,8 +179,8 @@ const nextConfig: NextConfig = {
    *     `server.js` by hand or every asset 404s.
    *
    *  2. The standalone server does NOT read `.env.local` (or any `.env*`
-   *     file). Every runtime value must arrive as a real process env var —
-   *     Fly secrets — and every NEXT_PUBLIC_* value must be present at BUILD
+   *     file). Every runtime value must arrive as a real process env var -
+   *     Fly secrets - and every NEXT_PUBLIC_* value must be present at BUILD
    *     time, because Next inlines those into the bundles then. Setting one
    *     as a Fly secret afterwards changes nothing the browser sees.
    *
@@ -199,8 +199,8 @@ const nextConfig: NextConfig = {
    * major on one always-on machine patched by hand by a sole trader, not a
    * fleet with an upgrade pipeline.
    *
-   * Removing it changes no behaviour — nothing in this app reads it and no
-   * client depends on it — and it is not a disguise either: `/_next/*` URLs
+   * Removing it changes no behaviour - nothing in this app reads it and no
+   * client depends on it - and it is not a disguise either: `/_next/*` URLs
    * still identify the framework to anyone who looks. It stops it being
    * announced to everyone who did not.
    */
@@ -211,7 +211,7 @@ const nextConfig: NextConfig = {
    *
    * Both hostnames have A/AAAA records pointing at this Fly app and both have
    * their own Fly certificate, so without this the entire shop answers at two
-   * addresses — two copies of every product page, splitting whatever ranking
+   * addresses - two copies of every product page, splitting whatever ranking
    * they earn between them and making `canonical` the only thing telling a
    * crawler which is real. `metadataBase` already says the bare domain; this
    * makes the server agree instead of merely hinting.
@@ -219,12 +219,12 @@ const nextConfig: NextConfig = {
    * It belongs here rather than at the registrar. Porkbun's URL forwarding
    * works by planting its own record on the www host, and that record is a
    * CNAME-style pointer that cannot coexist with the A/AAAA the certificate
-   * needs — the same conflict that kept the apex parked for two weeks. One
+   * needs - the same conflict that kept the apex parked for two weeks. One
    * redirect in the app costs a single 301 and no DNS at all.
    *
    * `permanent: true` is a 308, not a 301, so the method survives: a POST to
-   * the www host is replayed as a POST. Nothing should be posting there —
-   * Stripe's webhook is configured on the bare domain — but a 301 would
+   * the www host is replayed as a POST. Nothing should be posting there -
+   * Stripe's webhook is configured on the bare domain - but a 301 would
    * quietly turn any that did into a GET, and a payment confirmation lost that
    * way would look like a bug in the shop rather than in a redirect.
    */
@@ -246,21 +246,21 @@ const nextConfig: NextConfig = {
    *
    * The hole being closed is specific, not hygiene. `@supabase/ssr`'s cookie
    * defaults are `httpOnly: false`, `sameSite: "lax"`, `maxAge` 400 days and
-   * **no `secure` flag** — see
-   * node_modules/@supabase/ssr/dist/main/utils/constants.js — and `proxy.ts`
+   * **no `secure` flag** - see
+   * node_modules/@supabase/ssr/dist/main/utils/constants.js - and `proxy.ts`
    * passes those options straight through to the response. So the session
    * cookie is readable by any script on the page and goes out over plain
    * http:// as happily as over https://. `force_https = true` in fly.toml is a
    * *redirect*, which means the browser has already put that cookie on the
    * wire in clear before the redirect comes back. One captured plaintext
    * request is 400 days of somebody else's account, and the account most worth
-   * capturing is the owner's — which is the whole studio.
+   * capturing is the owner's - which is the whole studio.
    *
    * Applied on `/:path*`, i.e. everywhere, with no exclusions.
    *
    * /api/webhooks/stripe is deliberately NOT excluded. `proxy.ts` leaves it out
    * of its matcher because the proxy reads the request and Stripe's signature
-   * is computed over the exact bytes that arrived — that is a *request*
+   * is computed over the exact bytes that arrived - that is a *request*
    * concern. This config only adds headers to the *response*, which Stripe's
    * HTTP client discards. Copying that exclusion here would take its shape
    * without its reason and leave a gap for nothing.
@@ -276,8 +276,8 @@ const nextConfig: NextConfig = {
              *
              * One year, subdomains included, NOT preloaded.
              *
-             * `includeSubDomains` because it costs nothing today — nothing is
-             * served on a subdomain of bamstudio-shop.fly.dev — and because it
+             * `includeSubDomains` because it costs nothing today - nothing is
+             * served on a subdomain of bamstudio-shop.fly.dev - and because it
              * is the half that stops a stray http:// link to some future `www.`
              * or staging host being the plaintext request that carries the
              * cookie.
@@ -292,7 +292,7 @@ const nextConfig: NextConfig = {
              * a domain that has never once served the shop to browser-enforced
              * https on every subdomain, before anyone knows what else will live
              * there, is a one-way door for a pre-revenue sole trader. Add
-             * `preload` once the custom domain is live and settled on https —
+             * `preload` once the custom domain is live and settled on https -
              * one word here, plus a submission at hstspreload.org.
              *
              * What leaving it off costs: HSTS is trust-on-first-use. It only
@@ -302,15 +302,15 @@ const nextConfig: NextConfig = {
              * `.dev` TLD is already on the preload list, so
              * bamstudio-shop.fly.dev is forced to https in Chrome, Edge and
              * Firefox whatever we send. It stops being narrow the day the shop
-             * answers on bamstudioshop.com — a plain `.com` with no such
-             * protection — which is precisely when this header starts doing the
+             * answers on bamstudioshop.com - a plain `.com` with no such
+             * protection - which is precisely when this header starts doing the
              * work it is here for.
              */
             key: "Strict-Transport-Security",
             value: "max-age=31536000; includeSubDomains",
           },
           {
-            // Worked out from this codebase's real subresources — see the long
+            // Worked out from this codebase's real subresources - see the long
             // note above contentSecurityPolicy(). Every directive is enforced;
             // none of it is report-only.
             key: "Content-Security-Policy",
@@ -342,7 +342,7 @@ const nextConfig: NextConfig = {
              * document. That page's URL carries the Stripe session id that
              * reads back the customer's address, so it must leak nothing at
              * all. Do not "tidy up" that page by deleting its metadata on the
-             * grounds that a global policy now exists — this header is weaker
+             * grounds that a global policy now exists - this header is weaker
              * than what that one page needs.
              */
             key: "Referrer-Policy",

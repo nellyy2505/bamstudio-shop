@@ -103,8 +103,8 @@
 
 /* ---------------------------------------------------------------- printing
  *
- * WHY THE PRINT RULES LIVE HERE. This is the only stylesheet in the project —
- * `app/layout.tsx` imports it and nothing else imports CSS — so a second file
+ * WHY THE PRINT RULES LIVE HERE. This is the only stylesheet in the project -
+ * `app/layout.tsx` imports it and nothing else imports CSS - so a second file
  * would be a second thing to remember to load. Tailwind's own `print:` variant
  * handles per-element decisions and is used on the pages themselves; what a
  * utility class cannot express is the page box, so `@page` has to be written
@@ -119,7 +119,7 @@
  * because a mono laser prints an amber warning pill as light grey. Anything
  * that has to be understood is words.
  *
- * `.no-print` marks chrome — the staff bar, the sidebar, every control.
+ * `.no-print` marks chrome - the staff bar, the sidebar, every control.
  * `.print-sheet` wraps a document that is genuinely meant to be printed and
  * flattens its palette to black on white.
  * -------------------------------------------------------------------------- */
@@ -161,7 +161,7 @@
     background: #fff;
   }
 
-  /* A document that IS the thing being printed needs no card around it — the
+  /* A document that IS the thing being printed needs no card around it - the
      page box is its frame. Spelled out here rather than as `print:border-0`
      on the element, because these rules sit outside Tailwind's layers and
      would otherwise beat the utility whatever order it was written in. */
@@ -172,14 +172,14 @@
 
   /* Everything inside a printed document is black on white. This is what
      stops a filled pill, a soft warning panel or the cream table stripe from
-     coming out as a grey block — and it is why nothing on those pages relies
+     coming out as a grey block - and it is why nothing on those pages relies
      on a colour to carry meaning. */
   .print-sheet,
   .print-sheet * {
     background: transparent !important;
     color: #000 !important;
     box-shadow: none !important;
-    /* The screen palette's rules are a very pale cream — legible on a monitor,
+    /* The screen palette's rules are a very pale cream - legible on a monitor,
        all but invisible on paper. This only darkens borders that already have
        a width, so nothing gains an outline it did not have. */
     border-color: #999 !important;

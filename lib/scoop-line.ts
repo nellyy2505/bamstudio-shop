@@ -1,11 +1,11 @@
 /**
- * A Lucky Scoop as a *line* — in a basket, on a Stripe session, and in
+ * A Lucky Scoop as a *line* - in a basket, on a Stripe session, and in
  * `order_items`.
  *
  * `lib/scoop.ts` holds the rules (is this tier sellable, what did a pack cost).
  * This file holds the one thing those rules do not answer: what a scoop looks
  * like once it is something a customer has put in a basket and paid for. It is
- * pure — no Supabase, no Stripe, no `next/*` — so the buy control, the two
+ * pure - no Supabase, no Stripe, no `next/*` - so the buy control, the two
  * quote paths, the checkout route and the Stripe webhook can all import it
  * without dragging server-only code across a boundary.
  *
@@ -15,7 +15,7 @@
  * A SCOOP IS SOLD BEFORE ITS CONTENTS ARE DECIDED. At the moment money changes
  * hands nobody knows which products go in it, so a scoop line:
  *
- *   * carries `scoop_tier_id` and **never** `product_id` — the two are mutually
+ *   * carries `scoop_tier_id` and **never** `product_id` - the two are mutually
  *     exclusive in the schema (0007_lucky_scoop.sql), and a product id on a
  *     scoop line is not a cosmetic error: it is what would decrement the shelf
  *     count of a product nobody has drawn yet;
@@ -55,7 +55,7 @@ export type ScoopSellable = Pick<
 /* ------------------------------------------------------- how it is written */
 
 /**
- * The line's `variant_label` — "5 pieces".
+ * The line's `variant_label` - "5 pieces".
  *
  * The one thing about a scoop that is knowable at sale time and is a term of
  * the sale: how many pieces were promised. It is written onto the order line
@@ -63,8 +63,8 @@ export type ScoopSellable = Pick<
  * `scoop_tiers.piece_count` is editable in the studio, and what THIS customer
  * was promised must not change when she edits the tier next month.
  *
- * Every screen that renders an order — /track, /account/orders/[id], the
- * confirmation email, the studio's packing list — already prints
+ * Every screen that renders an order - /track, /account/orders/[id], the
+ * confirmation email, the studio's packing list - already prints
  * `variant_label` under `product_name`, so "Pet scoop / 5 pieces" reaches all
  * of them with no screen having to learn what a scoop is.
  */
@@ -78,14 +78,14 @@ export function scoopVariantLabel(pieceCount: number): string {
  * `order_items.art` and `order_items.tint` are NOT NULL with no default
  * (0001_init.sql) and a scoop has no product row to take them from, so a value
  * has to come from somewhere. It comes from here, from the theme the customer
- * chose, and this is the ONLY place it is decided — the staged checkout path
+ * chose, and this is the ONLY place it is decided - the staged checkout path
  * and the webhook's Stripe-rebuild path both read this map, so a rebuilt scoop
  * line renders identically to the one checkout would have written.
  *
  * This is decoration and nothing else: it is a picture where a photograph
  * would go, exactly as `ProductArt` is for the catalogue. Nothing prices,
  * weighs, costs or picks a piece from it. An unrecognised theme falls to the
- * mixed bowl rather than throwing — a wrong illustration is not worth failing
+ * mixed bowl rather than throwing - a wrong illustration is not worth failing
  * a paid order over, and `scoop_tiers.theme` is CHECK-constrained to these four
  * anyway.
  */
@@ -115,7 +115,7 @@ export function scoopArt(theme: string | null | undefined): {
  * order was staged, and the webhook rebuilds the whole order from the Stripe
  * session (`fillItemsFromStripe`). That path resolves each line to a product
  * row **by slug**, and `scoop_tiers.slug` and `products.slug` are separate
- * unique indexes on separate tables — nothing stops a tier called
+ * unique indexes on separate tables - nothing stops a tier called
  * `mixed-scoop` and a product called `mixed-scoop` existing side by side. A
  * rebuild with no marker would look the tier's slug up in `products`, find a
  * charm, write its `product_id` onto the line, and then take that charm off the
@@ -130,7 +130,7 @@ export function scoopArt(theme: string | null | undefined): {
  * strings are comfortably inside both.
  */
 export const SCOOP_METADATA = {
-  /** `scoop_tiers.id` — what `order_items.scoop_tier_id` is written from. */
+  /** `scoop_tiers.id` - what `order_items.scoop_tier_id` is written from. */
   tier: "scoop_tier",
   /** The promised piece count, so the rebuild can write `variant_label`. */
   pieces: "scoop_pieces",
@@ -159,7 +159,7 @@ export function scoopLineMetadata(tier: ScoopSellable): Record<string, string> {
  * leaving it off would already produce a parcel. It is set **explicitly** here
  * anyway, because absent-means-false is a default and this is a decision:
  * 0007_lucky_scoop.sql deliberately gives `scoop_tiers` no `letter_eligible`
- * column at all, and says why — a Large Letter is untracked and uninsured, and
+ * column at all, and says why - a Large Letter is untracked and uninsured, and
  * a parcel whose contents were chosen at random is the last one the studio
  * should be sending that way. If it went missing there is no reprint to fall
  * back on: the pieces that were in it were drawn from a bowl and are gone.
@@ -167,8 +167,8 @@ export function scoopLineMetadata(tier: ScoopSellable): Record<string, string> {
  * future reader would otherwise have to guess whether the column had merely
  * been forgotten.
  *
- * It also means a scoop makes the WHOLE basket a parcel — `selectPackaging`
- * rule 1 is "every line's product is letter-eligible", not most of them — which
+ * It also means a scoop makes the WHOLE basket a parcel - `selectPackaging`
+ * rule 1 is "every line's product is letter-eligible", not most of them - which
  * is correct: the scoop is going in the same mailer as the charms.
  *
  * ## Where the numbers come from
@@ -178,14 +178,14 @@ export function scoopLineMetadata(tier: ScoopSellable): Record<string, string> {
  * difference rather than the customer. It is treated here as the weight of the
  * scoop's CONTENTS as they go into the mailer: `basketWeight()` then adds the
  * per-item wrap and the mailer itself on top, exactly as it does for a product.
- * That is the direction `lib/shipping/dimensions.ts` requires — every estimate
- * rounds toward the shop paying — and it means a scoop and a charm are weighed
+ * That is the direction `lib/shipping/dimensions.ts` requires - every estimate
+ * rounds toward the shop paying - and it means a scoop and a charm are weighed
  * by one expression rather than two.
  *
  * A tier with no packed weight cannot be ACTIVATED (0007), and an inactive tier
  * is not sellable, so checkout has already refused it before this is reached.
  * Note the direction: the weight check is a condition of activation, upstream of
- * `sellable`, and NOT one of the questions `sellable` itself asks — it asks two,
+ * `sellable`, and NOT one of the questions `sellable` itself asks - it asks two,
  * switched on and priced, and nothing else since the stock gate was removed
  * (`lib/scoop.ts`). This line used to claim an unweighed tier was directly "not
  * sellable"; a reader taking that literally would go looking for a weight test
@@ -198,7 +198,7 @@ export function scoopLineMetadata(tier: ScoopSellable): Record<string, string> {
  *
  * Length and width are the same story and there is no dishonesty in the gap: a
  * tier carries no footprint because nobody has measured a packed scoop's
- * outline, so the catch-all applies. Neither dimension can move the price —
+ * outline, so the catch-all applies. Neither dimension can move the price -
  * `lib/shipping/select.ts` records that no cubic weighting was found at any
  * weight tested, and the letter rules that DO read a footprint are unreachable
  * for a line that is never letter-eligible. They exist to make the carrier
@@ -240,7 +240,7 @@ export function toScoopShippingLine(
  * products, and the rule it exists to enforce holds here too: **the cart's
  * quote route and the checkout route must build this array with the same
  * function.** Two code paths computing postage is how the price a customer
- * agreed to and the price Stripe charges come to differ — silently, and only
+ * agreed to and the price Stripe charges come to differ - silently, and only
  * for some baskets. There is one builder for scoops, and it is this one.
  *
  * A slug with no tier row is skipped rather than guessed at, matching
