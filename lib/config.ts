@@ -163,25 +163,28 @@ export const PRINT_LEAD_TIME = {
 export const GST_DIVISOR = 11;
 
 /**
- * Flat bundle pricing for the DIY name charm, by number of letters.
- * Identical across every colourway so the stall never has to price on the fly.
+ * The letter caps, by how many the customer spelled. **Caps only** — no charm.
  *
- * $4.00 plus $1.50 a letter. The step was $1.00 until the costing found that
- * **every letter cap carries its own clicker**, not one per name — so a
- * marginal letter costs about 40c in parts and print, not 16c, and a $1.00
- * step was returning under $3/printer-hour at every length.
+ * $3.99 for the first letter, $1.49 for each one after. Identical across every
+ * colourway so the stall never has to price on the fly.
  *
- * $1.50 is a deliberate part-measure. The workbook's own bar is $3.33 per
- * printer-hour and clearing it needs about $2.00 a letter; this ladder still
- * sits under the bar. It is here because it is the ladder that was chosen, not
- * because the numbers endorse it — see `claude/planner-workbook-fixes.md`.
+ * The shape of this ladder is the point. The old one earned less per
+ * printer-hour the longer the name got, which penalised exactly the customers
+ * who spent most. This one is close to flat at every length, because the first
+ * letter carries the holder and each one after carries only itself.
+ *
+ * It sits under the workbook's own $3.33/printer-hour bar — clearing that would
+ * need roughly $4.07 then $1.81. This is the ladder that was chosen, and the
+ * gap is recorded here rather than hidden: a five-letter name is a little over
+ * two hours of machine time, and machine time, not price, is what limits the
+ * year. See `claude/planner-workbook-fixes.md`.
  */
 export const BUILDER_PRICING: Record<number, number> = {
-  1: 400,
-  2: 550,
-  3: 700,
-  4: 850,
-  5: 1000,
+  1: 399,
+  2: 548,
+  3: 697,
+  4: 846,
+  5: 995,
 };
 
 export const BUILDER_MAX_LETTERS = 5;
@@ -202,8 +205,37 @@ export type PersonalisationMode = "builder" | "text" | null;
 export const PERSONALISATION_TEXT_MAX = 20;
 export const PERSONALISATION_TEXT_PATTERN = /^[A-Za-z0-9 '&.\-/]+$/;
 
-/** Charm is included by default; dropping it takes a dollar off. */
-export const BUILDER_NO_CHARM_DISCOUNT = 100;
+/**
+ * What comes off a charm's own retail price when it is bought with letter caps.
+ *
+ * The charm is **not** included and is off by default — the customer designs
+ * caps, and adds a charm only if they want one. Adding it charges that
+ * product's real price less this, so a charm never carries a second price of
+ * its own to drift from the first: reprice the macaron in the Studio and the
+ * builder follows in the same breath. The pointer to that product is
+ * `collections.charm_slug` (migration 0009).
+ *
+ * $1.50 is a decision, not a costing. Bundling genuinely saves about $0.44 — no
+ * bag of its own, no second fixed card fee — and the rest is bought goodwill
+ * and basket size, which the postage bands then pay back, since a bigger basket
+ * walks toward `SHIPPING.subsidyThreshold`. Worth knowing before it moves
+ * again: at the macaron's $6.49 the standalone earns roughly the
+ * $3.33/printer-hour bar and nothing more, so every cent of this comes out of a
+ * product with no headroom.
+ */
+export const BUILDER_CHARM_BUNDLE_DISCOUNT = 150;
+
+/**
+ * What the builder charges for a charm, given that charm product's own price.
+ *
+ * Clamped at zero so a charm cheaper than the discount is free rather than a
+ * credit. A negative line would let a basket price itself downward, which is
+ * the shape of every "add it twice and get paid" bug — and the cart, which
+ * cannot see the database, would have no way to notice.
+ */
+export function builderCharmPrice(charmProductPrice: number): number {
+  return Math.max(0, charmProductPrice - BUILDER_CHARM_BUNDLE_DISCOUNT);
+}
 
 /*
  * There is deliberately no `SLOW_LETTERS` here any more.

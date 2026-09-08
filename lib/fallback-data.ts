@@ -3071,6 +3071,7 @@ export const FALLBACK_COLLECTIONS: Collection[] = [
     "holder_colour": "#B08968",
     "charm_art": "coffee",
     "charm_name": "Tiramisu Cake",
+    "charm_slug": "tiramisu-cake",
     "tint": "cream",
     "is_popular": false
   },
@@ -3083,6 +3084,7 @@ export const FALLBACK_COLLECTIONS: Collection[] = [
     "holder_colour": "#E75480",
     "charm_art": "icecream",
     "charm_name": "Ice Cream Cone",
+    "charm_slug": "ice-cream-cone",
     "tint": "blush",
     "is_popular": false
   },
@@ -3095,6 +3097,7 @@ export const FALLBACK_COLLECTIONS: Collection[] = [
     "holder_colour": "#B08968",
     "charm_art": "matcha",
     "charm_name": "Matcha Set",
+    "charm_slug": "matcha-set",
     "tint": "sage",
     "is_popular": true
   },
@@ -3107,6 +3110,7 @@ export const FALLBACK_COLLECTIONS: Collection[] = [
     "holder_colour": "#9AA0A6",
     "charm_art": "macaron",
     "charm_name": "Macaron",
+    "charm_slug": "macaron",
     "tint": "sky",
     "is_popular": false
   },
@@ -3119,6 +3123,7 @@ export const FALLBACK_COLLECTIONS: Collection[] = [
     "holder_colour": "#2B2B2B",
     "charm_art": "smore",
     "charm_name": "S'mores",
+    "charm_slug": "s-mores",
     "tint": "cream",
     "is_popular": false
   },
@@ -3131,6 +3136,7 @@ export const FALLBACK_COLLECTIONS: Collection[] = [
     "holder_colour": "#E4D5BC",
     "charm_art": "butter",
     "charm_name": "Butter",
+    "charm_slug": "butter",
     "tint": "butter",
     "is_popular": false
   }

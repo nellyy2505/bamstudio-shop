@@ -10,7 +10,7 @@ import { useCart } from "@/components/cart/CartProvider";
 import {
   BUILDER_ATTACHMENTS,
   BUILDER_MAX_LETTERS,
-  BUILDER_NO_CHARM_DISCOUNT,
+  BUILDER_CHARM_BUNDLE_DISCOUNT,
   BUILDER_PRICING,
   PRINT_LEAD_TIME,
 } from "@/lib/config";
@@ -32,11 +32,23 @@ export function BuilderClient({
   collections,
   anchor,
   alternatives = [],
+  charmPrices = {},
 }: {
   collections: Collection[];
   anchor: Product;
   /** Every builder-mode product, so the shopper can switch what they're making. */
   alternatives?: Product[];
+  /**
+   * What each colourway's charm costs here, keyed by colourway slug and already
+   * discounted — resolved on the server from `collections.charm_slug` and that
+   * product's real price. A colourway missing from this map offers no charm,
+   * and the option is hidden rather than shown at a guessed price.
+   *
+   * The server prices the line again at checkout from the same two sources, so
+   * a tampered value here cannot survive; this exists to show a figure, not to
+   * set one.
+   */
+  charmPrices?: Record<string, number>;
 }) {
   const { add } = useCart();
   const router = useRouter();
@@ -45,7 +57,9 @@ export function BuilderClient({
     (collections.find((c) => c.is_popular) ?? collections[0]).slug,
   );
   const [letters, setLetters] = useState<string[]>([]);
-  const [withCharm, setWithCharm] = useState(true);
+  // Off by default: the customer designs caps, and adds a charm only if
+  // they want one. It is an extra now, not something to opt out of.
+  const [withCharm, setWithCharm] = useState(false);
   const [attachmentId, setAttachmentId] = useState<string>(
     BUILDER_ATTACHMENTS[0].id,
   );
@@ -57,11 +71,15 @@ export function BuilderClient({
   const word = letters.join("");
   const full = letters.length >= BUILDER_MAX_LETTERS;
 
+  /** Undefined when this colourway has no charm to sell. */
+  const charmPrice: number | undefined = charmPrices[collection.slug];
+  const charmAvailable = typeof charmPrice === "number";
+
   const price = useMemo(() => {
     const bundle = BUILDER_PRICING[letters.length];
     if (!bundle) return 0;
-    return bundle - (withCharm ? 0 : BUILDER_NO_CHARM_DISCOUNT);
-  }, [letters.length, withCharm]);
+    return bundle + (withCharm && charmAvailable ? charmPrice : 0);
+  }, [letters.length, withCharm, charmAvailable, charmPrice]);
 
   function pushLetter(letter: string) {
     if (full) return;
@@ -285,30 +303,10 @@ export function BuilderClient({
             </div>
 
             <div className="flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={() => setWithCharm(true)}
-                aria-pressed={withCharm}
-                className={cx(
-                  "flex items-center gap-3.5 rounded-2xl border p-4 text-left",
-                  withCharm ? "border-ink" : "border-line hover:border-line2",
-                )}
-              >
-                <span
-                  className={cx(
-                    "h-5 w-5 shrink-0 rounded-full",
-                    withCharm ? "border-[6px] border-ink" : "border border-line2",
-                  )}
-                />
-                <span className="flex-1">
-                  <b className="text-[14.5px]">Add the matching charm</b>
-                  <span className="block text-[13px] text-muted">
-                    {collection.charm_name} clicker threads on the end
-                  </span>
-                </span>
-                <b>Included</b>
-              </button>
-
+              {/* Letters-only is listed first and is the default: the caps are
+                  what this page sells, and the charm is an extra. Listing the
+                  add-on first made it read as the normal choice and the plain
+                  set as a downgrade, which is the opposite of the product. */}
               <button
                 type="button"
                 onClick={() => setWithCharm(false)}
@@ -330,8 +328,41 @@ export function BuilderClient({
                     Just the caps on the holder
                   </span>
                 </span>
-                <b>−{money(BUILDER_NO_CHARM_DISCOUNT)}</b>
+                <b>Included</b>
               </button>
+
+              {/* Hidden, not disabled, when this colourway has no charm to
+                  sell: an option that cannot be priced is not an option, and a
+                  greyed-out row invites the question of what it would cost. */}
+              {charmAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => setWithCharm(true)}
+                  aria-pressed={withCharm}
+                  className={cx(
+                    "flex items-center gap-3.5 rounded-2xl border p-4 text-left",
+                    withCharm ? "border-ink" : "border-line hover:border-line2",
+                  )}
+                >
+                  <span
+                    className={cx(
+                      "h-5 w-5 shrink-0 rounded-full",
+                      withCharm ? "border-[6px] border-ink" : "border border-line2",
+                    )}
+                  />
+                  <span className="flex-1">
+                    <b className="text-[14.5px]">
+                      Add the {collection.charm_name} charm
+                    </b>
+                    <span className="block text-[13px] text-muted">
+                      The matching clicker, threaded on the end —{" "}
+                      {money(BUILDER_CHARM_BUNDLE_DISCOUNT)} less than buying it
+                      on its own
+                    </span>
+                  </span>
+                  <b>+{money(charmPrice!)}</b>
+                </button>
+              ) : null}
 
               <fieldset className="mt-2">
                 <legend className="mb-2.5 text-[13.5px] font-extrabold">
@@ -380,7 +411,9 @@ export function BuilderClient({
                 <span className="text-[12.5px] text-muted">
                   {collection.name} · {letters.length} letter
                   {letters.length === 1 ? "" : "s"}
-                  {withCharm ? " · matching charm" : " · letters only"}
+                  {withCharm
+                    ? ` · with ${collection.charm_name} charm`
+                    : " · letters only"}
                 </span>
               </>
             )}
@@ -405,18 +438,22 @@ export function BuilderClient({
           <div className="mb-4 flex flex-col gap-2.5 text-sm">
             <div className="flex justify-between">
               <span className="text-muted">
-                {letters.length || "—"}-letter bundle
+                {letters.length || "—"} letter{letters.length === 1 ? "" : "s"}
               </span>
               <span>
                 {letters.length ? money(BUILDER_PRICING[letters.length]) : "—"}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted">Charm</span>
-              <span>
-                {withCharm ? "Included" : `−${money(BUILDER_NO_CHARM_DISCOUNT)}`}
-              </span>
-            </div>
+            {charmAvailable ? (
+              <div className="flex justify-between">
+                <span className="text-muted">
+                  {collection.charm_name} charm
+                </span>
+                <span>
+                  {withCharm ? `+${money(charmPrice!)}` : "Not added"}
+                </span>
+              </div>
+            ) : null}
             <div className="flex justify-between">
               <span className="text-muted">
                 {BUILDER_ATTACHMENTS.find((a) => a.id === attachmentId)?.label}

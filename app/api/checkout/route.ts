@@ -11,7 +11,7 @@ import {
 import {
   BASKET_LIMITS,
   BUILDER_MAX_LETTERS,
-  BUILDER_NO_CHARM_DISCOUNT,
+  builderCharmPrice,
   BUILDER_PRICING,
   PERSONALISATION_TEXT_MAX,
   PERSONALISATION_TEXT_PATTERN,
@@ -37,6 +37,7 @@ import {
   toScoopShippingLines,
 } from "@/lib/scoop-line";
 import { quoteBasket } from "@/lib/shipping/quote";
+import type { Product } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -463,6 +464,25 @@ export async function POST(request: Request) {
     }
   }
 
+  /*
+   * The charm a builder line asked for, priced from its own product row.
+   *
+   * Loaded here and not with the lines above because which product it is comes
+   * from the *collection*, which is only known once the colourways are in hand.
+   * The client sends `with_charm: true` and nothing else — it never names the
+   * charm and never names a price, so the worst a tampered basket can do is ask
+   * for a charm on a colourway that has none, which is refused below.
+   */
+  const charmSlugs = new Set<string>();
+  for (const line of body.lines) {
+    if (!line.custom?.with_charm) continue;
+    const slug = collections.get(line.custom.collection_slug)?.charm_slug;
+    if (slug) charmSlugs.add(slug);
+  }
+  const charmProducts = charmSlugs.size
+    ? await loadProductsBySlug([...charmSlugs])
+    : new Map<string, Product>();
+
   const lineItems: {
     price_data: {
       currency: string;
@@ -553,12 +573,35 @@ export async function POST(request: Request) {
         (a) => a.id === line.attachment_id,
       );
 
+      /*
+       * Caps, plus the charm if one was asked for, plus the finding.
+       *
+       * The charm's price comes from its own product row less
+       * BUILDER_CHARM_BUNDLE_DISCOUNT — never from the client, and never from a
+       * copy stored on the collection. A charm asked for on a colourway that
+       * has none, or whose product has since been retired, is refused: adding
+       * nothing would hand over a charm for free, and the packing list would
+       * still say to include one.
+       */
+      let charmPrice = 0;
+      if (line.custom.with_charm) {
+        const charm = collection.charm_slug
+          ? charmProducts.get(collection.charm_slug)
+          : undefined;
+        if (!charm) {
+          return NextResponse.json(
+            {
+              error: `The ${collection.name} charm is no longer available. Remove it and try again.`,
+            },
+            { status: 409 },
+          );
+        }
+        charmPrice = builderCharmPrice(charm.price);
+      }
+
       // Every builder finding is free today, but honour the delta anyway —
       // otherwise adding a paid one to a builder product would give it away.
-      unitPrice =
-        bundle -
-        (line.custom.with_charm ? 0 : BUILDER_NO_CHARM_DISCOUNT) +
-        (builderAttachment?.price_delta ?? 0);
+      unitPrice = bundle + charmPrice + (builderAttachment?.price_delta ?? 0);
 
       // Taken from the collection we just looked up, never the client's copy.
       colour = collection.name;
@@ -566,7 +609,9 @@ export async function POST(request: Request) {
       description = [
         collection.name,
         letters,
-        line.custom.with_charm ? "with charm" : "letters only",
+        line.custom.with_charm
+          ? `with ${collection.charm_name} charm`
+          : "letters only",
         builderAttachment?.label,
       ]
         .filter(Boolean)

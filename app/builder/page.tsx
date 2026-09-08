@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import { BuilderClient } from "./BuilderClient";
 import { Icon, Pill } from "@/components/ui";
 import { getCollections, getProducts } from "@/lib/queries";
-import { PRINT_LEAD_TIME } from "@/lib/config";
+import {
+  builderCharmPrice,
+  BUILDER_PRICING,
+  PRINT_LEAD_TIME,
+} from "@/lib/config";
+import { money } from "@/lib/format";
 import { selfCanonical } from "../seo";
 
 export const revalidate = 300;
@@ -11,19 +16,19 @@ export const metadata: Metadata = {
   ...selfCanonical("/builder"),
   title: "Design your own name charm",
   description:
-    "Pick a colourway, spell a name in printed letter caps and add a matching charm. Flat price by name length, made to order in Wollongong.",
+    "Pick a colourway and spell a name in printed letter caps. $3.99 for the first letter, $1.49 for each after, and a matching charm for less than it costs on its own. Made to order in Wollongong.",
 };
 
 const STEPS = [
   {
     n: "1",
     title: "Printed for you",
-    body: "Your letters and charm are printed fresh in your colourway — nothing pre-made.",
+    body: "Your letters are printed fresh in your colourway, and the charm too if you add one. Nothing pre-made.",
   },
   {
     n: "2",
     title: "Assembled by hand",
-    body: "Caps are threaded on the holder cord, the charm clipped on, every click tested.",
+    body: "Caps are threaded on the holder cord, any charm clipped on, every click tested.",
   },
   {
     n: "3",
@@ -61,6 +66,26 @@ export default async function BuilderPage({
     builderProducts.find((p) => p.slug === "custom-name-charm") ??
     builderProducts[0];
 
+  /*
+   * What each colourway's charm costs in the builder, already discounted.
+   *
+   * Resolved here, on the server, from `collections.charm_slug` and that
+   * product's own `price`, so there is one price for a macaron whether it is
+   * bought on its own or threaded on the end of a name. A colourway whose charm
+   * product is missing or inactive is simply absent from this map, and the
+   * builder hides the option rather than offering something it cannot price.
+   *
+   * `/api/checkout` recomputes the same figure from the same two sources before
+   * charging, so this is what the customer is shown, never what they are
+   * charged.
+   */
+  const bySlug = new Map(products.map((p) => [p.slug, p] as const));
+  const charmPrices: Record<string, number> = {};
+  for (const c of collections) {
+    const charm = c.charm_slug ? bySlug.get(c.charm_slug) : undefined;
+    if (charm) charmPrices[c.slug] = builderCharmPrice(charm.price);
+  }
+
   if (!anchor || collections.length === 0) {
     return (
       <div className="wrap py-20 text-center">
@@ -84,8 +109,10 @@ export default async function BuilderPage({
             Design your own {anchor.short_name.toLowerCase()}
           </h1>
           <p className="mx-auto max-w-2xl text-[#5F5769] md:text-base">
-            Pick a collection, spell it out, add a charm. Flat price by name
-            length — every colourway costs the same.
+            Pick a collection and spell it out. {money(BUILDER_PRICING[1])} for
+            the first letter, {money(BUILDER_PRICING[2] - BUILDER_PRICING[1])}{" "}
+            for each one after, and every colourway costs the same. Add the
+            matching charm if you want one.
           </p>
         </div>
       </div>
@@ -94,6 +121,7 @@ export default async function BuilderPage({
         collections={collections}
         anchor={anchor}
         alternatives={builderProducts}
+        charmPrices={charmPrices}
       />
 
       <section className="wrap pt-16">

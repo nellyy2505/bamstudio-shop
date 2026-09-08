@@ -62,14 +62,14 @@ insert into public.products (
 
 insert into public.collections (
   slug, name, cap_colour, letter_colour, holder_colour,
-  charm_art, charm_name, tint, is_popular, sort_order
+  charm_art, charm_name, charm_slug, tint, is_popular, sort_order
 ) values
-  ('retro-key', 'Retro Key', '#E9DCC4', '#5B4636', '#B08968', 'coffee', 'Tiramisu Cake', 'cream', false, 0),
-  ('strawberry-milk', 'Strawberry Milk', '#F6CFD8', '#FFFFFF', '#E75480', 'icecream', 'Ice Cream Cone', 'blush', false, 1),
-  ('matcha-latte', 'Matcha Latte', '#A9BC7F', '#FFFFFF', '#B08968', 'matcha', 'Matcha Set', 'sage', true, 2),
-  ('blueberry', 'Blueberry', '#BCD3E8', '#FFFFFF', '#9AA0A6', 'macaron', 'Macaron', 'sky', false, 3),
-  ('mono', 'Mono', '#FFFFFF', '#252220', '#2B2B2B', 'smore', 'S''mores', 'cream', false, 4),
-  ('butter-toast', 'Butter Toast', '#F2D98B', '#5B4636', '#E4D5BC', 'butter', 'Butter', 'butter', false, 5);
+  ('retro-key', 'Retro Key', '#E9DCC4', '#5B4636', '#B08968', 'coffee', 'Tiramisu Cake', 'tiramisu-cake', 'cream', false, 0),
+  ('strawberry-milk', 'Strawberry Milk', '#F6CFD8', '#FFFFFF', '#E75480', 'icecream', 'Ice Cream Cone', 'ice-cream-cone', 'blush', false, 1),
+  ('matcha-latte', 'Matcha Latte', '#A9BC7F', '#FFFFFF', '#B08968', 'matcha', 'Matcha Set', 'matcha-set', 'sage', true, 2),
+  ('blueberry', 'Blueberry', '#BCD3E8', '#FFFFFF', '#9AA0A6', 'macaron', 'Macaron', 'macaron', 'sky', false, 3),
+  ('mono', 'Mono', '#FFFFFF', '#252220', '#2B2B2B', 'smore', 'S''mores', 's-mores', 'cream', false, 4),
+  ('butter-toast', 'Butter Toast', '#F2D98B', '#5B4636', '#E4D5BC', 'butter', 'Butter', 'butter', 'butter', false, 5);
 
 -- No seeded reviews: the shop has never sold online, so inventing any would be
 -- misleading conduct. Real reviews arrive through public.reviews once customers

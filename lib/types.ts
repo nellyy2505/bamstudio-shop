@@ -99,6 +99,12 @@ export type Collection = {
   holder_colour: string;
   charm_art: ArtKey;
   charm_name: string;
+  /**
+   * `products.slug` of the charm this colourway sells as its add-on (0009).
+   * Null means the colourway offers no charm — the builder hides the option
+   * rather than guessing a price for it.
+   */
+  charm_slug: string | null;
   tint: Tint;
   is_popular: boolean;
 };
