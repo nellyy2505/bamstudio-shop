@@ -1483,7 +1483,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Round cactus in pot",
     "category": "Clicker keychain",
     "theme": "Plants & flowers",
-    "description": "A palm-sized round cactus in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Pot-based, same pot shape across the range. Theme: Plants & flowers.",
+    "description": "A palm-sized round cactus in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers.",
     "price": 900,
     "art": "cactus",
     "tint": "sage",
@@ -1533,7 +1533,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized round cactus in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Pot-based, same pot shape across the range. Theme: Plants & flowers."
+        "body": "A palm-sized round cactus in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers."
       },
       {
         "title": "Materials & care",
@@ -1563,7 +1563,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Aloe in pot",
     "category": "Clicker keychain",
     "theme": "Plants & flowers",
-    "description": "A palm-sized aloe in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Pot-based, same pot shape across the range. Theme: Plants & flowers.",
+    "description": "A palm-sized aloe in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers.",
     "price": 900,
     "art": "cactus",
     "tint": "sage",
@@ -1600,7 +1600,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized aloe in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Pot-based, same pot shape across the range. Theme: Plants & flowers."
+        "body": "A palm-sized aloe in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers."
       },
       {
         "title": "Materials & care",
@@ -1630,7 +1630,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Monstera in pot",
     "category": "Clicker keychain",
     "theme": "Plants & flowers",
-    "description": "A palm-sized monstera in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Pot-based, same pot shape across the range. Theme: Plants & flowers.",
+    "description": "A palm-sized monstera in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers.",
     "price": 900,
     "art": "cactus",
     "tint": "sage",
@@ -1667,7 +1667,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized monstera in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Pot-based, same pot shape across the range. Theme: Plants & flowers."
+        "body": "A palm-sized monstera in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers."
       },
       {
         "title": "Materials & care",
@@ -1697,7 +1697,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "White tulip in pot",
     "category": "Clicker keychain",
     "theme": "Plants & flowers",
-    "description": "A palm-sized white tulip in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Pot-based, same pot shape across the range. Theme: Plants & flowers.",
+    "description": "A palm-sized white tulip in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers.",
     "price": 900,
     "art": "tulip",
     "tint": "blush",
@@ -1734,7 +1734,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized white tulip in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Pot-based, same pot shape across the range. Theme: Plants & flowers."
+        "body": "A palm-sized white tulip in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers."
       },
       {
         "title": "Materials & care",
@@ -1764,7 +1764,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Heart plant in pot",
     "category": "Clicker keychain",
     "theme": "Plants & flowers",
-    "description": "A palm-sized heart plant in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. From the Valentine set. Pot-based, same pot shape across the range. Theme: Plants & flowers.",
+    "description": "A palm-sized heart plant in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. From the Valentine set. Theme: Plants & flowers.",
     "price": 900,
     "art": "tulip",
     "tint": "blush",
@@ -1801,7 +1801,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized heart plant in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. From the Valentine set. Pot-based, same pot shape across the range. Theme: Plants & flowers."
+        "body": "A palm-sized heart plant in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. From the Valentine set. Theme: Plants & flowers."
       },
       {
         "title": "Materials & care",
@@ -1831,7 +1831,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Sunflower in pot",
     "category": "Clicker keychain",
     "theme": "Plants & flowers",
-    "description": "A palm-sized sunflower in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Design as a potted plant, not a flat flower head. Pot-based, same pot shape across the range. Theme: Plants & flowers.",
+    "description": "A palm-sized sunflower in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers.",
     "price": 900,
     "art": "tulip",
     "tint": "butter",
@@ -1868,7 +1868,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized sunflower in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Design as a potted plant, not a flat flower head. Pot-based, same pot shape across the range. Theme: Plants & flowers."
+        "body": "A palm-sized sunflower in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers."
       },
       {
         "title": "Materials & care",
@@ -1898,7 +1898,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Daisy in pot",
     "category": "Clicker keychain",
     "theme": "Plants & flowers",
-    "description": "A palm-sized daisy in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Design as a potted plant, not a flat flower head. Pot-based, same pot shape across the range. Theme: Plants & flowers.",
+    "description": "A palm-sized daisy in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers.",
     "price": 900,
     "art": "tulip",
     "tint": "cream",
@@ -1935,7 +1935,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized daisy in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Design as a potted plant, not a flat flower head. Pot-based, same pot shape across the range. Theme: Plants & flowers."
+        "body": "A palm-sized daisy in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers."
       },
       {
         "title": "Materials & care",
@@ -1965,7 +1965,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Baby's breath in pot",
     "category": "Clicker keychain",
     "theme": "Plants & flowers",
-    "description": "A palm-sized baby's breath in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Pot-based, same pot shape across the range. Theme: Plants & flowers.",
+    "description": "A palm-sized baby's breath in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers.",
     "price": 900,
     "art": "tulip",
     "tint": "sage",
@@ -2002,7 +2002,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized baby's breath in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Pot-based, same pot shape across the range. Theme: Plants & flowers."
+        "body": "A palm-sized baby's breath in pot with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Plants & flowers."
       },
       {
         "title": "Materials & care",
@@ -2032,7 +2032,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Letter clicker A-Z",
     "category": "Clicker keychain",
     "theme": "Letters & names",
-    "description": "A palm-sized letter clicker a-z with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. One row per letter you stock. Copy this row down and change the SKU. Theme: Letters & names.",
+    "description": "A palm-sized letter clicker a-z with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Letters & names.",
     "price": 900,
     "art": "letters",
     "tint": "lilac",
@@ -2069,7 +2069,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized letter clicker a-z with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. One row per letter you stock. Copy this row down and change the SKU. Theme: Letters & names."
+        "body": "A palm-sized letter clicker a-z with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Letters & names."
       },
       {
         "title": "Materials & care",
@@ -2099,7 +2099,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Number clicker 0-9",
     "category": "Clicker keychain",
     "theme": "Letters & names",
-    "description": "A palm-sized number clicker 0-9 with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Same again: one row per number you stock. Theme: Letters & names.",
+    "description": "A palm-sized number clicker 0-9 with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Letters & names.",
     "price": 900,
     "art": "letters",
     "tint": "lilac",
@@ -2136,7 +2136,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized number clicker 0-9 with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Same again: one row per number you stock. Theme: Letters & names."
+        "body": "A palm-sized number clicker 0-9 with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Theme: Letters & names."
       },
       {
         "title": "Materials & care",
@@ -2166,7 +2166,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Custom name charm",
     "category": "Clicker keychain",
     "theme": "Letters & names",
-    "description": "A palm-sized custom name charm with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Cube letters on a cord. Their 7 base colours x 6 letter colours is a smart, cheap way to look like a range. Theme: Letters & names.",
+    "description": "A palm-sized custom name charm with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Cube letters on a cord. Theme: Letters & names.",
     "price": 400,
     "art": "letters",
     "tint": "lilac",
@@ -2198,7 +2198,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A palm-sized custom name charm with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Cube letters on a cord. Their 7 base colours x 6 letter colours is a smart, cheap way to look like a range. Theme: Letters & names."
+        "body": "A palm-sized custom name charm with a spring-loaded clicker inside, the fidget you keep reaching for. Printed in layered PLA and finished by hand. Cube letters on a cord. Theme: Letters & names."
       },
       {
         "title": "Materials & care",
@@ -2764,7 +2764,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "short_name": "Personalised bowl with pet's name",
     "category": "Pet",
     "theme": "Pet",
-    "description": "A personalised bowl with pet's name, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Personalisation is where the margin is. Theme: Pet.",
+    "description": "A personalised bowl with pet's name, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Theme: Pet.",
     "price": 1800,
     "art": "corgi",
     "tint": "cream",
@@ -2780,7 +2780,7 @@ export const FALLBACK_PRODUCTS: Product[] = [
     "details": [
       {
         "title": "Item details",
-        "body": "A personalised bowl with pet's name, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Personalisation is where the margin is. Theme: Pet."
+        "body": "A personalised bowl with pet's name, 3D-printed to order in our Wollongong studio. Printed in layered PLA and finished by hand. Theme: Pet."
       },
       {
         "title": "Materials & care",

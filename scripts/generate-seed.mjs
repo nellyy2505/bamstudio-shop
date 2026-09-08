@@ -10,13 +10,55 @@
  * Prices: the sheet's "My price" column is authoritative once filled. Until
  * then we fall back to PRICE_BY_CATEGORY so the shop has something to show.
  */
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 
-const XLSX =
-  process.argv[2] ??
-  path.resolve(process.cwd(), "..", "Documents", "3D_Planner.xlsx");
+/*
+ * Where the workbook lives, relative to the repo root this script is run from.
+ *
+ * The first entry that exists wins, and an explicit `node scripts/generate-seed
+ * .mjs <path>` beats all of them. This used to be a single hardcoded
+ * `../Documents/3D_Planner.xlsx`, which had not been true for some time: the
+ * file sits beside the repo, not in a Documents folder under it, so the script
+ * failed on openpyxl's FileNotFoundError before writing a byte. That failure
+ * mode is safe but silent about the real cause, and it is the kind of thing
+ * that gets discovered on the day someone urgently needs to regenerate.
+ *
+ * Order matters: siblings of the repo first, because that is where it actually
+ * is, then the historical path so an older checkout still works.
+ */
+const XLSX_CANDIDATES = [
+  path.resolve(process.cwd(), "..", "3D_Planner.xlsx"),
+  path.resolve(process.cwd(), "3D_Planner.xlsx"),
+  path.resolve(process.cwd(), "..", "Documents", "3D_Planner.xlsx"),
+];
+
+const XLSX = process.argv[2] ?? XLSX_CANDIDATES.find((p) => existsSync(p));
+
+if (!XLSX || !existsSync(XLSX)) {
+  console.error(
+    "Could not find the 3D_Planner workbook. Looked in:\n" +
+      XLSX_CANDIDATES.map((p) => `  ${p}`).join("\n") +
+      "\n\nPass the path explicitly:\n" +
+      "  node scripts/generate-seed.mjs /path/to/3D_Planner.xlsx",
+  );
+  process.exit(1);
+}
+
+/*
+ * A lock file means the workbook is open in Excel. openpyxl will read the
+ * last saved copy, so a regeneration would quietly bake in whatever was on
+ * disk before the edits being made right now.
+ */
+const LOCK = path.join(path.dirname(XLSX), `~$${path.basename(XLSX)}`);
+if (existsSync(LOCK)) {
+  console.error(
+    `${path.basename(XLSX)} is open in Excel (${LOCK} exists).\n` +
+      "Close it and run again, or you will seed from the last saved version.",
+  );
+  process.exit(1);
+}
 
 /* ---------------- mapping tables (edit these as the range grows) ---------- */
 
@@ -338,13 +380,47 @@ function coloursFor(row) {
   return unique.map((name) => ({ name, hex: COLOUR_HEX[name] }));
 }
 
+/**
+ * The one sentence of per-product colour that is allowed onto the shopfront,
+ * keyed by SKU.
+ *
+ * THIS USED TO BE `row.Notes`, AND THAT WAS A LEAK. The workbook's Notes column
+ * serves two masters: some of it is customer copy ("Basket is part of the
+ * product"), and some of it is the owner thinking out loud. Publishing the
+ * column wholesale put "Their 7 base colours x 6 letter colours is a smart,
+ * cheap way to look like a range" and "Personalisation is where the margin is"
+ * on live product pages, where anyone could read them, and would have added
+ * "$5.49 inside a bundle - see Keycaps section 7" at the next regeneration.
+ *
+ * A denylist would have to be updated every time a note is edited, and would
+ * fail open: a new private note publishes itself until someone notices. This
+ * allowlist fails closed. A note not listed here does not reach a customer, and
+ * adding one is a deliberate line of code rather than a cell edit.
+ *
+ * Anything richer than a sentence belongs in the Studio, where the description
+ * is editable per product and does not have to survive a regeneration.
+ */
+const PUBLIC_NOTE_BY_SKU = {
+  "CLK-018": "Basket is part of the product.",
+  "CLK-019": "Pan is part of the product.",
+  "CLK-023": "Latte art on the surface.",
+  "CLK-031": "Pug, corgi, dachshund.",
+  "CLK-032": "Frenchie, shiba, husky.",
+  "CLK-048": "From the Valentine set.",
+  "CLK-059": "Cube letters on a cord.",
+  "CLK-061": "Anniversary dates, 143, jersey numbers.",
+  "CLK-073": "Soccer, tennis, basketball, football.",
+  "CLK-077": "Came from a custom request.",
+};
+
 function describe(row) {
   const theme = row.Theme ?? "";
   const isClicker = String(row.Category ?? "").includes("Clicker");
   const base = isClicker
     ? `A palm-sized ${String(row.Product).toLowerCase()} with a spring-loaded clicker inside, the fidget you keep reaching for.`
-    : `A ${String(row.Product).toLowerCase()}, 3D-printed to order in our Sydney studio.`;
-  const note = row.Notes ? ` ${row.Notes}` : "";
+    : `A ${String(row.Product).toLowerCase()}, 3D-printed to order in our Wollongong studio.`;
+  const approved = PUBLIC_NOTE_BY_SKU[String(row.SKU ?? "").trim()];
+  const note = approved ? ` ${approved}` : "";
   return `${base} Printed in layered PLA and finished by hand.${note} Theme: ${theme}.`;
 }
 
