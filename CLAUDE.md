@@ -168,6 +168,28 @@ those grants customers pay and no order is ever recorded), and that
 > corrected. 52/52, 65/65 and 86/86 were each superseded before anyone ran
 > them; 126 is the first count after 50 that has actually printed.
 >
+**A migration that has already run is never edited.** `0004`'s own header
+explains why it exists as a new file rather than a fix to `0002`, and that is the
+rule. Round 18 swept em dashes out of the whole repo and *reverted* the change to
+`0001` through `0007` for exactly this reason: their `COMMENT ON` strings still
+contain em dashes, and a file that has been applied is a record of what ran, not
+a document to tidy. If applied SQL is wrong, write the next number.
+
+**`0010` and `0011` contain em dashes on purpose and must keep them.** They are
+the text those migrations search for. A sweep that "fixes" them turns every
+statement into a silent no-op, and the catalogue keeps the punctuation the
+migration existed to remove. Both files say so at the top.
+
+**Prices are not migrations.** `products.price` is the Studio's to set. A
+migration that quietly reprices something is a number nobody can trace back to a
+decision, and it fights the screen the owner actually uses. `0010` rewrites
+names and copy and deliberately leaves `price` alone.
+
+**Order history is not rewritten.** `orders` and `order_lines` record what
+someone bought, under the name and at the price they bought it. `0008` and `0010`
+both changed product copy and both skip those tables: a customer may still be
+holding a receipt, and matching it to today's catalogue would falsify it.
+
 > ⚠️ **`supabase/storage.sql` is deliberately not applied by the harness**, and
 > is not a migration: `storage` is a platform schema that vanilla PostgreSQL does
 > not have. Guarding it with an `if exists` would make the harness skip it
@@ -344,6 +366,25 @@ the full table.
   - round 15 removed six of them, including a search suggestion that printed
   "0 reviews" under every product and a "Highest rated" sort over a column where
   every row is `0`, which is really an arbitrary order dressed as a ranking.
+- **Postage is three bands over the basket subtotal, and only standard post is
+  discounted.** Under `SHIPPING.subsidyThreshold` ($49) the customer pays the
+  whole quoted rate; up to `SHIPPING.freeThreshold` ($89) the studio pays
+  `subsidisedShare` (half); at or above it, standard post is free. Express is
+  charged in full at every subtotal - it is speed the customer chose to buy, not
+  speed the studio promised. `shippingCharge()` in `lib/config.ts` is the **only**
+  place a quoted rate becomes a charged rate, and the cart and `/api/checkout`
+  both call it against the same subtotal so the basket figure and the Stripe
+  charge cannot drift. `isFreeShipping()` is a thin wrapper for copy that only
+  needs the top band; copy that says "we pay half" must be gated on
+  `isSubsidisedShipping()`, because `!isFreeShipping()` is also true of a basket
+  paying in full.
+- **The name builder sells letter caps alone; the charm is an opt-in extra.**
+  `BUILDER_PRICING` is caps only - $3.99 for the first letter, $1.49 for each
+  after. The charm is **off by default** and priced at its own product's price
+  less `BUILDER_CHARM_BUNDLE_DISCOUNT`, resolved through `collections.charm_slug`
+  (0009). **Never store a charm's price on the collection.** A copied price
+  drifts the first time the charm is repriced, silently, and in whichever
+  direction the charm moved. One product, one price, wherever it is sold.
 - **Overselling is allowed, and must stay visible.** The shop prints to order.
   Stock only moves in the webhook, *after* payment, so a stock check at checkout
   guards a window it does not own - two shoppers can both pass it, and the loser
@@ -783,6 +824,24 @@ lives in `public.staff`: RLS on, **no policy at all**, explicit revokes from
 every other table in `0003_admin.sql` that decides authority or exposes cost.
 Do not add a policy to make something "easier to query" from the client.
 
+**An invitation link is shown once, and that is why there is a New link
+button.** Only the token's hash is stored, so `inviteStaff` and
+`reissueInvitation` return the plaintext exactly once, wrapped in
+`INVITE_LINK:<status>|<url>`. The screen used to offer nothing but *Revoke* on a
+waiting invitation, which is not what an owner who closed the page needs to
+read. `reissueInvitation` revokes then issues, in that order, so a half-sent
+link dies before its replacement exists: the worst case is an invitation nobody
+can use, never two live links for one seat.
+
+**Both actions email the invitee, and the link is still shown either way.**
+`sendEmail()` never throws and never retries, so a failed send that only logged
+would leave the owner believing a link is in flight to someone who will never
+get one. Three endings, and the difference is load-bearing: `emailed` means a
+provider accepted it, which is not the same as landing in an inbox. Keep all
+three, and keep the link visible under every one of them. Nothing about the
+invitation depends on delivery - the token is in the database before the send is
+attempted.
+
 **`requireStaff(capability)` is called by every page, route handler and server
 action under `/admin`** - it cannot be hoisted anywhere. `proxy.ts` only holds
 the anon client, so it can establish "signed in at all" and nothing more; a
@@ -931,6 +990,20 @@ development only. Config arrives as real env vars, two ways:
   (new in round 9; without it postage quotes from the fallback table and the
   shop still works). Read per request.
 
+**The Fly dashboard STAGES secrets; it does not apply them.** The Set Secret
+dialog says so: *"Secrets are staged for the next release."* Nothing changes
+until **Deploy Secrets** is clicked. That is true of the dashboard only -
+`flyctl secrets set` restarts the machine on its own - and `flyctl` is not
+installed on the owner's machine, so the dashboard is the path. It works in our
+favour for paired secrets: `RESEND_API_KEY` and `EMAIL_FROM` must land in one
+release, or the code sees the half-configured pair it treats as off.
+
+**Never infer a secret's *value* from its Fly digest.** A digest that did not
+change proves the value did not change, and nothing more. Round 18 read
+"unchanged" as "still the test value", raised a false alarm about
+`STRIPE_WEBHOOK_SECRET`, and was wrong: the owner had re-saved the correct one.
+If a secret's contents are in doubt, ask the owner or test the behaviour.
+
 **Never move a secret into a build arg** - build args are recorded in image
 history. And never advise the owner to set a `NEXT_PUBLIC_*` value as a Fly
 secret: it does nothing.
@@ -1002,28 +1075,79 @@ None of these is about the app. All of them have cost time.
 - **The device bridge VM has no network access.** `git push`, `fly`, `curl` and
   anything else that needs egress must be run by the owner. Do not report a
   push as done because the command exited.
-- **`git` on the mounted Windows folder cannot delete its own lock files.**
-  Clear them by moving them aside - `mv .git/index.lock /tmp/`, and the same for
-  any other `.git/**/*.lock` - rather than `rm`.
-- **Nine files show as permanently modified and it is pure CRLF line-ending
-  noise** (`git diff --ignore-all-space` is empty). **Never `git add -A`.** Stage
-  the files you actually changed, by name, or a commit becomes unreviewable.
-- **A Next build cannot complete on the device shell.** Each call is a fresh
-  ~45s shell and anything left running is killed between calls - `nohup`,
-  `setsid` and `disown` all die. What works: `tar` the source (excluding
+- **`git` on the mounted Windows folder cannot delete its own lock files** until
+  delete permission has been granted for the folder. Granted, `rm -f
+  .git/index.lock .git/HEAD.lock` works and is the cheapest prefix to put on
+  every git command; ungranted, move them aside instead - `mv .git/index.lock
+  /tmp/`. Ask for the permission once at the start of a session that will commit
+  more than twice.
+- **CRLF noise: check before you trust this.** Round 9 saw nine files
+  permanently modified by line endings alone, and the rule was never to
+  `git add -A`. It is **not reproducing** as of round 18 - a clean tree checks
+  clean and `git diff --ignore-all-space` is empty - and six commits were staged
+  with `add -A` without picking anything up. Run `git status --porcelain | wc -l`
+  on a clean tree first. If it is zero, `add -A` is safe; if files appear that
+  you did not touch, stage by name.
+- **A Next build cannot complete on the device shell**, and there are now two
+  separate reasons. Each call is a fresh shell (~175s cap) and anything left
+  running is killed between calls - `nohup`, `setsid` and `disown` all die. Even
+  inside one call it fails: Turbopack cannot `unlink .next/BUILD_ID` on the
+  mount (`EPERM`), and copying the tree outside the mount fails too, because
+  Turbopack rejects a `node_modules` symlink that points out of the project root.
+  `tsc --noEmit` and `eslint` both run fine there and catch most of it; CI's
+  build is the real gate, and it blocks the rollout when it fails. What works: `tar` the source (excluding
   `node_modules`, `.next`, `.git`, `.env*`), stage that one file, then `npm ci`
   and `npm run build` in a cloud container with dummy `NEXT_PUBLIC_*` values.
   **Never stage `.env.local`.**
-- **`../Documents/3D_Planner.xlsx` is not in the sandbox**, so
-  `scripts/generate-seed.mjs` cannot be run here. `lib/fallback-data.ts` and
-  `supabase/seed.sql` were patched in place in round 9; a real regenerate is
-  owed.
+- **`scripts/generate-seed.mjs` runs again, and that is newly true.** It looked
+  for the workbook at `../Documents/3D_Planner.xlsx`; the file is a sibling of
+  the repo. It now tries the real location first, takes an explicit path as
+  `argv[2]`, says where it looked instead of dying inside openpyxl, and refuses
+  to run while Excel holds the file open (openpyxl would otherwise seed from the
+  last saved version). **Still do not run it casually.** It also pulls the
+  workbook's current prices, colours and attachments, which is a change nobody
+  asked for in the middle of a release. `seed.sql` and `lib/fallback-data.ts`
+  were hand-patched in round 18 to match what it now produces for the
+  description field; the generator knows about `charm_slug` and Wollongong, so a
+  regenerate reproduces round 18 rather than reverting it.
+
+## Copy rules - the whole repo, not just the shopfront
+
+- **No em dashes. Anywhere.** Round 18 removed 3,298 of them across 168 files.
+  In comments and docs a plain hyphen is fine. **In anything a person reads on a
+  screen, rewrite the sentence** - a blanket comma turns half of them into comma
+  splices and the rest into sentences that start mid-thought. Two sentences, a
+  colon, or parentheses, whichever the sentence actually wants. The two standing
+  exceptions are in the SQL section above: applied migrations, and `0010`/`0011`.
+- **A JSX text line must never begin with a comma.** JSX trims each line and
+  joins them with a single space, so a line starting `, and so on` renders as
+  `text , and so on`. Ten of these were created by the em-dash sweep and fixed
+  before it shipped. When a dash sat at the end of a line, the replacement
+  punctuation goes on the line **above**, and `{" "}` moves after it.
+- **A product's `name` carries no category suffix.** "Macaron", not "Macaron -
+  Clicker keychain". The category is its own column and already renders beside
+  the name on the product page, the shop grid and the admin list, and `name` is
+  what reaches Stripe checkout and the order email. `short_name` has always held
+  the bare name; the two now agree.
+- **The workbook's Notes column is never published.** It served two masters -
+  "Basket is part of the product" alongside "Personalisation is where the margin
+  is" - and `scripts/generate-seed.mjs` used to append the lot to every
+  description. That put the owner's margin thinking on live product pages, where
+  it sat on `/product/custom-name-charm` until round 18. The generator now emits
+  `PUBLIC_NOTE_BY_SKU`, an explicit allowlist, and `0011` stripped the leaked
+  ones from the database. **Do not reintroduce a denylist**: it needs updating
+  every time a cell is edited and it fails open, publishing each new private note
+  until somebody notices. An allowlist fails closed.
 
 ## Conventions
 
 - Money is cents everywhere. `lib/format.ts` renders it.
 - Australian English in all customer-facing copy ("colour", "personalised",
   "favourites", "postcode", "suburb").
+- **The studio is in Wollongong**, and the Australia Post lodgement postcode is
+  2500 (`lib/shipping/dimensions.ts`). The one "Sydney" left in the codebase is
+  on the privacy page and is about **where the server runs** - Fly.io's Sydney
+  region - which is still true. Do not "fix" it.
 - Comments in this codebase explain *why*, usually recording a defect that was
   found and closed. Match that when you touch a guarded path - a future session
   needs to know the constraint, not the syntax.
