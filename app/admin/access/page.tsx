@@ -6,6 +6,7 @@ import { removeStaff, revokeInvitation } from "../actions";
 import { NoRows, PageHead, Panel } from "../ui";
 import { listInvitations, listStaff, type InvitationRow } from "../data";
 import { InviteForm } from "./InviteForm";
+import { ReissueButton } from "./ReissueButton";
 
 /**
  * Who is allowed in the studio.
@@ -148,7 +149,7 @@ export default async function AccessPage() {
 
       <Panel
         title="Invitations"
-        note="Newest first. Revoking one stops it being used, but an invitation already accepted has to be undone by removing the person above."
+        note="Newest first. A link is shown once and cannot be read back, so if one is lost, New link revokes it and issues another. An invitation already accepted has to be undone by removing the person above."
         padded={false}
       >
         {invitations.length === 0 ? (
@@ -164,7 +165,7 @@ export default async function AccessPage() {
                   <th className="px-5 py-3">EXPIRES</th>
                   <th className="px-5 py-3">STATE</th>
                   <th className="px-5 py-3 text-right">
-                    <span className="sr-only">Revoke</span>
+                    <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
@@ -187,13 +188,23 @@ export default async function AccessPage() {
                       </Pill>
                     </td>
                     <td className="px-5 py-3.5 text-right">
-                      {invitation.state === "pending" ? (
-                        <AdminForm action={revokeInvitation} className="items-end">
-                          <input type="hidden" name="id" value={invitation.id} />
-                          <SubmitButton variant="soft" size="sm" pendingLabel="Revoking…">
-                            Revoke
-                          </SubmitButton>
-                        </AdminForm>
+                      {invitation.state === "pending" ||
+                      invitation.state === "expired" ? (
+                        <div className="flex flex-col items-end gap-2.5">
+                          {/* Offered on an expired invitation too. The old link
+                              is dead either way, and the alternative is
+                              retyping an address to make the same invitation
+                              again. */}
+                          <ReissueButton invitationId={invitation.id} />
+                          {invitation.state === "pending" ? (
+                            <AdminForm action={revokeInvitation} className="items-end">
+                              <input type="hidden" name="id" value={invitation.id} />
+                              <SubmitButton variant="soft" size="sm" pendingLabel="Revoking…">
+                                Revoke
+                              </SubmitButton>
+                            </AdminForm>
+                          ) : null}
+                        </div>
                       ) : (
                         <span className="text-[13px] text-faint">Nothing to do</span>
                       )}

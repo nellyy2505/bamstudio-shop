@@ -2087,6 +2087,77 @@ export async function revokeInvitation(_prev: FormState, form: FormData): Promis
   });
 }
 
+/**
+ * Replace an invitation that is still waiting, and hand back a fresh link.
+ *
+ * DEFECT THIS CLOSES. `inviteStaff` shows the link exactly once, because only
+ * its hash is stored - the right call, and the same reason a password table
+ * holds hashes. But the screen offered no way back from the obvious human
+ * outcome: the page was closed, or the message was never sent, and the link is
+ * gone. What was left was a row reading "waiting" that nobody could act on, and
+ * a single button marked Revoke, which reads like giving up rather than the
+ * first half of "make another one". The owner's own words for it were that she
+ * could not get the link any more.
+ *
+ * Revoke-then-invite was always available as two steps. It was not discoverable
+ * as one, and the sequence matters: revoke first, so a link that may have been
+ * half-sent stops working before its replacement exists. Doing it in this
+ * order means the worst case is an invitation nobody can use, never two live
+ * links for one seat.
+ *
+ * An accepted invitation is refused. That person is already staff, and the way
+ * to change their access is the staff table above, not a new link.
+ */
+export async function reissueInvitation(_prev: FormState, form: FormData): Promise<FormState> {
+  return guard("access", async () => {
+    const staff = await requireStaff("access");
+    const id = text(form, "id");
+    if (!id) return fail("No invitation given.");
+
+    const admin = createAdminClient();
+    const { data: existing, error: readError } = await admin
+      .from("staff_invitations")
+      .select("email, role, accepted_at")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (readError) return fail(friendly(readError.message));
+    if (!existing) return fail("That invitation is no longer there.");
+    if (existing.accepted_at) {
+      return fail(
+        "That invitation has already been accepted, so a new link would do nothing. " +
+          "Change what they can do from the list above.",
+      );
+    }
+    // Belt and braces: the role stored on the row is re-checked rather than
+    // trusted, so a row edited in the SQL editor cannot launder "owner" into a
+    // fresh invitation through this path.
+    if (!isInvitableRole(existing.role)) {
+      return fail("That invitation is for a role that cannot be handed out. Make a new one instead.");
+    }
+
+    const { error: revokeError } = await admin
+      .from("staff_invitations")
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("id", id)
+      .is("accepted_at", null);
+    if (revokeError) return fail(friendly(revokeError.message));
+
+    const token = randomBytes(32).toString("base64url");
+    const { error: insertError } = await admin.from("staff_invitations").insert({
+      email: existing.email,
+      role: existing.role,
+      token_hash: hashToken(token),
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      created_by: staff.userId,
+    });
+    if (insertError) return fail(friendly(insertError.message));
+
+    revalidatePath("/admin/access");
+    return ok(`INVITE_LINK:${siteUrl()}/admin/join?token=${token}`);
+  });
+}
+
 /** Take someone's studio access away. The owner's own row cannot be removed. */
 export async function removeStaff(_prev: FormState, form: FormData): Promise<FormState> {
   return guard("access", async () => {
