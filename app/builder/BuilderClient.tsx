@@ -7,13 +7,8 @@ import { ProductArt } from "@/components/ProductArt";
 import { Keycap, KeycapWord } from "@/components/builder/Keycap";
 import { Button, Icon, Pill, cx } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
-import {
-  BUILDER_ATTACHMENTS,
-  BUILDER_MAX_LETTERS,
-  BUILDER_CHARM_BUNDLE_DISCOUNT,
-  BUILDER_PRICING,
-  PRINT_LEAD_TIME,
-} from "@/lib/config";
+import { BUILDER_ATTACHMENTS, PRINT_LEAD_TIME } from "@/lib/config";
+import type { FallbackRung } from "@/lib/pricing/builder-fallback";
 import { money } from "@/lib/format";
 import type { ArtKey, Collection, Product, Tint } from "@/lib/types";
 
@@ -33,6 +28,9 @@ export function BuilderClient({
   anchor,
   alternatives = [],
   charmPrices = {},
+  rungs,
+  maxLetters,
+  charmDiscount,
 }: {
   collections: Collection[];
   anchor: Product;
@@ -49,6 +47,17 @@ export function BuilderClient({
    * set one.
    */
   charmPrices?: Record<string, number>;
+  /**
+   * The letter ladder, read from `builder_pricing` on the server and handed
+   * down. A prop rather than an import because it is a row in a table the owner
+   * edits, not a constant: importing it would freeze a build-time copy of her
+   * prices into the browser bundle until the next deploy.
+   */
+  rungs: FallbackRung[];
+  /** The ladder's top rung: the most letters this builder accepts. */
+  maxLetters: number;
+  /** What comes off a charm's own price here, for the line that says so. */
+  charmDiscount: number;
 }) {
   const { add } = useCart();
   const router = useRouter();
@@ -68,18 +77,24 @@ export function BuilderClient({
   const collection =
     collections.find((c) => c.slug === collectionSlug) ?? collections[0];
 
+  /** letters -> price, from the rungs the server read out of the database. */
+  const ladder = useMemo(
+    () => new Map(rungs.map((rung) => [rung.units, rung.priceCents])),
+    [rungs],
+  );
+
   const word = letters.join("");
-  const full = letters.length >= BUILDER_MAX_LETTERS;
+  const full = letters.length >= maxLetters;
 
   /** Undefined when this colourway has no charm to sell. */
   const charmPrice: number | undefined = charmPrices[collection.slug];
   const charmAvailable = typeof charmPrice === "number";
 
   const price = useMemo(() => {
-    const bundle = BUILDER_PRICING[letters.length];
+    const bundle = ladder.get(letters.length);
     if (!bundle) return 0;
     return bundle + (withCharm && charmAvailable ? charmPrice : 0);
-  }, [letters.length, withCharm, charmAvailable, charmPrice]);
+  }, [ladder, letters.length, withCharm, charmAvailable, charmPrice]);
 
   function pushLetter(letter: string) {
     if (full) return;
@@ -195,7 +210,7 @@ export function BuilderClient({
               <Pill tone="dark">2</Pill>
               <h2 className="text-[22px]">Spell it out</h2>
               <span className="ml-auto text-[13px] text-muted">
-                1–{BUILDER_MAX_LETTERS} letters · {letters.length} used
+                1–{maxLetters} letters · {letters.length} used
               </span>
             </div>
             {/* This read "Popular letters are always in stock; rare ones may
@@ -289,7 +304,7 @@ export function BuilderClient({
 
             {full ? (
               <p className="mt-3 text-center text-[13px] font-bold text-accent-dark">
-                That&apos;s the {BUILDER_MAX_LETTERS}-letter maximum. Remove one
+                That&apos;s the {maxLetters}-letter maximum. Remove one
                 to swap it out.
               </p>
             ) : null}
@@ -356,7 +371,7 @@ export function BuilderClient({
                     </b>
                     <span className="block text-[13px] text-muted">
                       The matching clicker, threaded on the end,{" "}
-                      {money(BUILDER_CHARM_BUNDLE_DISCOUNT)} less than buying it
+                      {money(charmDiscount)} less than buying it
                       on its own
                     </span>
                   </span>
@@ -420,7 +435,7 @@ export function BuilderClient({
           </div>
 
           <div className="mb-4 grid grid-cols-5 gap-1.5">
-            {Object.entries(BUILDER_PRICING).map(([count, value]) => (
+            {rungs.map(({ units: count, priceCents: value }) => (
               <div
                 key={count}
                 className={cx(
@@ -441,7 +456,9 @@ export function BuilderClient({
                 {letters.length || "-"} letter{letters.length === 1 ? "" : "s"}
               </span>
               <span>
-                {letters.length ? money(BUILDER_PRICING[letters.length]) : "-"}
+                {ladder.has(letters.length)
+                  ? money(ladder.get(letters.length) as number)
+                  : "-"}
               </span>
             </div>
             {charmAvailable ? (

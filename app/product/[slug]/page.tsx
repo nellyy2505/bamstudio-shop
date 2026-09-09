@@ -12,7 +12,6 @@ import {
   getReviews,
 } from "@/lib/queries";
 import {
-  BUILDER_PRICING,
   PRINT_LEAD_TIME,
   SHIPPING,
   SHOP,
@@ -20,6 +19,7 @@ import {
 } from "@/lib/config";
 import { canReachStudio } from "@/lib/contact";
 import { deliveryWindow, money, pluralise } from "@/lib/format";
+import { getLadder } from "@/lib/pricing/builder";
 import { siteUrl } from "@/lib/stripe";
 import { SITE_OPEN_GRAPH } from "../../seo";
 
@@ -78,6 +78,16 @@ export default async function ProductPage({ params }: { params: Params }) {
   const product = await getProductBySlug(slug);
   if (!product) notFound();
 
+  /*
+   * The ladder, for the structured data's price range. Only read for the two
+   * products that need it: every other product emits a plain Offer at its own
+   * price and has no business paying for this query.
+   */
+  const letterRungs: { units: number; priceCents: number }[] =
+    product.personalisation_mode === "builder"
+      ? (await getLadder("letter_caps")).rungs
+      : [];
+
   const [related, reviews] = await Promise.all([
     getRelatedProducts(product, 4),
     getReviews(product.id),
@@ -112,11 +122,15 @@ export default async function ProductPage({ params }: { params: Params }) {
    * varies is AggregateOffer with lowPrice/highPrice, so that is what a
    * builder product emits.
    *
-   * `lowPrice` is `product.price` because that is the figure the page prints
-   * after the word "From". `highPrice` is the dearest bundle in
-   * BUILDER_PRICING - the single source the builder itself prices from
-   * (lib/config.ts) - floored at `product.price` so the range can never come
-   * out inverted if the two ever drift.
+   * `lowPrice` is `product.price`, which for a builder product is the ladder's
+   * cheapest rung: `withBuilderPrices()` in lib/queries.ts substitutes it, so
+   * this is the same figure the page prints after the word "From" and there is
+   * no second opinion here. `highPrice` is the dearest rung, read from the same
+   * ladder, floored at `lowPrice` so the range can never come out inverted.
+   *
+   * Both used to come from a constant, and the low one used to come from a
+   * seeded copy of that constant in `products.price`, which is how this page
+   * came to advertise $4.00 for a ladder that started at $3.50.
    */
   const priced =
     product.personalisation_mode === "builder"
@@ -125,7 +139,7 @@ export default async function ProductPage({ params }: { params: Params }) {
           priceCurrency: "AUD",
           lowPrice: (product.price / 100).toFixed(2),
           highPrice: (
-            Math.max(product.price, ...Object.values(BUILDER_PRICING)) / 100
+            Math.max(product.price, ...letterRungs.map((r) => r.priceCents)) / 100
           ).toFixed(2),
         }
       : {

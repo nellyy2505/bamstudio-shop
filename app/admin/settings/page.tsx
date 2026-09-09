@@ -1,5 +1,10 @@
 import { requireStaff } from "@/lib/auth/staff";
-import { saveAccessory, saveSettings } from "../actions";
+import {
+  saveAccessory,
+  saveBuilderPricing,
+  saveCharmDiscount,
+  saveSettings,
+} from "../actions";
 import { getAccessories, getSettings, type Accessory, type Settings } from "../data";
 import { AdminForm, SubmitButton } from "../AdminForm";
 import { NoRows, PageHead, Panel, Unknown } from "../ui";
@@ -16,6 +21,7 @@ import {
   targetPerPrinterHour,
 } from "@/lib/costing";
 import { SHIPPING } from "@/lib/config";
+import { getCharmDiscountCents, getLadder, type Ladder } from "@/lib/pricing/builder";
 import { money } from "@/lib/format";
 
 /**
@@ -37,10 +43,14 @@ export const metadata = { title: "Settings · Studio" };
 export default async function SettingsPage() {
   await requireStaff("settings");
 
-  const [settings, accessories] = await Promise.all([
-    getSettings(),
-    getAccessories(),
-  ]);
+  const [settings, accessories, letterLadder, boxLadder, charmDiscount] =
+    await Promise.all([
+      getSettings(),
+      getAccessories(),
+      getLadder("letter_caps"),
+      getLadder("bakery_box"),
+      getCharmDiscountCents(),
+    ]);
 
   return (
     <div className="flex flex-col gap-7">
@@ -463,6 +473,12 @@ export default async function SettingsPage() {
         </div>
       </AdminForm>
 
+      <BuilderPricingPanel
+        letterLadder={letterLadder}
+        boxLadder={boxLadder}
+        charmDiscount={charmDiscount}
+      />
+
       <Panel
         title="Accessories"
         note="Keyrings, chains and clasps. Priced in cents each, to four decimal places, a keyring bought at $9.50 per hundred is 9.5 cents, not 10."
@@ -797,6 +813,183 @@ function SuggestedPriceWorking({ settings }: { settings: Settings }) {
         was abandoned as unreachable.
       </p>
     </div>
+  );
+}
+
+/**
+ * What a personalised build costs, editable.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE POINT OF THIS PANEL.
+ *
+ * These prices lived in lib/config.ts until migration 0014, which meant the
+ * owner could change every price in the shop from a screen except these two,
+ * and changing one of these took a developer, a commit and a deploy. It also
+ * meant the ladder got copied into `products.price` by the seed generator, and
+ * when the ladder moved the copy did not: the shop advertised a name charm at
+ * $4.00 on its card and $3.50 on the collections page, at the same time.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Its own form per builder, and not part of the big settings form above,
+ * because that one writes the whole `shop_settings` row from one payload and a
+ * variable-length ladder does not fit that shape. Two forms, two saves, and
+ * neither can blank the other's fields.
+ */
+function BuilderPricingPanel({
+  letterLadder,
+  boxLadder,
+  charmDiscount,
+}: {
+  letterLadder: Ladder;
+  boxLadder: Ladder;
+  charmDiscount: number;
+}) {
+  const stale = letterLadder.fromFallback || boxLadder.fromFallback;
+
+  return (
+    <Panel
+      title="What a build costs"
+      note="The letter ladder and the bakery box. These used to be in the code, so changing one needed a deploy."
+    >
+      <div className="flex flex-col gap-7">
+        {stale ? (
+          /*
+           * Loud, because this is the state where the screen lies. The shop is
+           * serving the fallback prices compiled into lib/pricing/
+           * builder-fallback.ts, so the boxes below show figures that are not
+           * what the database holds, and saving would write them in as if they
+           * had been chosen.
+           */
+          <div className="card border-warn-soft bg-warn-soft/50 p-4 text-[13.5px]">
+            <b className="text-warn">
+              These are the fallback prices from the code, not the database.
+            </b>{" "}
+            Either migration 0014 has not been applied yet or the
+            <code className="mx-1 font-mono text-[12.5px]">builder_pricing</code>
+            table answered with nothing. The shop is still quoting these figures,
+            so nothing is broken for a customer, but saving here would write them
+            in as though somebody had chosen them. Worth checking the migration
+            ran before you touch anything.
+          </div>
+        ) : null}
+
+        <LadderForm
+          kind="letter_caps"
+          title="Letter caps"
+          note="What a name costs, by how many letters. Clear a box to stop selling that length."
+          unitNoun="letters"
+          ladder={letterLadder}
+          extraRungs={2}
+        />
+
+        <LadderForm
+          kind="bakery_box"
+          title="Bakery box"
+          note="One price a box, whichever pieces go in it. A second row would be a different box size at its own price."
+          unitNoun="pieces"
+          ladder={boxLadder}
+          extraRungs={1}
+        />
+
+        <AdminForm action={saveCharmDiscount}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Charm discount inside a build ($)"
+              htmlFor="charm_discount"
+              hint="Comes off the charm's own shop price when it is added to a name. The charm itself is never priced separately."
+            >
+              <input
+                id="charm_discount"
+                name="charm_discount"
+                inputMode="decimal"
+                defaultValue={(charmDiscount / 100).toFixed(2)}
+                className={inputClass}
+              />
+            </Field>
+          </div>
+          <div>
+            <SubmitButton variant="soft" size="sm">
+              Save the discount
+            </SubmitButton>
+          </div>
+        </AdminForm>
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * One builder's ladder, as a row per rung.
+ *
+ * `extraRungs` blank rows are offered past the end so a length can be added
+ * without a separate "add a row" control and the client JavaScript it would
+ * need. Every other field on this screen is a plain input in a plain form, and
+ * a ladder that is five rows long today is not worth breaking that for.
+ */
+function LadderForm({
+  kind,
+  title,
+  note,
+  unitNoun,
+  ladder,
+  extraRungs,
+}: {
+  kind: string;
+  title: string;
+  note: string;
+  unitNoun: string;
+  ladder: Ladder;
+  extraRungs: number;
+}) {
+  const top = ladder.rungs.reduce((max, r) => Math.max(max, r.units), 0);
+  const rows = [
+    ...ladder.rungs,
+    ...Array.from({ length: extraRungs }, (_, i) => ({
+      units: top + i + 1,
+      priceCents: 0,
+    })),
+  ];
+
+  return (
+    <AdminForm action={saveBuilderPricing}>
+      <input type="hidden" name="kind" value={kind} />
+
+      <div>
+        <h3 className="font-display text-[15.5px] font-semibold">{title}</h3>
+        <p className="mt-0.5 text-[13px] text-muted">{note}</p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {rows.map((rung, index) => (
+          <div key={`${kind}-${rung.units}`} className="flex items-center gap-3">
+            <input type="hidden" name="units" value={rung.units} />
+            <span className="w-24 text-[13.5px] tabular-nums">
+              {rung.units} {unitNoun}
+            </span>
+            <input
+              name="price"
+              inputMode="decimal"
+              aria-label={`Price for ${rung.units} ${unitNoun}`}
+              defaultValue={rung.priceCents > 0 ? (rung.priceCents / 100).toFixed(2) : ""}
+              placeholder={index >= ladder.rungs.length ? "not sold" : "clear to stop selling"}
+              className={`${inputClass} !h-10 !w-[120px] !px-2.5 text-right tabular-nums`}
+            />
+            {index > 0 && rung.priceCents > 0 && rows[index - 1].priceCents > 0 ? (
+              <span className="text-[12.5px] text-faint tabular-nums">
+                {money(rung.priceCents - rows[index - 1].priceCents)} more than{" "}
+                {rung.units - 1}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <SubmitButton variant="soft" size="sm">
+          Save {title.toLowerCase()}
+        </SubmitButton>
+      </div>
+    </AdminForm>
   );
 }
 

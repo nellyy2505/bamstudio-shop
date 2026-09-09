@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import { BuilderClient } from "./BuilderClient";
 import { Icon, Pill } from "@/components/ui";
 import { getCollections, getProducts } from "@/lib/queries";
+import { PRINT_LEAD_TIME } from "@/lib/config";
 import {
-  builderCharmPrice,
-  builderLadderSentence,
-  PRINT_LEAD_TIME,
-} from "@/lib/config";
+  charmPrice,
+  getCharmDiscountCents,
+  getLadder,
+  ladderSentence,
+  maxUnits,
+} from "@/lib/pricing/builder";
 import { selfCanonical } from "../seo";
 
 export const revalidate = 300;
@@ -20,15 +23,19 @@ export const metadata: Metadata = {
   ...selfCanonical("/builder"),
   title: "Design your own name charm",
   /*
-   * Built from the ladder rather than typed out. This sentence held
-   * "$3.99 for the first letter, $1.49 for each after" as a string literal,
-   * which is a price in a search result and a social preview that nobody would
-   * think to update when the ladder moved. It is also the second copy of a
-   * sentence the page heading already computes.
+   * NO PRICE IN THIS SENTENCE, deliberately.
+   *
+   * It used to name the ladder, first as a hardcoded "$3.99 for the first
+   * letter, $1.49 for each after" and then built from the constant. Neither
+   * works now that the ladder is a row in a table the owner can edit: page
+   * metadata is static and is what search results and social previews cache,
+   * so a price here is a price that goes stale silently, in the one place
+   * nobody looks. The heading below states it, from the database, per request.
    */
-  description: `Pick a colourway and spell a name in printed letter caps. ${capitalise(
-    builderLadderSentence(),
-  )}, and a matching charm for less than it costs on its own. Made to order in Wollongong.`,
+  description:
+    "Pick a colourway and spell a name in printed letter caps, and add a " +
+    "matching charm for less than it costs on its own. Made to order in " +
+    "Wollongong.",
 };
 
 const STEPS = [
@@ -91,11 +98,16 @@ export default async function BuilderPage({
    * charging, so this is what the customer is shown, never what they are
    * charged.
    */
+  const [ladder, charmDiscount] = await Promise.all([
+    getLadder("letter_caps"),
+    getCharmDiscountCents(),
+  ]);
+
   const bySlug = new Map(products.map((p) => [p.slug, p] as const));
   const charmPrices: Record<string, number> = {};
   for (const c of collections) {
     const charm = c.charm_slug ? bySlug.get(c.charm_slug) : undefined;
-    if (charm) charmPrices[c.slug] = builderCharmPrice(charm.price);
+    if (charm) charmPrices[c.slug] = charmPrice(charm.price, charmDiscount);
   }
 
   if (!anchor || collections.length === 0) {
@@ -121,10 +133,10 @@ export default async function BuilderPage({
             Design your own {anchor.short_name.toLowerCase()}
           </h1>
           <p className="mx-auto max-w-2xl text-[#5F5769] md:text-base">
-            {/* One sentence, one source. This used to compute the step from the
-                first two rungs of the ladder, which said "for each one after"
-                and was true of every step but the last. */}
-            Pick a collection and spell it out. {capitalise(builderLadderSentence())},
+            {/* One sentence, one source, and that source is now the database.
+                It used to compute the step from the first two rungs, which said
+                "for each one after" and was true of every step but the last. */}
+            Pick a collection and spell it out. {capitalise(ladderSentence(ladder))},
             and every colourway costs the same. Add the matching charm if you
             want one.
           </p>
@@ -136,6 +148,9 @@ export default async function BuilderPage({
         anchor={anchor}
         alternatives={builderProducts}
         charmPrices={charmPrices}
+        rungs={ladder.rungs}
+        maxLetters={maxUnits(ladder)}
+        charmDiscount={charmDiscount}
       />
 
       <section className="wrap pt-16">

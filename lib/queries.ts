@@ -8,6 +8,7 @@ import type {
 } from "@/lib/types";
 import { tierAvailability, type ScoopAvailability } from "@/lib/scoop";
 import { FALLBACK_COLLECTIONS, FALLBACK_PRODUCTS } from "./fallback-data";
+import { fromPrice, getLadder } from "./pricing/builder";
 
 /**
  * True once the Supabase env vars are present. Until then every query
@@ -121,6 +122,62 @@ function applyFallbackFilters(filters: ProductFilters) {
   return rows;
 }
 
+/**
+ * The price a product SHOWS, which is not always the price in its column.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THIS EXISTS AT ALL.
+ *
+ * `products.price` is meaningless for a builder product. What a name charm
+ * costs depends on how many letters were spelled, and that ladder lives in
+ * `builder_pricing`. The column still has to hold something, because it is
+ * `not null`, and `scripts/generate-seed.mjs` filled it with the ladder's
+ * cheapest rung.
+ *
+ * That copy is what broke. The ladder moved from $4.00 to $3.99 to $3.50 and
+ * the seeded column stayed at 400, so the shop grid and the product page said
+ * $4.00 while /collections, which computed the same figure from the ladder,
+ * said $3.50. One product, two prices, on the same site, from the same source
+ * copied twice.
+ *
+ * So the column is no longer trusted for these rows. The cheapest rung is read
+ * and substituted here, in the one place that feeds every shopfront renderer,
+ * rather than in each of ProductCard, SearchBar, ProductBuy and the JSON-LD.
+ * All of them keep reading `product.price`; only this function knows the rule.
+ *
+ * WHAT IS DELIBERATELY NOT DONE HERE: `loadProductsBySlug` is left alone. That
+ * one feeds /api/checkout and the postage quote, and checkout prices a builder
+ * line from the ladder itself against the letters actually sent. Substituting a
+ * display price into the path that charges people would be a second opinion
+ * about money in the one place there must only be one.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * One ladder read per call, not per product, and skipped entirely when the page
+ * holds no builder products, which is most of them.
+ *
+ * APPLIED TO THE FALLBACK PATHS TOO, and that is not an afterthought: the
+ * bundled catalogue in lib/fallback-data.ts carries the same seeded `400` the
+ * database does, so patching only the Supabase branch left a shop running
+ * without a database advertising the old price. Caught by building with no
+ * Supabase configured and reading the price off the rendered page.
+ */
+async function withBuilderPrices(products: Product[]): Promise<Product[]> {
+  if (!products.some((p) => p.personalisation_mode === "builder")) {
+    return products;
+  }
+
+  const cheapest = fromPrice(await getLadder("letter_caps"));
+  // An empty ladder leaves the column alone. It is a stale number, but a stale
+  // number is a better thing to print than $0.00.
+  if (cheapest === null) return products;
+
+  return products.map((product) =>
+    product.personalisation_mode === "builder"
+      ? { ...product, price: cheapest }
+      : product,
+  );
+}
+
 export async function getProducts(
   filters: ProductFilters = {},
 ): Promise<{ products: Product[]; total: number }> {
@@ -130,7 +187,10 @@ export async function getProducts(
   if (!isDatabaseConfigured()) {
     const rows = applyFallbackFilters(filters);
     const start = (page - 1) * perPage;
-    return { products: rows.slice(start, start + perPage), total: rows.length };
+    return {
+      products: await withBuilderPrices(rows.slice(start, start + perPage)),
+      total: rows.length,
+    };
   }
 
   const supabase = await createClient();
@@ -188,13 +248,14 @@ export async function getProducts(
     return { products: [], total: 0 };
   }
 
-  const products = (data ?? []) as Product[];
+  const products = await withBuilderPrices((data ?? []) as Product[]);
   return { products, total: count ?? products.length };
 }
 
 export async function getProductBySlug(slug: string): Promise<Product | null> {
   if (!isDatabaseConfigured()) {
-    return FALLBACK_PRODUCTS.find((p) => p.slug === slug) ?? null;
+    const row = FALLBACK_PRODUCTS.find((p) => p.slug === slug) ?? null;
+    return row ? (await withBuilderPrices([row]))[0] : null;
   }
 
   const supabase = await createClient();
@@ -209,7 +270,9 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
     console.error("getProductBySlug failed:", error.message);
     return null;
   }
-  return (data as Product) ?? null;
+  const product = (data as Product) ?? null;
+  if (!product) return null;
+  return (await withBuilderPrices([product]))[0];
 }
 
 export async function getRelatedProducts(
@@ -217,11 +280,13 @@ export async function getRelatedProducts(
   limit = 4,
 ): Promise<Product[]> {
   if (!isDatabaseConfigured()) {
-    return FALLBACK_PRODUCTS.filter(
-      (p) => p.slug !== product.slug && p.theme === product.theme,
-    )
-      .concat(FALLBACK_PRODUCTS.filter((p) => p.slug !== product.slug))
-      .slice(0, limit);
+    return withBuilderPrices(
+      FALLBACK_PRODUCTS.filter(
+        (p) => p.slug !== product.slug && p.theme === product.theme,
+      )
+        .concat(FALLBACK_PRODUCTS.filter((p) => p.slug !== product.slug))
+        .slice(0, limit),
+    );
   }
 
   const supabase = await createClient();
@@ -234,7 +299,7 @@ export async function getRelatedProducts(
     .limit(limit);
 
   const rows = (data ?? []) as Product[];
-  if (rows.length >= limit) return rows;
+  if (rows.length >= limit) return withBuilderPrices(rows);
 
   // Top up from the wider catalogue so the rail is never half-empty.
   const { data: extra } = await supabase
@@ -253,7 +318,7 @@ export async function getRelatedProducts(
       seen.add(row.slug);
     }
   }
-  return rows.slice(0, limit);
+  return withBuilderPrices(rows.slice(0, limit));
 }
 
 export async function searchProducts(term: string): Promise<Product[]> {
@@ -262,12 +327,14 @@ export async function searchProducts(term: string): Promise<Product[]> {
 
   if (!isDatabaseConfigured()) {
     const needle = query.toLowerCase();
-    return FALLBACK_PRODUCTS.filter(
+    return withBuilderPrices(
+      FALLBACK_PRODUCTS.filter(
       (p) =>
         p.name.toLowerCase().includes(needle) ||
         p.theme.toLowerCase().includes(needle) ||
         p.category.toLowerCase().includes(needle) ||
-        p.description.toLowerCase().includes(needle),
+          p.description.toLowerCase().includes(needle),
+      ),
     );
   }
 
@@ -280,7 +347,7 @@ export async function searchProducts(term: string): Promise<Product[]> {
     console.error("searchProducts failed:", error.message);
     return [];
   }
-  return (data ?? []) as Product[];
+  return withBuilderPrices((data ?? []) as Product[]);
 }
 
 /**

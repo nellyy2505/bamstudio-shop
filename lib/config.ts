@@ -162,102 +162,40 @@ export const PRINT_LEAD_TIME = {
 /** GST is included in displayed prices (1/11th of a GST-inclusive total). */
 export const GST_DIVISOR = 11;
 
-/**
- * The letter caps, by how many the customer spelled. **Caps only** - no charm.
- *
- * $3.50 for the first letter, $1.00 for each one after, and 50c for the fifth.
- * Identical across every colourway so the stall never has to price on the fly.
- *
- * WHAT THIS LADDER COSTS, because it is a deliberate choice and the previous
- * one was chosen for the opposite reason.
- *
- * A marginal letter is about 21 minutes of machine time and 40c of filament and
- * clicker. Against the workbook's $3.33 printer-hour bar:
- *
- *   letters        price    margin    $ per printer-hour
- *   1              $3.50    50.2%     $2.60
- *   2              $4.50    49.5%     $2.17
- *   3              $5.50    49.1%     $1.95
- *   4              $6.50    48.8%     $1.83
- *   5              $7.00    45.8%     $1.54
- *
- * and the marginal letter on its own earns $1.34 an hour at $1.00, and **10c an
- * hour at 50c** - three and a half cents of profit for 21 minutes of printing.
- *
- * THE SHAPE IS NOW THE OTHER WAY UP. The ladder this replaced ran 54.7% to
- * 58.0% and $3.24 to $2.77, close to flat, and was built that way on purpose
- * because the one before it earned less per printer-hour the longer the name
- * got, which penalised exactly the customers who spent most. This one does that
- * again and more steeply: margin and dollars per hour both fall with every
- * letter, and a five-letter name is a little over two hours of machine time for
- * $3.20 of profit.
- *
- * Recorded rather than argued. It is a price the owner set, the numbers are
- * here so nobody has to rediscover them, and machine time is what limits the
- * year. See `claude/planner-workbook-fixes.md`.
- *
- * NOTE FOR WHOEVER EDITS THIS: `scripts/generate-seed.mjs` reads this table out
- * of this file with a regular expression, because it cannot import TypeScript.
- * Keep it a plain object literal on these lines or the seed generator will stop
- * finding it and say so rather than guessing.
- */
-export const BUILDER_PRICING: Record<number, number> = {
-  1: 350,
-  2: 450,
-  3: 550,
-  4: 650,
-  5: 700,
-};
-
-export const BUILDER_MAX_LETTERS = 5;
-
-/** Cheapest a builder charm can be - the honest "from" price to advertise. */
-export const BUILDER_FROM_PRICE = Math.min(...Object.values(BUILDER_PRICING));
-
 /*
- * The ladder, as the three numbers copy actually needs, derived from the table
- * above so a price change cannot leave a sentence behind.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE BUILDER PRICES USED TO LIVE HERE. THEY ARE IN THE DATABASE NOW.
  *
- * This used to be a hardcoded "$3.99 for the first letter, $1.49 for each
- * after" in the builder page's metadata AND a second copy computed in its
- * heading, which is two places to update and one of them somewhere nobody
- * looks. `BUILDER_STEP` reads the first step; `BUILDER_FINAL_STEP` reads the
- * last, and they differ now, which is exactly why copy must not say "each one
- * after" and stop there.
+ * `BUILDER_PRICING`, `BUILDER_MAX_LETTERS`, `BUILDER_FROM_PRICE` and
+ * `BUILDER_CHARM_BUNDLE_DISCOUNT` were constants in this file, which made every
+ * one of them a deployment rather than a field: the owner could change any
+ * other price in the shop from a screen, and these from a pull request.
  *
- * `BUILDER_STEP` assumes every step from the second letter to the second-last
- * is the same, which is true of this ladder by construction. If that ever stops
- * being true, the sentence below has to grow a case rather than quietly
- * describing only the first step.
+ * They also got copied. `scripts/generate-seed.mjs` read the ladder's cheapest
+ * rung and wrote it into `products.price` for the builder products, so when the
+ * ladder moved the copy did not, and the shop listed one product at $4.00 on
+ * its card and $3.50 on the collections page. That is the "one product, one
+ * price" rule broken by exactly the mechanism it was written about.
+ *
+ *   Read them with `getLadder()` and `getCharmDiscountCents()` in
+ *   lib/pricing/builder.ts. The table is `builder_pricing` (migration 0014),
+ *   and lib/pricing/builder-fallback.ts holds the same figures for when the
+ *   database cannot answer, the way lib/shipping/fallback.ts does for postage.
+ *
+ * THE CHARM RULE HAS NOT CHANGED, only its home: the charm is priced at its own
+ * product's price less the discount, resolved live through
+ * `collections.charm_slug` (0009). **Never store a charm's price on the
+ * collection.** A copied price drifts the first time the charm is repriced,
+ * silently, and in whichever direction the charm moved.
+ *
+ * Nothing that renders a price should import a price from this file.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
-export const BUILDER_FIRST_LETTER = BUILDER_PRICING[1];
-export const BUILDER_STEP = BUILDER_PRICING[2] - BUILDER_PRICING[1];
-export const BUILDER_FINAL_STEP =
-  BUILDER_PRICING[BUILDER_MAX_LETTERS] - BUILDER_PRICING[BUILDER_MAX_LETTERS - 1];
-
-/**
- * The ladder in one sentence, for the places that sell it.
- *
- * The last clause appears only when the final letter really is priced
- * differently, so flattening the ladder later drops it automatically instead of
- * leaving a claim about a discount that no longer exists.
- */
-export function builderLadderSentence(): string {
-  const dollars = (cents: number) =>
-    cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`;
-
-  const base = `${dollars(BUILDER_FIRST_LETTER)} for the first letter, ${dollars(
-    BUILDER_STEP,
-  )} for each one after`;
-
-  return BUILDER_FINAL_STEP === BUILDER_STEP
-    ? base
-    : `${base}, and just ${dollars(BUILDER_FINAL_STEP)} for the last one`;
-}
 
 /**
  * How a product collects its personalisation.
- *  - "builder": the keycap letter builder, priced by BUILDER_PRICING.
+ *  - "builder": the keycap letter builder, priced by the `letter_caps`
+ *               ladder in `builder_pricing`. See lib/pricing/builder.ts.
  *  - "text":    a single free-text field on the product page, priced at the
  *               product's own price (a pet bowl, a date chain).
  *  - null:      not personalised.
@@ -267,40 +205,6 @@ export type PersonalisationMode = "builder" | "text" | null;
 /** Free-text personalisation must stay printable and short enough to print. */
 export const PERSONALISATION_TEXT_MAX = 20;
 export const PERSONALISATION_TEXT_PATTERN = /^[A-Za-z0-9 '&.\-/]+$/;
-
-/**
- * What comes off a charm's own retail price when it is bought with letter caps.
- *
- * The charm is **not** included and is off by default - the customer designs
- * caps, and adds a charm only if they want one. Adding it charges that
- * product's real price less this, so a charm never carries a second price of
- * its own to drift from the first: reprice the macaron in the Studio and the
- * builder follows in the same breath. The pointer to that product is
- * `collections.charm_slug` (migration 0009).
- *
- * $1.50 is a decision, not a costing. Bundling genuinely saves about $0.44 - no
- * bag of its own, no second fixed card fee - and the rest is bought goodwill
- * and basket size, which the postage bands then pay back, since a bigger basket
- * walks toward `SHIPPING.subsidyThreshold`. Worth knowing before it moves
- * again: at the macaron's $6.50 the standalone earns $2.98 against the
- * $3.33/printer-hour bar, so every cent of this comes out of a product that is
- * already under the bar. It does at least land on round money: $6.50 less
- * $1.50 is a $5.00 add-on, which is one fewer awkward number on a stall
- * table.
- */
-export const BUILDER_CHARM_BUNDLE_DISCOUNT = 150;
-
-/**
- * What the builder charges for a charm, given that charm product's own price.
- *
- * Clamped at zero so a charm cheaper than the discount is free rather than a
- * credit. A negative line would let a basket price itself downward, which is
- * the shape of every "add it twice and get paid" bug - and the cart, which
- * cannot see the database, would have no way to notice.
- */
-export function builderCharmPrice(charmProductPrice: number): number {
-  return Math.max(0, charmProductPrice - BUILDER_CHARM_BUNDLE_DISCOUNT);
-}
 
 /*
  * There is deliberately no `SLOW_LETTERS` here any more.

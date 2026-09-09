@@ -10,9 +10,6 @@ import {
 } from "@/lib/queries";
 import {
   BASKET_LIMITS,
-  BUILDER_MAX_LETTERS,
-  builderCharmPrice,
-  BUILDER_PRICING,
   PERSONALISATION_TEXT_MAX,
   PERSONALISATION_TEXT_PATTERN,
   PRINT_LEAD_TIME,
@@ -20,6 +17,14 @@ import {
   shippingCharge,
   transitDays,
 } from "@/lib/config";
+import { BUILDER_UNITS_HARD_MAX } from "@/lib/pricing/builder-fallback";
+import {
+  charmPrice as charmPriceFor,
+  getCharmDiscountCents,
+  getLadder,
+  maxUnits,
+  priceFor,
+} from "@/lib/pricing/builder";
 import { clientKey, rateLimitDurable } from "@/lib/rate-limit";
 import { toShippingLines } from "@/lib/shipping/lines";
 // The studio's own costing, reused rather than re-implemented: one definition
@@ -54,10 +59,18 @@ const LineSchema = z.object({
       collection_slug: z.string().min(1).max(60),
       // Kept only for older clients; the server uses the stored name.
       collection_name: z.string().min(1).max(60),
+      /*
+       * A RAIL, NOT THE RULE. The most letters this builder actually sells is
+       * the top rung of a ladder in the database, and a zod schema built at
+       * module scope cannot await it. So this bounds the size of a parsed
+       * payload - a request claiming eight hundred letters is refused before
+       * anything counts them - and the real limit is applied below, against the
+       * ladder, where a price for that many letters either exists or does not.
+       */
       letters: z
         .string()
         .min(1)
-        .max(BUILDER_MAX_LETTERS)
+        .max(BUILDER_UNITS_HARD_MAX)
         .regex(/^[A-Za-z]+$/, "Letters only."),
       with_charm: z.boolean(),
     })
@@ -483,6 +496,21 @@ export async function POST(request: Request) {
     ? await loadProductsBySlug([...charmSlugs])
     : new Map<string, Product>();
 
+  /*
+   * The letter ladder and the charm discount, read once per request rather than
+   * per line, and read HERE rather than imported.
+   *
+   * This is the moment that matters: a price the customer was shown a minute
+   * ago is a claim, and this is where the shop decides what it actually
+   * charges. Reading it now means a price the owner changed while somebody had
+   * the builder open is applied at checkout, and it means a basket cannot be
+   * charged from a constant that was compiled into the bundle at deploy time.
+   */
+  const [letterLadder, charmDiscount] = await Promise.all([
+    getLadder("letter_caps"),
+    getCharmDiscountCents(),
+  ]);
+
   const lineItems: {
     price_data: {
       currency: string;
@@ -560,10 +588,28 @@ export async function POST(request: Request) {
       }
 
       const letters = line.custom.letters.replace(/[^A-Za-z]/g, "").toUpperCase();
-      const bundle = BUILDER_PRICING[letters.length];
+
+      /*
+       * The price for this many letters, from the database, at the moment of
+       * charging. No rung means no price, and no price means no sale: a length
+       * the ladder does not cover is refused rather than guessed at, because
+       * the only ways to guess are to extrapolate the step (inventing a price
+       * the owner never set) or to fall through to zero (giving it away).
+       *
+       * The message names the ladder's real bounds rather than a hardcoded
+       * "1-5", which is what it used to say and would have been wrong the first
+       * time she added a sixth rung.
+       */
+      const bundle = priceFor(letterLadder, letters.length);
       if (!bundle) {
+        const top = maxUnits(letterLadder);
         return NextResponse.json(
-          { error: "Name charms take 1–5 letters." },
+          {
+            error:
+              top > 0
+                ? `Name charms take 1 to ${top} letters.`
+                : "Name charms are not on sale at the moment.",
+          },
           { status: 400 },
         );
       }
@@ -576,9 +622,9 @@ export async function POST(request: Request) {
       /*
        * Caps, plus the charm if one was asked for, plus the finding.
        *
-       * The charm's price comes from its own product row less
-       * BUILDER_CHARM_BUNDLE_DISCOUNT - never from the client, and never from a
-       * copy stored on the collection. A charm asked for on a colourway that
+       * The charm's price comes from its own product row less the studio's
+       * discount, read here rather than imported - never from the client, and
+       * never from a copy stored on the collection. A charm asked for on a colourway that
        * has none, or whose product has since been retired, is refused: adding
        * nothing would hand over a charm for free, and the packing list would
        * still say to include one.
@@ -596,7 +642,7 @@ export async function POST(request: Request) {
             { status: 409 },
           );
         }
-        charmPrice = builderCharmPrice(charm.price);
+        charmPrice = charmPriceFor(charm.price, charmDiscount);
       }
 
       // Every builder finding is free today, but honour the delta anyway -

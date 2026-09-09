@@ -4,7 +4,7 @@ import { ProductArt } from "@/components/ProductArt";
 import { Keycap } from "@/components/builder/Keycap";
 import { Breadcrumbs, ButtonLink, Icon, Pill, cx } from "@/components/ui";
 import { getCollections } from "@/lib/queries";
-import { BUILDER_PRICING } from "@/lib/config";
+import { fromPrice, getLadder } from "@/lib/pricing/builder";
 import { money } from "@/lib/format";
 import type { ArtKey, Tint } from "@/lib/types";
 import { selfCanonical } from "../seo";
@@ -29,7 +29,11 @@ const TINT_BG: Record<Tint, string> = {
 
 export default async function CollectionsPage() {
   const collections = await getCollections();
-  const cheapest = Math.min(...Object.values(BUILDER_PRICING));
+  // Read, not computed from a constant. This line and the price on a builder
+  // product's own card are the two places that advertise the same figure, and
+  // they disagreed for a day because one was derived and the other was a copy
+  // seeded into products.price.
+  const cheapest = fromPrice(await getLadder("letter_caps"));
 
   return (
     <div className="wrap pt-9">
@@ -84,7 +88,10 @@ export default async function CollectionsPage() {
                   ) : null}
                 </div>
                 <p className="mt-1 mb-3.5 text-[13px] text-muted">
-                  {collection.charm_name} charm · from {money(cheapest)}
+                  {/* No "from" clause at all when the ladder is empty, rather
+                      than "from $0.00", which is a claim that it is free. */}
+                  {collection.charm_name} charm
+                  {cheapest === null ? null : <> · from {money(cheapest)}</>}
                 </p>
 
                 <div className="flex items-center gap-2">

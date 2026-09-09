@@ -1,7 +1,7 @@
 -- Schema smoke test.
 --
 -- Run this in the Supabase SQL editor after applying every file in
--- supabase/migrations/ in order and then seed.sql. It returns ONE table of 141
+-- supabase/migrations/ in order and then seed.sql. It returns ONE table of 150
 -- rows and every `pass` must be `t`. These are the guarantees that only fail
 -- in production - a missing grant here means paid orders are never recorded,
 -- and you would first hear about it from a customer.
@@ -12,8 +12,9 @@
 -- observable stock clamp and the refund register), 86 with 0006 (the enquiry
 -- and sign-up tables), 126 with 0007 (the Lucky Scoop tiers, their pools and
 -- what went into a packed scoop), 141 with 0013 (returns, what they put back on
--- the shelf, and how a sale off the website was paid for) - so a shorter table
--- than 141 means an older copy of this file, and an older copy is a green
+-- the shelf, and how a sale off the website was paid for), 150 with 0014 (the
+-- builder prices, out of the code at last) - so a shorter table than 150 means
+-- an older copy of this file, and an older copy is a green
 -- result that never looked at part of the schema. That reads like a pass and is
 -- not one.
 --
@@ -66,10 +67,11 @@ union all
 -- 0005_sale_integrity.sql added payment_incidents; 19 since 0006_enquiries.sql
 -- added contact_enquiries and newsletter_signups; 23 since 0007_lucky_scoop.sql
 -- added scoop_tiers, scoop_tier_products, scoop_packs and scoop_pack_items; 25
--- since 0013_returns.sql added order_returns and order_return_items. A new
--- table that forgets to enable RLS lands in `public` readable by the anon key,
--- so this count is deliberately exact rather than `>=`.
-select 'row-level security everywhere',    count(*) = 25 from pg_tables
+-- since 0013_returns.sql added order_returns and order_return_items; 26 since
+-- 0014_builder_pricing.sql added builder_pricing. A new table that forgets to
+-- enable RLS lands in `public` readable by the anon key, so this count is
+-- deliberately exact rather than `>=`.
+select 'row-level security everywhere',    count(*) = 26 from pg_tables
          where schemaname = 'public' and rowsecurity = true
 union all
 -- A client must never be able to write a review: the old policy let any
@@ -1367,6 +1369,55 @@ select 'an invented payment method is refused', (
          )
        );
 
+-- ------------------------------------------------- 0014 builder pricing
+--
+-- Unlike every other table that decides money, this one IS readable by the
+-- browser key, and that is deliberate: it holds the prices printed on the
+-- builder page a moment later. Writes stay with the service role.
+insert into _checks (check_name, pass)
+select 'the shop can read builder prices' as check,
+       has_table_privilege('anon', 'public.builder_pricing', 'select') as pass
+union all
+select 'anon cannot set a builder price',
+       not has_table_privilege('anon', 'public.builder_pricing', 'insert')
+union all
+select 'signed-in cannot set a builder price',
+       not has_table_privilege('authenticated', 'public.builder_pricing', 'update')
+union all
+select 'the studio can set builder prices',
+       has_table_privilege('service_role', 'public.builder_pricing', 'insert')
+union all
+-- A build priced at nothing is a giveaway, and "not priced yet" must not be
+-- expressible as 0 the way it is not on scoop_tiers.
+select 'a build cannot be priced at zero', (
+         select not exists (select 1 from public.builder_pricing where price_cents <= 0)
+       )
+union all
+-- The ladder the shop actually ships with. If this is empty the shopfront falls
+-- back to the figures compiled into lib/pricing/builder-fallback.ts, which is a
+-- correct response to a broken database and a silent one if nobody checks.
+select 'the letter ladder is seeded', (
+         select count(*) = 5 from public.builder_pricing where kind = 'letter_caps'
+       )
+union all
+select 'the first letter is $3.50', (
+         select price_cents = 350 from public.builder_pricing
+          where kind = 'letter_caps' and units = 1
+       )
+union all
+select 'the bakery box has one flat price', (
+         select count(*) = 1 from public.builder_pricing where kind = 'bakery_box'
+       )
+union all
+-- An invented builder cannot be priced, for the reason every enum here is a
+-- check: a value the Studio cannot produce did not come from the Studio.
+select 'an invented builder kind is refused', (
+         select not exists (
+           select 1 from public.builder_pricing
+            where kind not in ('letter_caps', 'bakery_box')
+         )
+       );
+
 -- Search is bounded: a lone wildcard must not match the whole catalogue.
 insert into _checks (check_name, pass)
 select 'search rejects a bare wildcard' as check,
@@ -1375,7 +1426,7 @@ union all
 select 'search ignores empty input',
        (select count(*) from public.search_products('   ')) = 0;
 
--- Every assertion, in one result set. `pass` must be `t` on all 141 rows.
+-- Every assertion, in one result set. `pass` must be `t` on all 150 rows.
 select check_name as check, pass from _checks order by ord;
 
 rollback;

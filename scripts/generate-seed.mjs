@@ -230,28 +230,43 @@ const PERSONALISED = new Set(Object.keys(PERSONALISATION));
  * page, the card and the JSON-LD all advertise a figure the builder can
  * actually charge.
  *
- * Read out of lib/config.ts rather than duplicated: a .mjs script can't import
- * the TypeScript module, but it can parse the one literal it needs, so editing
- * BUILDER_PRICING can't silently leave the catalogue advertising a price the
- * builder no longer offers.
+ * Read out of lib/pricing/builder-fallback.ts rather than duplicated: a .mjs
+ * script cannot import the TypeScript module, but it can parse the one literal
+ * it needs.
+ *
+ * ---------------------------------------------------------------------------
+ * THIS NUMBER IS A PLACEHOLDER AND NOTHING RENDERS IT.
+ *
+ * `products.price` is `not null`, and a builder product has no single price to
+ * put there: what a name charm costs depends on how many letters were spelled,
+ * and that ladder lives in the `builder_pricing` table (migration 0014).
+ *
+ * This used to write the ladder's cheapest rung and the shop used to RENDER it,
+ * which is how the catalogue came to advertise $4.00 on a product card while
+ * /collections, computing the same figure from the ladder, said $3.50. One
+ * product, two prices, from one source copied twice.
+ *
+ * `withBuilderPrices()` in lib/queries.ts now substitutes the ladder's cheapest
+ * rung on every shopfront read, so this column is no longer read for these
+ * rows. It is still filled with a plausible figure rather than a zero, because
+ * a 0 in a price column is one bad query away from being printed as "$0.00".
+ * ---------------------------------------------------------------------------
  */
 const BUILDER_FROM_PRICE = readBuilderFromPrice();
 
 function readBuilderFromPrice() {
-  const config = readFileSync(
-    path.resolve(import.meta.dirname, "..", "lib", "config.ts"),
+  const fallback = readFileSync(
+    path.resolve(import.meta.dirname, "..", "lib", "pricing", "builder-fallback.ts"),
     "utf8",
   );
-  const block = config.match(
-    /BUILDER_PRICING:\s*Record<number,\s*number>\s*=\s*\{([^}]*)\}/,
-  );
-  const prices = [...(block?.[1] ?? "").matchAll(/:\s*(\d+)/g)].map((m) =>
+  const block = fallback.match(/letter_caps:\s*\[([\s\S]*?)\]/);
+  const prices = [...(block?.[1] ?? "").matchAll(/priceCents:\s*(\d+)/g)].map((m) =>
     Number(m[1]),
   );
   if (prices.length === 0) {
     throw new Error(
-      "Could not read BUILDER_PRICING from lib/config.ts, builder products " +
-        "would be listed at a price the builder cannot charge.",
+      "Could not read BUILDER_PRICING_FALLBACK from lib/pricing/builder-fallback.ts. " +
+        "The builder products need a placeholder price for their not-null column.",
     );
   }
   return Math.min(...prices);
@@ -361,6 +376,8 @@ function priceFor(row) {
   // Builder charms are priced by letter count at checkout, so the catalogue
   // price is the cheapest bundle - never the sheet's flat figure, which the
   // builder can never charge.
+  // A placeholder for a not-null column that nothing renders. See the long
+  // note on BUILDER_FROM_PRICE above: the real ladder is in the database.
   if (PERSONALISATION[sku]?.mode === "builder") return BUILDER_FROM_PRICE;
 
   const my = Number(row["My price"]);

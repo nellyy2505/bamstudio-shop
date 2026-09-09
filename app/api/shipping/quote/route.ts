@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { BASKET_LIMITS, BUILDER_MAX_LETTERS, SHIPPING } from "@/lib/config";
+import { BASKET_LIMITS, SHIPPING } from "@/lib/config";
+import { BUILDER_UNITS_HARD_MAX } from "@/lib/pricing/builder-fallback";
 import { loadProductsBySlug, loadScoopTiersBySlug } from "@/lib/queries";
 import { clientKey, rateLimitDurable } from "@/lib/rate-limit";
 import { toShippingLines } from "@/lib/shipping/lines";
@@ -42,7 +43,13 @@ const LineSchema = z.object({
       letters: z
         .string()
         .min(1)
-        .max(BUILDER_MAX_LETTERS)
+        /*
+         * A rail on payload size, not the business rule. This route quotes
+         * postage and never prices a build, so the exact ladder is not its
+         * concern - what it must not do is let an unbounded string through to
+         * the weight arithmetic. Checkout applies the real limit.
+         */
+        .max(BUILDER_UNITS_HARD_MAX)
         .regex(/^[A-Za-z]+$/, "Letters only."),
       with_charm: z.boolean(),
     })

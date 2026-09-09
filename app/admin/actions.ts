@@ -916,6 +916,172 @@ export async function saveSettings(_prev: FormState, form: FormData): Promise<Fo
   });
 }
 
+/* ------------------------------------------------------ builder pricing */
+
+/**
+ * The letter ladder and the bakery box price, from the Studio.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * WHY THIS SCREEN EXISTS.
+ *
+ * These prices used to be `BUILDER_PRICING` in lib/config.ts, which made
+ * changing one a code edit, a commit, a push and a CI deploy. Every other price
+ * in this shop is a field; this one was a deployment. Worse, it got copied into
+ * `products.price` by the seed generator and the copy drifted, so the shop
+ * listed a name charm at $4.00 on its card and $3.50 on the collections page.
+ * ────────────────────────────────────────────────────────────────────────────
+ *
+ * "catalogue", the same capability as `saveProduct` and `savePrices`, because
+ * this is the same authority: the number a customer is charged.
+ *
+ * REPLACED WHOLESALE, not diffed. A rung removed from the form has to disappear
+ * from the ladder, and a diff that only handles adds is how a ladder ends up
+ * still selling a six-letter name nobody meant to offer. Same argument as the
+ * filament recipe in `saveProduct`.
+ */
+export async function saveBuilderPricing(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  return guard("catalogue", async () => {
+    const kind = text(form, "kind");
+    if (kind !== "letter_caps" && kind !== "bakery_box") {
+      return fail("Unknown builder.");
+    }
+
+    const unitList = form.getAll("units").map(String);
+    const priceList = form.getAll("price").map(String);
+
+    const rungs: { units: number; price: number }[] = [];
+    for (let i = 0; i < unitList.length; i += 1) {
+      const units = Number.parseInt(unitList[i] ?? "", 10);
+      const raw = (priceList[i] ?? "").trim();
+
+      // A blank price removes the rung. That is the only way to stop selling a
+      // length, and it is deliberate rather than a side effect: there is no
+      // other control on the screen that means "we do not sell this any more".
+      if (raw === "") continue;
+      if (!Number.isFinite(units) || units < 1) continue;
+
+      const price = dollarsToCents(raw);
+      if (price === null) return fail(`"${raw}" is not a price. Nothing was saved.`);
+      if (price <= 0) {
+        return fail(
+          `A price of $0 would give it away. Clear the box to stop selling ` +
+            `${units} instead. Nothing was saved.`,
+        );
+      }
+      if (price > MAX_PRICE_CENTS) {
+        return fail(`${money(price)} looks like a typo. Nothing was saved.`);
+      }
+      if (rungs.some((r) => r.units === units)) {
+        return fail(`${units} is listed twice. Nothing was saved.`);
+      }
+      rungs.push({ units, price });
+    }
+
+    /*
+     * A ladder with no rungs at all is refused. The shop treats an empty ladder
+     * as "the database cannot answer" and serves the code fallback, so saving
+     * one would not take the builder off sale, it would silently roll every
+     * price back to whatever was compiled in at the last deploy. Turning a
+     * builder off is a different action from pricing it, and it does not exist
+     * yet, so this says so rather than pretending.
+     */
+    if (rungs.length === 0) {
+      return fail(
+        "A builder needs at least one price. Clearing them all does not take " +
+          "it off sale, it makes the shop fall back to the prices in the code.",
+      );
+    }
+
+    const admin = createAdminClient();
+
+    const { error: clearError } = await admin
+      .from("builder_pricing")
+      .delete()
+      .eq("kind", kind);
+    if (clearError) return fail(friendly(clearError.message));
+
+    const { error } = await admin.from("builder_pricing").insert(
+      rungs.map((rung) => ({
+        kind,
+        units: rung.units,
+        price_cents: rung.price,
+        updated_at: new Date().toISOString(),
+      })),
+    );
+    if (error) return fail(friendly(error.message));
+
+    // Everything that quotes a build. /build and /builder are the builder
+    // itself; /collections and /shop print the "from" price; a builder
+    // product's own page prints it and its structured data.
+    revalidatePath("/builder");
+    revalidatePath("/build");
+    revalidatePath("/collections");
+    revalidatePath("/shop");
+    revalidatePath("/admin/settings");
+
+    /*
+     * Which products these are is asked of the database, not held in a list
+     * here. A constant naming the builder products would be one more copy of a
+     * fact the `products` table already holds, which is the exact mistake this
+     * whole change exists to undo.
+     */
+    const { data: builderProducts } = await admin
+      .from("products")
+      .select("slug")
+      .eq("personalisation_mode", "builder");
+    for (const row of builderProducts ?? []) {
+      revalidatePath(`/product/${row.slug as string}`);
+    }
+
+    return ok(
+      `Saved. ${pluralise(rungs.length, "price")} on the ${
+        kind === "letter_caps" ? "letter ladder" : "bakery box"
+      }.`,
+    );
+  });
+}
+
+/**
+ * The charm discount, which is one number and not a ladder.
+ *
+ * Saved by the settings form alongside the other money constants rather than
+ * here; this action exists only so the builder-pricing panel can carry it too,
+ * because a person changing what a charm costs inside the builder is looking at
+ * the builder's prices, not at the printer's electricity.
+ */
+export async function saveCharmDiscount(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  return guard("catalogue", async () => {
+    const discount = dollarsToCents(text(form, "charm_discount"));
+    if (discount === null) {
+      return fail("The discount has to be an amount, like 1.50.");
+    }
+    if (discount > MAX_PRICE_CENTS) {
+      return fail(`${money(discount)} looks like a typo. Nothing was saved.`);
+    }
+
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("shop_settings")
+      .update({
+        builder_charm_discount_cents: discount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", true);
+    if (error) return fail(friendly(error.message));
+
+    revalidatePath("/builder");
+    revalidatePath("/build");
+    revalidatePath("/admin/settings");
+    return ok(`Saved. A charm now costs ${money(discount)} less inside a build.`);
+  });
+}
+
 /* ---------------------------------------------------------------- orders */
 
 /**
