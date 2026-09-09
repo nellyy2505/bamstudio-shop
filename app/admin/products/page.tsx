@@ -167,7 +167,7 @@ export default async function ProductsPage({
                      * This used to be `price * (1 - cardFeeRate) - cost`, which
                      * left out the fixed 30c of every card payment and all of
                      * the postage the studio absorbs, so it read about eight
-                     * points high on a $6.49 piece. The margin on this list, on
+                     * points high on a $6.50 piece. The margin on this list, on
                      * the product page and on the repricing screen now all come
                      * from the same function the workbook was checked against.
                      */

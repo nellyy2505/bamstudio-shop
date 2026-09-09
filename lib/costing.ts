@@ -188,7 +188,7 @@ export function stallShare(s: CostSettings): number {
  * Dollars per printer-hour the year needs. Workbook Settings!C111.
  *
  * Set from the business, deliberately not from a product: when the macaron was
- * cut from $9.00 to $6.49, a bar derived from a product price would have
+ * cut from $9.00 to $6.50, a bar derived from a product price would have
  * quietly lowered the standard for the whole catalogue at the same moment.
  */
 export function targetPerPrinterHour(s: CostSettings): number {
@@ -372,7 +372,7 @@ export function suggestedPrice(s: CostSettings, costCents: number): number | nul
  * This is the honest counterpart to `suggestedPrice`: that one asks "what
  * should this cost", this one asks "at the price on the shelf, what is left".
  * The two disagree all over the catalogue and the disagreement is the point -
- * the macaron at $6.49 against a suggestion of $8.50 is a decision, and a
+ * the macaron at $6.50 against a suggestion of $8.50 is a decision, and a
  * screen that only showed the suggestion would hide it.
  *
  * The card fee and the postage come off the *price*, not off the margin,

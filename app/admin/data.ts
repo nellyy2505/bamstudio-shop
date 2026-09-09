@@ -585,6 +585,9 @@ export type RepricingBoard = {
   targetMargin: number;
   /** The printer-hour bar, in cents per hour. */
   barPerHour: number;
+  /** `shop_settings.round_price_to_cents`, so the screen can round the way the
+      suggestions already do rather than inventing its own step. */
+  roundToCents: number;
   /** How many rows still sit at the price the catalogue was seeded with. */
   atSeedPrice: number;
   /** The seed price itself, if a suspicious number of rows share one. */
@@ -689,6 +692,7 @@ export async function getRepricingBoard(
     terms,
     targetMargin: settings.targetMargin,
     barPerHour: targetPerPrinterHour(settings),
+    roundToCents: settings.roundPriceToCents > 0 ? settings.roundPriceToCents : 1,
     atSeedPrice,
     seedPrice,
   };

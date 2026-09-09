@@ -121,7 +121,15 @@ near("macaron, suggested online (Y6)", m.suggestedPriceForChannel(S, mac.total, 
 near("macaron, suggested stall (AG6)", m.suggestedPriceForChannel(S, mac.total, m.stallShare(S)), 750);
 near("macaron, ONE PRICE (AI6)", m.suggestedPrice(S, mac.total), 850);
 
-// At the $6.49 she actually charges, against a suggestion of $8.50.
+// At the $6.49 the WORKBOOK holds in Z6, against a suggestion of $8.50.
+//
+// Deliberately still 6.49, and not the $6.50 the shop is being priced at. Every
+// `want` on the six lines below is a cell Excel computed from Z6=6.49, so moving
+// the input here would compare the code against numbers the sheet never
+// produced. This block checks that the code reproduces the workbook; what the
+// shop charges is set in the Studio and is not this file's business. When the
+// workbook is next saved with 6.50 in Z6, re-read the cells rather than nudging
+// these by hand.
 const at649 = m.costAtPrice(m.priceTerms(S), 649, mac.total);
 near("macaron at $6.49, card fee (AP6)", at649.cardFee, 41.033);
 near("macaron at $6.49, postage absorbed (AQ6)", at649.postage, 72.9213483146067, 1e-4);

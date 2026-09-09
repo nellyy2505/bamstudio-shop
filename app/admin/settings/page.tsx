@@ -726,7 +726,7 @@ function ChannelWorking({ settings }: { settings: Settings }) {
  * The bar every product is judged against, alongside margin.
  *
  * Set from the business and deliberately NOT from a product's price: when the
- * macaron was cut from $9.00 to $6.49, a bar derived from a product would have
+ * macaron was cut from $9.00 to $6.50, a bar derived from a product would have
  * quietly lowered the standard for the whole catalogue at the same moment.
  */
 function BarWorking({ settings }: { settings: Settings }) {

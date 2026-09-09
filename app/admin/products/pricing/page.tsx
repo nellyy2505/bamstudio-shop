@@ -201,6 +201,7 @@ export default async function RepricingPage({
                 terms={board.terms}
                 targetMargin={board.targetMargin}
                 barPerHour={board.barPerHour}
+                roundToCents={board.roundToCents}
               />
               <div className="flex flex-wrap items-center gap-4 border-t border-line pt-5">
                 <SubmitButton size="md">Save these prices</SubmitButton>

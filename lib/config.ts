@@ -282,9 +282,11 @@ export const PERSONALISATION_TEXT_PATTERN = /^[A-Za-z0-9 '&.\-/]+$/;
  * bag of its own, no second fixed card fee - and the rest is bought goodwill
  * and basket size, which the postage bands then pay back, since a bigger basket
  * walks toward `SHIPPING.subsidyThreshold`. Worth knowing before it moves
- * again: at the macaron's $6.49 the standalone earns roughly the
- * $3.33/printer-hour bar and nothing more, so every cent of this comes out of a
- * product with no headroom.
+ * again: at the macaron's $6.50 the standalone earns $2.98 against the
+ * $3.33/printer-hour bar, so every cent of this comes out of a product that is
+ * already under the bar. It does at least land on round money: $6.50 less
+ * $1.50 is a $5.00 add-on, which is one fewer awkward number on a stall
+ * table.
  */
 export const BUILDER_CHARM_BUNDLE_DISCOUNT = 150;
 

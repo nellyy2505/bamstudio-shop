@@ -1604,7 +1604,7 @@ export async function recordReturn(_prev: FormState, form: FormData): Promise<Fo
 
     const refund = dollarsToCents(text(form, "refund_amount"));
     if (refund === null) {
-      return fail("The refund has to be an amount, like 6.49, or 0 if none went back.");
+      return fail("The refund has to be an amount, like 6.50, or 0 if none went back.");
     }
 
     const admin = createAdminClient();

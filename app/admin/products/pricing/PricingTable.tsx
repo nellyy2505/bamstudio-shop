@@ -13,7 +13,7 @@ import type { RepricingRow } from "../../data";
  * WHY THIS IS A CLIENT COMPONENT, WHEN ALMOST NOTHING ELSE IN THE STUDIO IS.
  *
  * Because the point of the screen is the answer arriving before the save does.
- * Typing 6.49 and seeing 61.8% and $2.97 an hour appear next to it is the whole
+ * Typing 6.50 and seeing 61.9% and $2.98 an hour appear next to it is the whole
  * job: a suggested price is a starting point, and every price in this catalogue
  * is a decision to depart from it. A server round trip per keystroke would make
  * that unusable, and saving first and reading the consequence afterwards is how
@@ -36,11 +36,14 @@ export function PricingTable({
   terms,
   targetMargin,
   barPerHour,
+  roundToCents,
 }: {
   rows: RepricingRow[];
   terms: PriceTerms;
   targetMargin: number;
   barPerHour: number;
+  /** The step to round to, from Settings. 50 is "to the nearest 50c". */
+  roundToCents: number;
 }) {
   /*
    * Keyed by product id, holding what is in the box as a STRING.
@@ -75,6 +78,31 @@ export function PricingTable({
     });
   };
 
+  /*
+   * Round every box UP to the nearest step, never down.
+   *
+   * Up, because rounding a price down gives away margin on a catalogue that
+   * already sits under the printer-hour bar, and because it is what
+   * `suggestedPrice` does: a suggestion has always been CEILINGed to this same
+   * step, so a hand-set price rounded the same way lands on the same grid
+   * rather than a cent below it.
+   *
+   * It works on what is in the boxes, not on what is saved, so it composes with
+   * the button above it: fill every row with its suggestion, round, then adjust
+   * the two you disagree with, and save once.
+   */
+  const roundUp = () => {
+    setDraft((current) => {
+      const next = { ...current };
+      for (const row of rows) {
+        const typed = parse(current[row.id]);
+        if (typed === null || typed <= 0) continue;
+        next[row.id] = dollars(Math.ceil(typed / roundToCents) * roundToCents);
+      }
+      return next;
+    });
+  };
+
   const reset = () =>
     setDraft(Object.fromEntries(rows.map((row) => [row.id, dollars(row.price)])));
 
@@ -87,6 +115,13 @@ export function PricingTable({
           className={`${inputClass} !w-auto cursor-pointer px-4 font-display text-[13.5px] font-semibold`}
         >
           Fill every row with its suggestion
+        </button>
+        <button
+          type="button"
+          onClick={roundUp}
+          className={`${inputClass} !w-auto cursor-pointer px-4 font-display text-[13.5px] font-semibold`}
+        >
+          Round up to the nearest {roundToCents}c
         </button>
         <button
           type="button"

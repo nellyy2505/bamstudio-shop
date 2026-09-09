@@ -234,7 +234,7 @@ function Row({
  * "at what I charge, what is left, and where did the rest go".
  *
  * The two questions disagree all over this catalogue and the disagreement is the
- * point. The macaron sells at $6.49 against a suggestion of $8.50, which is a
+ * point. The macaron sells at $6.50 against a suggestion of $8.50, which is a
  * decision that was made with reasons; a screen showing only the suggestion
  * would hide it, and a screen showing only the margin would hide what it cost.
  *
