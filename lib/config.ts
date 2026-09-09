@@ -165,32 +165,95 @@ export const GST_DIVISOR = 11;
 /**
  * The letter caps, by how many the customer spelled. **Caps only** - no charm.
  *
- * $3.99 for the first letter, $1.49 for each one after. Identical across every
- * colourway so the stall never has to price on the fly.
+ * $3.50 for the first letter, $1.00 for each one after, and 50c for the fifth.
+ * Identical across every colourway so the stall never has to price on the fly.
  *
- * The shape of this ladder is the point. The old one earned less per
- * printer-hour the longer the name got, which penalised exactly the customers
- * who spent most. This one is close to flat at every length, because the first
- * letter carries the holder and each one after carries only itself.
+ * WHAT THIS LADDER COSTS, because it is a deliberate choice and the previous
+ * one was chosen for the opposite reason.
  *
- * It sits under the workbook's own $3.33/printer-hour bar - clearing that would
- * need roughly $4.07 then $1.81. This is the ladder that was chosen, and the
- * gap is recorded here rather than hidden: a five-letter name is a little over
- * two hours of machine time, and machine time, not price, is what limits the
+ * A marginal letter is about 21 minutes of machine time and 40c of filament and
+ * clicker. Against the workbook's $3.33 printer-hour bar:
+ *
+ *   letters        price    margin    $ per printer-hour
+ *   1              $3.50    50.2%     $2.60
+ *   2              $4.50    49.5%     $2.17
+ *   3              $5.50    49.1%     $1.95
+ *   4              $6.50    48.8%     $1.83
+ *   5              $7.00    45.8%     $1.54
+ *
+ * and the marginal letter on its own earns $1.34 an hour at $1.00, and **10c an
+ * hour at 50c** - three and a half cents of profit for 21 minutes of printing.
+ *
+ * THE SHAPE IS NOW THE OTHER WAY UP. The ladder this replaced ran 54.7% to
+ * 58.0% and $3.24 to $2.77, close to flat, and was built that way on purpose
+ * because the one before it earned less per printer-hour the longer the name
+ * got, which penalised exactly the customers who spent most. This one does that
+ * again and more steeply: margin and dollars per hour both fall with every
+ * letter, and a five-letter name is a little over two hours of machine time for
+ * $3.20 of profit.
+ *
+ * Recorded rather than argued. It is a price the owner set, the numbers are
+ * here so nobody has to rediscover them, and machine time is what limits the
  * year. See `claude/planner-workbook-fixes.md`.
+ *
+ * NOTE FOR WHOEVER EDITS THIS: `scripts/generate-seed.mjs` reads this table out
+ * of this file with a regular expression, because it cannot import TypeScript.
+ * Keep it a plain object literal on these lines or the seed generator will stop
+ * finding it and say so rather than guessing.
  */
 export const BUILDER_PRICING: Record<number, number> = {
-  1: 399,
-  2: 548,
-  3: 697,
-  4: 846,
-  5: 995,
+  1: 350,
+  2: 450,
+  3: 550,
+  4: 650,
+  5: 700,
 };
 
 export const BUILDER_MAX_LETTERS = 5;
 
 /** Cheapest a builder charm can be - the honest "from" price to advertise. */
 export const BUILDER_FROM_PRICE = Math.min(...Object.values(BUILDER_PRICING));
+
+/*
+ * The ladder, as the three numbers copy actually needs, derived from the table
+ * above so a price change cannot leave a sentence behind.
+ *
+ * This used to be a hardcoded "$3.99 for the first letter, $1.49 for each
+ * after" in the builder page's metadata AND a second copy computed in its
+ * heading, which is two places to update and one of them somewhere nobody
+ * looks. `BUILDER_STEP` reads the first step; `BUILDER_FINAL_STEP` reads the
+ * last, and they differ now, which is exactly why copy must not say "each one
+ * after" and stop there.
+ *
+ * `BUILDER_STEP` assumes every step from the second letter to the second-last
+ * is the same, which is true of this ladder by construction. If that ever stops
+ * being true, the sentence below has to grow a case rather than quietly
+ * describing only the first step.
+ */
+export const BUILDER_FIRST_LETTER = BUILDER_PRICING[1];
+export const BUILDER_STEP = BUILDER_PRICING[2] - BUILDER_PRICING[1];
+export const BUILDER_FINAL_STEP =
+  BUILDER_PRICING[BUILDER_MAX_LETTERS] - BUILDER_PRICING[BUILDER_MAX_LETTERS - 1];
+
+/**
+ * The ladder in one sentence, for the places that sell it.
+ *
+ * The last clause appears only when the final letter really is priced
+ * differently, so flattening the ladder later drops it automatically instead of
+ * leaving a claim about a discount that no longer exists.
+ */
+export function builderLadderSentence(): string {
+  const dollars = (cents: number) =>
+    cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`;
+
+  const base = `${dollars(BUILDER_FIRST_LETTER)} for the first letter, ${dollars(
+    BUILDER_STEP,
+  )} for each one after`;
+
+  return BUILDER_FINAL_STEP === BUILDER_STEP
+    ? base
+    : `${base}, and just ${dollars(BUILDER_FINAL_STEP)} for the last one`;
+}
 
 /**
  * How a product collects its personalisation.

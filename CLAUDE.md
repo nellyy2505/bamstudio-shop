@@ -379,10 +379,17 @@ the full table.
   `isSubsidisedShipping()`, because `!isFreeShipping()` is also true of a basket
   paying in full.
 - **The name builder sells letter caps alone; the charm is an opt-in extra.**
-  `BUILDER_PRICING` is caps only - $3.99 for the first letter, $1.49 for each
-  after. The charm is **off by default** and priced at its own product's price
-  less `BUILDER_CHARM_BUNDLE_DISCOUNT`, resolved through `collections.charm_slug`
-  (0009). **Never store a charm's price on the collection.** A copied price
+  `BUILDER_PRICING` is caps only - $3.50 for the first letter, $1.00 for each
+  after, and 50c for the fifth. **It is the one source, and copy must be built
+  from it, never typed out.** Two sentences described this ladder in words and
+  both had to be found by hand when it moved: a string literal in the builder
+  page's metadata, which is a price in search results and social previews, and a
+  heading that computed the step from the first two rungs and so said "each one
+  after" when the last step is different. Both now come from
+  `builderLadderSentence()`, which drops the final clause by itself if the
+  ladder is ever flattened again. The charm is **off by default** and priced at
+  its own product's price less `BUILDER_CHARM_BUNDLE_DISCOUNT`, resolved through
+  `collections.charm_slug` (0009). **Never store a charm's price on the collection.** A copied price
   drifts the first time the charm is repriced, silently, and in whichever
   direction the charm moved. One product, one price, wherever it is sold.
 - **Overselling is allowed, and must stay visible.** The shop prints to order.

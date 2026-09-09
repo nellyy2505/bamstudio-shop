@@ -4,19 +4,31 @@ import { Icon, Pill } from "@/components/ui";
 import { getCollections, getProducts } from "@/lib/queries";
 import {
   builderCharmPrice,
-  BUILDER_PRICING,
+  builderLadderSentence,
   PRINT_LEAD_TIME,
 } from "@/lib/config";
-import { money } from "@/lib/format";
 import { selfCanonical } from "../seo";
 
 export const revalidate = 300;
 
+/** The ladder sentence starts a sentence here and continues one below. */
+function capitalise(sentence: string): string {
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
 export const metadata: Metadata = {
   ...selfCanonical("/builder"),
   title: "Design your own name charm",
-  description:
-    "Pick a colourway and spell a name in printed letter caps. $3.99 for the first letter, $1.49 for each after, and a matching charm for less than it costs on its own. Made to order in Wollongong.",
+  /*
+   * Built from the ladder rather than typed out. This sentence held
+   * "$3.99 for the first letter, $1.49 for each after" as a string literal,
+   * which is a price in a search result and a social preview that nobody would
+   * think to update when the ladder moved. It is also the second copy of a
+   * sentence the page heading already computes.
+   */
+  description: `Pick a colourway and spell a name in printed letter caps. ${capitalise(
+    builderLadderSentence(),
+  )}, and a matching charm for less than it costs on its own. Made to order in Wollongong.`,
 };
 
 const STEPS = [
@@ -109,10 +121,12 @@ export default async function BuilderPage({
             Design your own {anchor.short_name.toLowerCase()}
           </h1>
           <p className="mx-auto max-w-2xl text-[#5F5769] md:text-base">
-            Pick a collection and spell it out. {money(BUILDER_PRICING[1])} for
-            the first letter, {money(BUILDER_PRICING[2] - BUILDER_PRICING[1])}{" "}
-            for each one after, and every colourway costs the same. Add the
-            matching charm if you want one.
+            {/* One sentence, one source. This used to compute the step from the
+                first two rungs of the ladder, which said "for each one after"
+                and was true of every step but the last. */}
+            Pick a collection and spell it out. {capitalise(builderLadderSentence())},
+            and every colourway costs the same. Add the matching charm if you
+            want one.
           </p>
         </div>
       </div>
