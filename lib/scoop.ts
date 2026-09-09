@@ -337,9 +337,10 @@ export function scoopCostBasis(
 
 /**
  * The price this tier might be worth, run through the shop's own costing rules:
- * the pool's average measured cost × the piece count, then
- * `suggestedPrice()` - cover the cost, the target margin and the card fee,
- * round up to the nearest 50c.
+ * the pool's average measured cost × the piece count, then `suggestedPrice()` -
+ * cover the cost, the target margin, both halves of the card fee and the
+ * postage the studio absorbs, whichever channel is worse, and round up to the
+ * nearest 50c.
  *
  * A SUGGESTION, NEVER A VALUE. It belongs beside the price field in the studio,
  * the way `costProduct()`'s suggestion sits beside a product's, and it is never
@@ -363,6 +364,13 @@ export function scoopCostBasis(
  * packing decision nobody has made. The per-order mailer is NOT added: it is
  * charged once per posted order and never inside a unit cost, which is what
  * `shop_settings.mailer_per_order_cents` says.
+ *
+ * THE SAME NOW GOES FOR OVERHEAD. Since migration 0012 a piece's `unitCost()`
+ * carries its share of the annual insurance, permits and equipment pools, so a
+ * five-piece scoop carries five shares. That is right: five pieces left the
+ * studio and the year's overhead is spread over units sold, not over parcels
+ * posted. The fixed half of the card fee is the opposite case and is added once,
+ * by `suggestedPrice()`, because one scoop is one payment.
  */
 export function suggestedTierPrice(
   settings: CostSettings,

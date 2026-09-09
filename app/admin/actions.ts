@@ -9,6 +9,8 @@ import { getOrderScoops, MEASURE_COLOUR_SLOTS, unitCostsAtSale } from "./data";
 import { activationBlockers, packCost } from "@/lib/scoop";
 import { SCOOP_THEMES, type ScoopTheme } from "@/lib/types";
 import { siteUrl } from "@/lib/stripe";
+import { SHIPPING } from "@/lib/config";
+import { money } from "@/lib/format";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import {
   hashToken,
@@ -221,6 +223,150 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
     revalidatePath(`/product/${slug}`);
 
     return ok(id ? "Saved." : "Product created.");
+  });
+}
+
+/**
+ * Many prices at once, from the repricing screen.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * WHY A BULK WRITE IS A DIFFERENT ANIMAL FROM saveProduct.
+ *
+ * `saveProduct` writes one row and the person is looking at that row. Here she
+ * is looking at forty-four, so three things that do not matter on a single form
+ * matter a great deal:
+ *
+ *   1. ONLY CHANGED ROWS ARE WRITTEN. Every row posts its old price in a
+ *      `was_` field alongside the new one, and a row whose price has not moved
+ *      is not touched at all. Writing all forty-four would bump `updated_at` on
+ *      the whole catalogue and make the history useless for answering "when did
+ *      this price change".
+ *   2. A BLANK FIELD MEANS LEAVE IT ALONE, not zero. On a form with one price
+ *      field, clearing it is obviously deliberate. On a grid of forty-four, a
+ *      blank is a field that got cleared by accident, and `Number("")` is 0 -
+ *      which would put a product in the shop for nothing. Blank is skipped and
+ *      the row keeps its price.
+ *   3. NOTHING IS SAVED IF ANYTHING IS WRONG. The validation pass runs over
+ *      every row before the first write. A screen that saved the first twelve
+ *      rows and then reported a typo on the thirteenth would leave her with no
+ *      way to know which half of the grid on her screen is now the truth.
+ * ────────────────────────────────────────────────────────────────────────────
+ *
+ * "catalogue", the same capability as `saveProduct`, for the same reason: this
+ * writes the number every margin in the shop is measured against.
+ */
+const MAX_PRICE_CENTS = 99999;
+
+export async function savePrices(_prev: FormState, form: FormData): Promise<FormState> {
+  return guard("catalogue", async () => {
+    const changes: { id: string; price: number }[] = [];
+    const problems: string[] = [];
+
+    for (const [key, value] of form.entries()) {
+      if (!key.startsWith("price_")) continue;
+      if (typeof value !== "string") continue;
+
+      const id = key.slice("price_".length);
+      const label = text(form, `sku_${id}`) || "a product";
+      const raw = value.trim();
+
+      // Blank is "leave this one alone". See note 2 above.
+      if (raw === "") continue;
+
+      const price = dollarsToCents(raw);
+      if (price === null) {
+        problems.push(`${label}: "${raw}" is not a price`);
+        continue;
+      }
+      if (price <= 0) {
+        problems.push(`${label}: a price of $0 would give the piece away`);
+        continue;
+      }
+      if (price > MAX_PRICE_CENTS) {
+        // Almost always a slipped decimal point, which is invisible in a grid.
+        problems.push(`${label}: ${money(price)} looks like a typo`);
+        continue;
+      }
+
+      const was = dollarsToCents(text(form, `was_${id}`));
+      if (was !== null && was === price) continue;
+
+      changes.push({ id, price });
+    }
+
+    if (problems.length > 0) {
+      return fail(
+        `Nothing was saved. ${problems.slice(0, 4).join("; ")}` +
+          (problems.length > 4 ? `; and ${problems.length - 4} more` : ""),
+      );
+    }
+    if (changes.length === 0) return ok("No prices had changed, so nothing was saved.");
+
+    const admin = createAdminClient();
+
+    /*
+     * One update per changed row. There is no bulk update in PostgREST that
+     * sets a different value per row, and `upsert` is the wrong tool: its
+     * insert path would need every not-null column on `products`, so a mistyped
+     * id would create a half-built product rather than failing.
+     *
+     * Run together rather than in sequence - forty-four sequential round trips
+     * to Supabase is several seconds of a person watching a spinner - but
+     * collected rather than raced, so a single failure is reported as itself
+     * instead of rejecting the batch and hiding the other forty-three.
+     */
+    const results = await Promise.all(
+      changes.map(async (change) => {
+        const { error } = await admin
+          .from("products")
+          .update({ price: change.price })
+          .eq("id", change.id);
+        return { change, error };
+      }),
+    );
+
+    const failures = results.filter((r) => r.error);
+    const saved = results.length - failures.length;
+
+    /*
+     * Revalidate each changed product's own page, using slugs read back from
+     * the database rather than slugs posted by the form. The form's hidden
+     * fields are staff-supplied and harmless here, but a path to revalidate is
+     * still a value from a client deciding what the server does with its cache,
+     * and reading them back costs one query.
+     */
+    if (saved > 0) {
+      const { data } = await admin
+        .from("products")
+        .select("slug")
+        .in("id", results.filter((r) => !r.error).map((r) => r.change.id));
+
+      revalidatePath("/admin/products");
+      revalidatePath("/admin/products/pricing");
+      revalidatePath("/admin/inventory");
+      revalidatePath("/admin/reports");
+      revalidatePath("/shop");
+      for (const row of data ?? []) revalidatePath(`/product/${row.slug as string}`);
+
+      /*
+       * The letter builder reads a charm's price live from its product row
+       * (collections.charm_slug, migration 0009), so repricing a charm reprices
+       * the add-on in the same breath. Its pages have to be dropped too or the
+       * builder quotes yesterday's charm.
+       */
+      revalidatePath("/build");
+    }
+
+    if (failures.length > 0) {
+      return fail(
+        `${saved} price${saved === 1 ? "" : "s"} saved, but ${failures.length} failed: ` +
+          friendly(failures[0].error?.message ?? "unknown error"),
+      );
+    }
+
+    return ok(
+      `${saved} price${saved === 1 ? "" : "s"} saved. Every margin has been recalculated.`,
+    );
   });
 }
 
@@ -673,10 +819,35 @@ export async function saveSettings(_prev: FormState, form: FormData): Promise<Fo
     if (!Number.isFinite(cardFee) || cardFee < 0 || cardFee >= 1) {
       return fail("The card fee has to be between 0 and 100 per cent.");
     }
-    if (margin + cardFee >= 1) {
+    const waste = Number(text(form, "waste_rate")) / 100;
+    if (!Number.isFinite(waste) || waste < 0 || waste >= 1) {
+      return fail("The waste allowance has to be between 0 and 100 per cent.");
+    }
+
+    /*
+     * The channel shares are not typed in, they are derived - postage from the
+     * parcel cost over the free-postage threshold in lib/config.ts, the stall
+     * cut from the fee over a day's takings. They still have to be checked
+     * here, because the suggested price divides by
+     * `1 - margin - card% - channel%` and a divisor at or below zero is a
+     * catalogue with no price that satisfies it. Refusing the save is the only
+     * place this can be caught before it reaches every product at once.
+     */
+    const parcelCost = intOr(form, "parcel_cost_cents", 0);
+    const stallFee = intOr(form, "stall_fee_cents", 0);
+    const takings = intOr(form, "market_day_takings_cents", 0);
+    if (takings <= 0) {
+      return fail("Typical takings for a market day have to be more than zero.");
+    }
+    const postageShare = parcelCost / SHIPPING.freeThreshold;
+    const stallShareRate = stallFee / takings;
+    const worstChannel = Math.max(postageShare, stallShareRate);
+
+    if (margin + cardFee + worstChannel >= 1) {
       return fail(
-        "The margin and the card fee add up to 100 per cent or more, so there is no price " +
-          "that satisfies both. Lower the margin.",
+        "The margin, the card fee and the channel cost add up to 100 per cent or more, so " +
+          "there is no price that satisfies them. The worst channel is currently " +
+          `${Math.round(worstChannel * 1000) / 10} per cent. Lower the margin.`,
       );
     }
 
@@ -709,6 +880,21 @@ export async function saveSettings(_prev: FormState, form: FormData): Promise<Fo
         default_buffer_stock: intOr(form, "default_buffer_stock", 5),
         packaging_per_unit_cents: Number(text(form, "packaging_per_unit_cents")) || 0,
         mailer_per_order_cents: Number(text(form, "mailer_per_order_cents")) || 0,
+
+        // The rest of the cost model, migration 0012.
+        card_fee_fixed_cents: Number(text(form, "card_fee_fixed_cents")) || 0,
+        waste_rate: waste,
+        annual_fixed_cost_cents: dollarsToCents(text(form, "annual_fixed_cost")) ?? 0,
+        annual_depreciation_cents: dollarsToCents(text(form, "annual_depreciation")) ?? 0,
+        // Guarded above zero because both overhead pools divide by it.
+        expected_units_per_year: Math.max(1, intOr(form, "expected_units_per_year", 1500)),
+        parcel_cost_cents: parcelCost,
+        stall_fee_cents: stallFee,
+        market_day_takings_cents: takings,
+        printer_hours_per_year: Math.max(1, intOr(form, "printer_hours_per_year", 2400)),
+        annual_contribution_target_cents:
+          dollarsToCents(text(form, "annual_contribution_target")) ?? 0,
+
         updated_at: new Date().toISOString(),
       })
       .eq("id", true);
@@ -717,7 +903,9 @@ export async function saveSettings(_prev: FormState, form: FormData): Promise<Fo
 
     revalidatePath("/admin/settings");
     revalidatePath("/admin/products");
+    revalidatePath("/admin/products/pricing");
     revalidatePath("/admin/inventory");
+    revalidatePath("/admin/scoops");
     return ok("Saved. Every unit cost has been recalculated.");
   });
 }

@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { unitCost, type CostSettings } from "@/lib/costing";
+import { SHIPPING } from "@/lib/config";
 
 /**
  * The studio's cost basis: the costing constants, the accessory prices, and
@@ -128,6 +129,38 @@ function toSettings(data: unknown): Settings {
     packagingPerUnitCents: num("packaging_per_unit_cents"),
     defaultBufferStock: num("default_buffer_stock", 5),
     mailerPerOrderCents: num("mailer_per_order_cents"),
+
+    /*
+     * The rest of the cost model (migration 0012).
+     *
+     * The fallbacks are the migration's own defaults rather than zeros. A zero
+     * here does not read as "not configured", it reads as a business with no
+     * insurance, no waste and no equipment - which is the flattering answer,
+     * and the one that would quietly reprice the whole catalogue downward if
+     * this code ever ran against a database where 0012 had not landed.
+     * `expectedUnitsPerYear` and the two divisors below especially: zero there
+     * is a division by zero, guarded in costing.ts, and the guard returns 0.
+     */
+    cardFeeFixedCents: num("card_fee_fixed_cents", 30),
+    wasteRate: num("waste_rate", 0.12),
+    annualFixedCostCents: num("annual_fixed_cost_cents", 30000),
+    annualDepreciationCents: num("annual_depreciation_cents", 3400),
+    expectedUnitsPerYear: num("expected_units_per_year", 1500),
+    parcelCostCents: num("parcel_cost_cents", 1000),
+
+    /*
+     * Derived, never stored. The three postage bands live in SHIPPING in
+     * lib/config.ts, where the cart and /api/checkout both read them, so that
+     * `shippingCharge()` and the price a piece is costed at cannot drift apart.
+     * A `free_postage_threshold_cents` column would be a second answer to a
+     * question that already has one.
+     */
+    freePostageThresholdCents: SHIPPING.freeThreshold,
+
+    stallFeeCents: num("stall_fee_cents", 5000),
+    marketDayTakingsCents: num("market_day_takings_cents", 60000),
+    printerHoursPerYear: num("printer_hours_per_year", 2400),
+    annualContributionTargetCents: num("annual_contribution_target_cents", 800000),
   };
 }
 

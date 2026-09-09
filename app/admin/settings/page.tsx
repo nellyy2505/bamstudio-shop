@@ -3,12 +3,19 @@ import { saveAccessory, saveSettings } from "../actions";
 import { getAccessories, getSettings, type Accessory, type Settings } from "../data";
 import { AdminForm, SubmitButton } from "../AdminForm";
 import { NoRows, PageHead, Panel, Unknown } from "../ui";
-import { Field, Pill, inputClass } from "@/components/ui";
+import { Field, Pill, cx, inputClass } from "@/components/ui";
 import {
+  depreciationSharePerUnit,
+  insuranceSharePerUnit,
   machineAndPowerPerHour,
   machineCostPerHour,
+  onlinePostageShare,
+  overheadPerUnit,
   powerCostPerHour,
+  stallShare,
+  targetPerPrinterHour,
 } from "@/lib/costing";
+import { SHIPPING } from "@/lib/config";
 import { money } from "@/lib/format";
 
 /**
@@ -169,6 +176,22 @@ export default async function SettingsPage() {
             </Field>
 
             <Field
+              label="Card fee, fixed (cents)"
+              htmlFor="card_fee_fixed_cents"
+              hint="Stripe AU takes 30c on top of the percentage, on every single sale."
+            >
+              <input
+                id="card_fee_fixed_cents"
+                name="card_fee_fixed_cents"
+                type="number"
+                min={0}
+                step="0.0001"
+                defaultValue={trim(settings.cardFeeFixedCents.toFixed(4))}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field
               label="Round prices up to (cents)"
               htmlFor="round_price_to_cents"
               hint="50 rounds every suggested price up to the nearest 50c."
@@ -201,15 +224,7 @@ export default async function SettingsPage() {
             </Field>
           </div>
 
-          <p className="mt-4 text-[13px] text-muted">
-            The margin and the card fee come off the price together, the way the
-            workbook does it: a piece is priced at its cost divided by{" "}
-            <span className="tabular-nums">
-              1 − {percent(settings.targetMargin)}% − {percent(settings.cardFeeRate)}%
-            </span>,
-            then rounded up. They cannot add up to 100 per cent, there would
-            be no price that satisfied both.
-          </p>
+          <SuggestedPriceWorking settings={settings} />
         </Panel>
 
         <Panel
@@ -249,6 +264,195 @@ export default async function SettingsPage() {
               />
             </Field>
           </div>
+        </Panel>
+
+        <Panel
+          title="Waste"
+          note="Prints that never make it to a customer. Failed and scrapped plates, plus test and colour-swap prints."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Waste allowance (%)"
+              htmlFor="waste_rate"
+              hint="12 for 12 per cent. 8 per cent failed plus 4 per cent test prints is where the workbook landed."
+            >
+              <input
+                id="waste_rate"
+                name="waste_rate"
+                inputMode="decimal"
+                defaultValue={percent(settings.wasteRate)}
+                className={inputClass}
+              />
+            </Field>
+          </div>
+
+          <p className="mt-4 text-[13px] text-muted">
+            This uplifts filament and machine time, and nothing else, because a
+            failed print burns both and consumes neither a keyring nor a bag. At{" "}
+            {percent(settings.wasteRate)}% you get{" "}
+            <b className="tabular-nums">
+              {(100 / (1 + settings.wasteRate)).toFixed(1)}
+            </b>{" "}
+            good pieces for every 100 you start. The prime tower is deliberately
+            not in here, the slicer already counts it in the grams you type on a
+            product.
+          </p>
+        </Panel>
+
+        <Panel
+          title="Overheads"
+          note="What the year costs whether one piece sells or a thousand do, spread across the pieces you expect to sell."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Annual fixed costs ($)"
+              htmlFor="annual_fixed_cost"
+              hint="Insurance, market permits, domain and apps. $300 is the cheapest $10M public liability cover found in September 2026."
+            >
+              <input
+                id="annual_fixed_cost"
+                name="annual_fixed_cost"
+                inputMode="decimal"
+                defaultValue={dollars(settings.annualFixedCostCents)}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field
+              label="Equipment, per year ($)"
+              htmlFor="annual_depreciation"
+              hint="Things bought once and used for years, divided by the years. Dehumidifier $120 over 5 plus media gear $30 over 3 is $34."
+            >
+              <input
+                id="annual_depreciation"
+                name="annual_depreciation"
+                inputMode="decimal"
+                defaultValue={dollars(settings.annualDepreciationCents)}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field
+              label="Units you expect to sell a year"
+              htmlFor="expected_units_per_year"
+              hint="Both pools above divide by this, so it moves every cost in the shop."
+            >
+              <input
+                id="expected_units_per_year"
+                name="expected_units_per_year"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={settings.expectedUnitsPerYear}
+                className={inputClass}
+              />
+            </Field>
+          </div>
+
+          <OverheadWorking settings={settings} />
+
+          <p className="mt-3.5 text-[13px] text-muted">
+            The printer is deliberately not an item here. It is already paid for
+            through machine cost per hour, and listing it again would charge it
+            twice. Your own time is not here either, by your decision, which is
+            the one cost the shop does not measure anywhere.
+          </p>
+        </Panel>
+
+        <Panel
+          title="Channel costs"
+          note="What it costs to get a piece to a customer. Never part of a unit cost, always a share of the price."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Real parcel cost (cents)"
+              htmlFor="parcel_cost_cents"
+              hint="What posting one parcel actually costs you. 1000 is $10."
+            >
+              <input
+                id="parcel_cost_cents"
+                name="parcel_cost_cents"
+                type="number"
+                min={0}
+                step={1}
+                defaultValue={settings.parcelCostCents}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field
+              label="Stall fee per market day (cents)"
+              htmlFor="stall_fee_cents"
+              hint="5000 is $50."
+            >
+              <input
+                id="stall_fee_cents"
+                name="stall_fee_cents"
+                type="number"
+                min={0}
+                step={1}
+                defaultValue={settings.stallFeeCents}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field
+              label="Typical takings, one market day (cents)"
+              htmlFor="market_day_takings_cents"
+              hint="60000 is $600. The stall fee is a share of this, not a cost per piece."
+            >
+              <input
+                id="market_day_takings_cents"
+                name="market_day_takings_cents"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={settings.marketDayTakingsCents}
+                className={inputClass}
+              />
+            </Field>
+          </div>
+
+          <ChannelWorking settings={settings} />
+        </Panel>
+
+        <Panel
+          title="The printer-hour bar"
+          note="Machine time, not price, is what limits the year. There are only so many hours in it."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Printer hours you can really run a year"
+              htmlFor="printer_hours_per_year"
+              hint="Not 8,760. What you will actually be there to start and clear."
+            >
+              <input
+                id="printer_hours_per_year"
+                name="printer_hours_per_year"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={settings.printerHoursPerYear}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field
+              label="Contribution you want from them ($)"
+              htmlFor="annual_contribution_target"
+              hint="What the printer should earn in a year, after everything the shop counts."
+            >
+              <input
+                id="annual_contribution_target"
+                name="annual_contribution_target"
+                inputMode="decimal"
+                defaultValue={dollars(settings.annualContributionTargetCents)}
+                className={inputClass}
+              />
+            </Field>
+          </div>
+
+          <BarWorking settings={settings} />
         </Panel>
 
         <div className="flex flex-wrap items-center gap-4">
@@ -363,6 +567,234 @@ function PerHour({ settings }: { settings: Settings }) {
         making cost is its print time multiplied by it, plus filament, plus an
         accessory, plus packaging, so a wrong figure here is wrong on every
         piece in the shop at once.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A boxed panel of derived numbers, the shape `PerHour` established.
+ *
+ * Every one of these exists for the same reason: the numbers below are not
+ * typed in anywhere, they are worked out from the fields above them, and a
+ * number nobody can decompose is a number nobody trusts. Each line shows its
+ * arithmetic, so when a suggested price looks wrong the input that put it there
+ * is on the same screen.
+ */
+function Working({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="card mt-5 border-line2 bg-cream p-5">
+      <div className="text-[12.5px] font-extrabold tracking-[0.06em] text-faint">
+        {label}
+      </div>
+      <dl className="mt-3 flex flex-col gap-2 text-[13.5px]">{children}</dl>
+    </div>
+  );
+}
+
+function Line({
+  term,
+  children,
+  total = false,
+}: {
+  term: React.ReactNode;
+  children: React.ReactNode;
+  total?: boolean;
+}) {
+  return (
+    <div
+      className={cx(
+        "flex flex-wrap items-baseline justify-between gap-3",
+        total && "border-t border-line2 pt-2.5",
+      )}
+    >
+      <dt className={total ? "font-extrabold" : "text-muted"}>{term}</dt>
+      <dd
+        className={cx(
+          "tabular-nums",
+          total && "font-display text-[19px] font-semibold",
+        )}
+      >
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * The overhead pool, per unit. Workbook Settings!C53.
+ *
+ * Shown as two lines rather than one total because they answer different
+ * questions - one is a bill that arrives whether she prints or not, the other is
+ * gear wearing out - and because the sensitivity is the real lesson: this is the
+ * one number on the page whose denominator is a guess, and the guess moves it a
+ * long way. 1,500 units gives 22c a piece; 500 gives 67c.
+ */
+function OverheadWorking({ settings }: { settings: Settings }) {
+  const insurance = insuranceSharePerUnit(settings);
+  const gear = depreciationSharePerUnit(settings);
+  const units = settings.expectedUnitsPerYear;
+
+  return (
+    <Working label="OVERHEAD PER UNIT">
+      <Line term="Insurance, permits, web">
+        {money(settings.annualFixedCostCents)} ÷ {units.toLocaleString("en-AU")} ={" "}
+        <b>{rate(insurance)}</b>
+      </Line>
+      <Line term="Equipment wear">
+        {money(settings.annualDepreciationCents)} ÷ {units.toLocaleString("en-AU")} ={" "}
+        <b>{rate(gear)}</b>
+      </Line>
+      <Line term="Overhead per unit" total>
+        {rate(overheadPerUnit(settings))}{" "}
+        <span className="text-[13.5px] font-normal text-muted">
+          ({money(overheadPerUnit(settings))} a piece)
+        </span>
+      </Line>
+      <p className="mt-1 text-[13px] text-muted">
+        At half the volume this doubles. If {units.toLocaleString("en-AU")} turns
+        out to be optimistic, every margin in the shop is worse than it reads
+        here, so it is worth revisiting once a real year of sales exists to
+        divide by.
+      </p>
+    </Working>
+  );
+}
+
+/**
+ * The two channel shares, and which one governs the price.
+ *
+ * The postage figure is the WORST case on purpose: the basket that only just
+ * crosses the free-postage line earns free postage and the studio carries the
+ * whole parcel. It is not a rare order, it is the one the free-postage line is
+ * there to encourage.
+ */
+function ChannelWorking({ settings }: { settings: Settings }) {
+  const postage = onlinePostageShare(settings);
+  const stall = stallShare(settings);
+  const online = postage >= stall;
+
+  return (
+    <Working label="WHAT EACH CHANNEL COSTS">
+      <Line term="Online, postage you absorb">
+        {money(settings.parcelCostCents)} ÷ {money(SHIPPING.freeThreshold)} ={" "}
+        <b>{percent(postage)}%</b>
+      </Line>
+      <Line term="Market stall, fee against takings">
+        {money(settings.stallFeeCents)} ÷ {money(settings.marketDayTakingsCents)} ={" "}
+        <b>{percent(stall)}%</b>
+      </Line>
+      <Line term="Priced against" total>
+        {online ? "Online" : "Market stall"}{" "}
+        <span className="text-[13.5px] font-normal text-muted">
+          ({percent(online ? postage : stall)}%)
+        </span>
+      </Line>
+      <p className="mt-1 text-[13px] text-muted">
+        One price for both channels, set by whichever is worse, because two
+        prices for one piece is a promise to mislabel something on a market
+        table.{" "}
+        {online ? (
+          <>
+            Online is currently the expensive channel, so it is the one every
+            suggested price is worked back from. A market day needs{" "}
+            <b className="tabular-nums">
+              {money(
+                stall > 0
+                  ? Math.round(settings.stallFeeCents / postage)
+                  : 0,
+              )}
+            </b>{" "}
+            in takings to be the cheaper way to sell.
+          </>
+        ) : (
+          <>
+            The stall is currently the expensive channel. That is unusual and
+            worth checking: either the fee has gone up or a typical day has got
+            quieter.
+          </>
+        )}{" "}
+        The $49 and $89 thresholds are not editable here. They are set in the
+        code the cart and the checkout both read, so a price and the postage
+        actually charged cannot drift apart.
+      </p>
+    </Working>
+  );
+}
+
+/**
+ * The bar every product is judged against, alongside margin.
+ *
+ * Set from the business and deliberately NOT from a product's price: when the
+ * macaron was cut from $9.00 to $6.49, a bar derived from a product would have
+ * quietly lowered the standard for the whole catalogue at the same moment.
+ */
+function BarWorking({ settings }: { settings: Settings }) {
+  const bar = targetPerPrinterHour(settings);
+
+  return (
+    <Working label="TARGET $ PER PRINTER-HOUR">
+      <Line term="Contribution wanted ÷ hours available" total>
+        {money(settings.annualContributionTargetCents)} ÷{" "}
+        {settings.printerHoursPerYear.toLocaleString("en-AU")} = {money(bar)}
+        <span className="ml-1.5 text-[13.5px] font-normal text-muted">an hour</span>
+      </Line>
+      <p className="mt-1 text-[13px] text-muted">
+        A piece can clear your target margin and still fail this, and that is the
+        case worth catching: a cheap thing that prints for two hours earns less
+        for the year than a dearer thing that prints in twenty minutes. Both
+        numbers are shown on every product and on the repricing screen.
+      </p>
+    </Working>
+  );
+}
+
+/**
+ * The suggested-price formula, with today's numbers in it.
+ *
+ * Spelled out because the divisor is the single most consequential number in
+ * the studio and it is nowhere near obvious: it is about 0.20, so every extra
+ * point of target margin moves a price by roughly five per cent.
+ */
+function SuggestedPriceWorking({ settings }: { settings: Settings }) {
+  const channel = Math.max(onlinePostageShare(settings), stallShare(settings));
+  const divisor = 1 - settings.targetMargin - settings.cardFeeRate - channel;
+
+  return (
+    <div className="mt-4 flex flex-col gap-2.5 text-[13px] text-muted">
+      <p>
+        A piece is priced at its cost plus the fixed{" "}
+        {trim(settings.cardFeeFixedCents.toFixed(2))}c card fee, divided by
+      </p>
+      <p className="font-mono text-[13px] tabular-nums text-ink">
+        1 − {percent(settings.targetMargin)}%{" "}
+        <span className="text-faint">margin</span> − {percent(settings.cardFeeRate)}%{" "}
+        <span className="text-faint">card</span> − {percent(channel)}%{" "}
+        <span className="text-faint">channel</span> ={" "}
+        <b>{divisor.toFixed(4)}</b>
+      </p>
+      <p>
+        then rounded up to the nearest {settings.roundPriceToCents}c. All three
+        come off the price together, the way the workbook does it, not
+        compounded.{" "}
+        {divisor > 0 ? (
+          <>
+            The divisor being about {divisor.toFixed(2)} is the thing to know:
+            one more point of target margin moves every price by roughly{" "}
+            {Math.round((0.01 / divisor) * 100)} per cent.
+          </>
+        ) : (
+          <b className="text-warn">
+            These add up to 100 per cent or more, so no price satisfies them.
+            Lower the margin.
+          </b>
+        )}
+      </p>
+      <p>
+        The workbook settled on <b>67%</b> and a <b>1.7%</b> card fee, which is
+        what Stripe charges in Australia. If the two fields above do not say
+        that, the suggestions on every screen are worked back from a target that
+        was abandoned as unreachable.
       </p>
     </div>
   );

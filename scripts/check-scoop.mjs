@@ -243,10 +243,26 @@ const S = {
   powerDrawWatts: 200,
   electricityPerKwhCents: 32.7,
   filamentPerKgCents: 1600,
-  targetMargin: 0.7,
-  cardFeeRate: 0.016,
+  targetMargin: 0.67,
+  cardFeeRate: 0.017,
   roundPriceToCents: 50,
   packagingPerUnitCents: 13,
+  // The rest of the cost model, as the workbook now holds it. A scoop is priced
+  // through the same suggestedPrice() as a product, so it carries the same fixed
+  // card fee and the same absorbed postage. Leaving these out does not fail
+  // loudly - it makes every suggestion NaN, which is why they are here in full
+  // rather than trimmed to the ones this file looks like it needs.
+  cardFeeFixedCents: 30,
+  wasteRate: 0.12,
+  annualFixedCostCents: 30000,
+  annualDepreciationCents: 3400,
+  expectedUnitsPerYear: 1500,
+  parcelCostCents: 1000,
+  freePostageThresholdCents: 8900,
+  stallFeeCents: 5000,
+  marketDayTakingsCents: 60000,
+  printerHoursPerYear: 2400,
+  annualContributionTargetCents: 800000,
 };
 
 const measuredPool = [
@@ -262,9 +278,12 @@ eq("a fully measured pool counts every piece",
 near("...averages them", basis.averagePieceCents, 40);            // 200 / 5
 near("...and multiplies by the piece count", basis.piecesCents, 200);
 
-// CEILING(200 / (1 - 0.7 - 0.016), 50) = CEILING(704.22…, 50) = 750
-near("a five-piece scoop from a 40c pool suggests $7.50",
-  m.suggestedTierPrice(S, measuredPool, 5), 750);
+// The online channel governs, being the worse of the two:
+//   CEILING((200 + 30) / (1 - 0.67 - 0.017 - 0.112359…), 50)
+//     = CEILING(1146.24…, 50) = 1150
+// against the stall's CEILING(1001.45…, 50) = 1050.
+near("a five-piece scoop from a 40c pool suggests $11.50",
+  m.suggestedTierPrice(S, measuredPool, 5), 1150);
 
 // THE ASSERTION THIS WHOLE FILE IS FOR. Zero of forty-four products in this
 // catalogue have a measured cost, and a partially measured pool is where an

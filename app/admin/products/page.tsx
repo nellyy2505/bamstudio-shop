@@ -10,7 +10,13 @@ import {
 import { PageHead, Panel, NoRows, Unknown } from "../ui";
 import { ButtonLink, Icon, Pagination, Pill, inputClass } from "@/components/ui";
 import { money } from "@/lib/format";
-import { toPrint } from "@/lib/costing";
+import {
+  costAtPrice,
+  perPrinterHour,
+  priceTerms,
+  targetPerPrinterHour,
+  toPrint,
+} from "@/lib/costing";
 import Link from "next/link";
 
 export const metadata = { title: "Products · Studio" };
@@ -46,6 +52,10 @@ export default async function ProductsPage({
     getOpenDemand(),
   ]);
 
+  // Once for the page, not once per row: both are pure functions of the settings.
+  const terms = priceTerms(settings);
+  const bar = targetPerPrinterHour(settings);
+
   const hrefFor = (page: number) => {
     const query = new URLSearchParams();
     if (filters.q) query.set("q", filters.q);
@@ -62,10 +72,16 @@ export default async function ProductsPage({
         title="Products"
         subtitle="Everything you sell, what it costs to make, and how many are on the shelf."
         actions={
-          <ButtonLink href="/admin/products/new" size="md">
-            <Icon name="plus" size={18} />
-            Add a product
-          </ButtonLink>
+          <>
+            <ButtonLink href="/admin/products/pricing" size="md" variant="soft">
+              <Icon name="trend" size={18} />
+              Reprice in bulk
+            </ButtonLink>
+            <ButtonLink href="/admin/products/new" size="md">
+              <Icon name="plus" size={18} />
+              Add a product
+            </ButtonLink>
+          </>
         }
       />
 
@@ -131,6 +147,7 @@ export default async function ProductsPage({
                     <th className="px-3 py-3 text-right">Unit cost</th>
                     <th className="px-3 py-3 text-right">Price</th>
                     <th className="px-3 py-3 text-right">Margin</th>
+                    <th className="px-3 py-3 text-right">$ / hour</th>
                     <th className="px-3 py-3 text-right">On hand</th>
                     <th className="px-3 py-3 text-right">To print</th>
                     <th className="px-5 py-3" />
@@ -145,11 +162,23 @@ export default async function ProductsPage({
                       ordered,
                       buffer: product.bufferStock,
                     });
-                    const margin =
+                    /*
+                     * One `costAtPrice` rather than a formula written out here.
+                     * This used to be `price * (1 - cardFeeRate) - cost`, which
+                     * left out the fixed 30c of every card payment and all of
+                     * the postage the studio absorbs, so it read about eight
+                     * points high on a $6.49 piece. The margin on this list, on
+                     * the product page and on the repricing screen now all come
+                     * from the same function the workbook was checked against.
+                     */
+                    const outcome =
                       costed.cost.unknown || product.price <= 0
                         ? null
-                        : (product.price * (1 - settings.cardFeeRate) - costed.cost.total) /
-                          product.price;
+                        : costAtPrice(terms, product.price, Math.round(costed.cost.total));
+                    const margin = outcome?.margin ?? null;
+                    const hourly = outcome
+                      ? perPrinterHour(outcome.profit, product.printTimeHours)
+                      : null;
 
                     return (
                       <tr key={product.id} className="align-middle hover:bg-cream/50">
@@ -192,6 +221,17 @@ export default async function ProductsPage({
                             </span>
                           )}
                         </td>
+                        <td className="px-3 py-3 text-right tabular-nums">
+                          {hourly === null ? (
+                            <span className="text-faint" title="No print time recorded">
+                              -
+                            </span>
+                          ) : (
+                            <span className={hourly < bar ? "font-semibold text-warn" : ""}>
+                              {money(hourly)}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-3 text-right tabular-nums">{product.stockOnHand}</td>
                         <td className="px-3 py-3 text-right tabular-nums">
                           {queue > 0 ? <b>{queue}</b> : <span className="text-faint">-</span>}
@@ -225,9 +265,16 @@ export default async function ProductsPage({
       </Panel>
 
       <p className="mt-4 text-[13px] text-muted">
-        A margin shown in amber is below your target of{" "}
-        {Math.round(settings.targetMargin * 100)}%. A dash means the piece has never been
-        timed or weighed, so there is no cost to compare a price against.
+        A margin in amber is below your target of{" "}
+        {Math.round(settings.targetMargin * 100)}%. A figure in amber under{" "}
+        <b>$ / hour</b> is below {money(bar)}, what each hour of machine time has
+        to contribute for the year to work. A piece can clear one and fail the
+        other. A dash means the piece has never been timed or weighed, so there is
+        no cost to compare a price against.{" "}
+        <Link href="/admin/products/pricing" className="font-bold text-accent">
+          Reprice in bulk
+        </Link>{" "}
+        shows every product against both tests on one screen.
       </p>
     </div>
   );

@@ -1,10 +1,15 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import {
+  costAtPrice,
+  perPrinterHour,
+  priceTerms,
   suggestedPrice,
+  targetPerPrinterHour,
   toPrint,
   unitCost,
   type CostBreakdown,
   type CostSettings,
+  type PriceTerms,
 } from "@/lib/costing";
 /*
  * The cost basis lives in lib/, not here.
@@ -17,7 +22,12 @@ import {
  * imported them from this module and nothing about where they live changes what
  * they answer.
  */
-import { getSettings, unitCostsAtSale, type Accessory } from "@/lib/cost-basis";
+import {
+  getAccessories,
+  getSettings,
+  unitCostsAtSale,
+  type Accessory,
+} from "@/lib/cost-basis";
 import {
   activationBlockers,
   packCost,
@@ -527,6 +537,160 @@ export function costProduct(
     // missing is this layer's job.
     suggested: cost.unknown ? null : suggestedPrice(settings, cost.total),
     accessoryName: accessory?.name ?? null,
+  };
+}
+
+/* ---------------------------------------------------------- repricing */
+
+/**
+ * One row of the repricing screen: what a piece costs, what it sells for, and
+ * both of the tests it has to pass.
+ *
+ * `suggested`, `margin` and `perHour` are all nullable, and each null means
+ * something different and specific:
+ *
+ *   suggested  null when the piece has never been timed or weighed, so there is
+ *              no cost to work a price back from. NOT zero, and not a price
+ *              derived from packaging alone - 13c of packaging turned into a
+ *              50c suggestion at a 97% margin was the exact failure the guard
+ *              in `costProduct` exists to stop.
+ *   margin     null when there is no cost to compare against, or the price is
+ *              zero. A margin of 100% on an unmeasured piece is a lie that
+ *              reads as good news.
+ *   perHour    null when the piece has no print time. Dividing by an unknown is
+ *              not a number, and a product with no print time is precisely the
+ *              one that would otherwise read as infinitely productive.
+ */
+export type RepricingRow = {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  slug: string;
+  active: boolean;
+  price: number;
+  /** Integer cents, or null when an input is missing. */
+  unitCostCents: number | null;
+  printTimeHours: number | null;
+  suggested: number | null;
+  margin: number | null;
+  perHour: number | null;
+  missing: string[];
+};
+
+export type RepricingBoard = {
+  rows: RepricingRow[];
+  /** The three terms the client needs to recompute a margin as she types. */
+  terms: PriceTerms;
+  targetMargin: number;
+  /** The printer-hour bar, in cents per hour. */
+  barPerHour: number;
+  /** How many rows still sit at the price the catalogue was seeded with. */
+  atSeedPrice: number;
+  /** The seed price itself, if a suspicious number of rows share one. */
+  seedPrice: number | null;
+};
+
+/**
+ * Every product, costed, for repricing in one pass.
+ *
+ * DELIBERATELY NOT PAGINATED, which is the only reason this exists alongside
+ * `listProducts`. The screen it feeds is for the job of getting 38 products off
+ * a seed price, and a screen that does that 25 at a time is the clicking it was
+ * built to replace. Forty-four rows with one settings read and one accessories
+ * read is a cheap query; if the catalogue ever reaches a few hundred this needs
+ * revisiting, and the filters below are where that would start.
+ */
+export async function getRepricingBoard(
+  filters: ProductListFilters = {},
+): Promise<RepricingBoard> {
+  assertServer("getRepricingBoard");
+
+  const admin = createAdminClient();
+  const [settings, accessories] = await Promise.all([getSettings(), getAccessories()]);
+
+  let query = admin
+    .from("products")
+    .select(PRODUCT_COLUMNS)
+    .order("category", { ascending: true })
+    .order("sku", { ascending: true });
+
+  if (filters.q) {
+    const safe = filters.q.replace(/[,()\\*]/g, " ").trim();
+    if (safe) query = query.or(`name.ilike.%${safe}%,sku.ilike.%${safe}%`);
+  }
+  if (filters.category) query = query.eq("category", filters.category);
+  if (filters.visibility === "active") query = query.eq("active", true);
+  if (filters.visibility === "hidden") query = query.eq("active", false);
+
+  const { data } = await query;
+  const terms = priceTerms(settings);
+
+  const rows: RepricingRow[] = (data ?? []).map((raw) => {
+    const product = mapProductRow(asRow(raw));
+    const costed = costProduct(product, settings, accessories);
+
+    // Integer cents here, and only here: everything upstream is fractional on
+    // purpose because a keyring is 9.5c, and the single rounding belongs at the
+    // edge where a number becomes something a person reads.
+    const unitCostCents = costed.cost.unknown ? null : Math.round(costed.cost.total);
+    const outcome =
+      unitCostCents === null || product.price <= 0
+        ? null
+        : costAtPrice(terms, product.price, unitCostCents);
+
+    return {
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      category: product.category,
+      slug: product.slug,
+      active: product.active,
+      price: product.price,
+      unitCostCents,
+      printTimeHours: product.printTimeHours,
+      suggested: costed.suggested,
+      margin: outcome?.margin ?? null,
+      perHour: outcome ? perPrinterHour(outcome.profit, product.printTimeHours) : null,
+      missing: costed.cost.missing,
+    };
+  });
+
+  /*
+   * How many rows share one price, and what it is.
+   *
+   * Not a hardcoded $9.00. The catalogue was seeded at that figure and 38 of 44
+   * rows still carry it, but hardcoding it would leave this counter quietly
+   * wrong the moment a second bulk price is set, and the interesting fact is not
+   * "how many are at $9.00", it is "how many have never been priced
+   * individually". A mode of one price across a dozen rows is that fact
+   * whatever the number turns out to be.
+   */
+  const tally = new Map<number, number>();
+  for (const row of rows) {
+    if (row.price > 0) tally.set(row.price, (tally.get(row.price) ?? 0) + 1);
+  }
+  let seedPrice: number | null = null;
+  let atSeedPrice = 0;
+  for (const [price, count] of tally) {
+    if (count > atSeedPrice) {
+      atSeedPrice = count;
+      seedPrice = price;
+    }
+  }
+  // One or two products sharing a price is a coincidence, not a seed.
+  if (atSeedPrice < 3) {
+    atSeedPrice = 0;
+    seedPrice = null;
+  }
+
+  return {
+    rows,
+    terms,
+    targetMargin: settings.targetMargin,
+    barPerHour: targetPerPrinterHour(settings),
+    atSeedPrice,
+    seedPrice,
   };
 }
 
