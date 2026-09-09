@@ -7,10 +7,13 @@ import { setOrderStatus } from "../../actions";
 import { CHANNEL_LABEL, PageHead, Panel, StatusPill, Unknown } from "../../ui";
 import { DispatchPanel } from "./DispatchPanel";
 import { ScoopPackPanel } from "./ScoopPackPanel";
+import { ReturnsPanel } from "./ReturnsPanel";
 import {
   describePersonalisationText,
   getOrder,
+  getOrderReturns,
   getOrderScoops,
+  getReturnedQuantities,
   listPoolCandidates,
   type OrderDetail,
   type OrderLine,
@@ -39,6 +42,17 @@ import {
  * one write. `setOrderStatus` rejects it as well, because a select element is
  * markup and a server action is a public endpoint.
  */
+/**
+ * How a sale off the website was paid for (0013). Shown only on a sale that was
+ * typed in, for the reason beside the row that uses it.
+ */
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  cash: "Cash",
+  card: "Card",
+  bank_transfer: "Bank transfer",
+  other: "Something else",
+};
+
 const STATUS_STEPS = [
   { value: "confirmed", label: "Confirmed, paid, not started" },
   { value: "printing", label: "Printing" },
@@ -62,6 +76,20 @@ export default async function OrderDetailPage({
   const { id } = await params;
   const [order, scoops] = await Promise.all([getOrder(id), getOrderScoops(id)]);
   if (!order) notFound();
+
+  /*
+   * Returns, and how much of each line has already come back. Read after the
+   * order rather than beside it, because both need the order's line ids, and
+   * skipped entirely for an order that was never paid for or was cancelled:
+   * nothing was ever sent, so nothing can come back.
+   */
+  const returnable = order.status !== "pending" && order.status !== "cancelled";
+  const [returns, returnedByLine] = returnable
+    ? await Promise.all([
+        getOrderReturns(order.id),
+        getReturnedQuantities(order.lines.map((line) => line.id)),
+      ])
+    : [[], new Map<string, number>()];
 
   /*
    * The whole catalogue, and only when a scoop on this order still has to be
@@ -223,14 +251,42 @@ export default async function OrderDetailPage({
             <Row label="Email">{order.email}</Row>
             <Row label="Channel">{CHANNEL_LABEL[order.channel] ?? order.channel}</Row>
             <Row label="Postage method">{order.shippingMethod.replace(/_/g, " ")}</Row>
+            {/*
+              * How it was paid. Stated only for a sale that was typed in: a
+              * website order is a card payment by construction, since it has a
+              * Stripe session, and 0013 deliberately does not copy that fact
+              * into a second column that could disagree with the first. So a
+              * null here on a website order is not a gap, and a row saying
+              * "unknown" would be wrong rather than merely unhelpful.
+              */}
+            {order.recordedBy ? (
+              <Row label="Paid by">
+                {order.paymentMethod ? (
+                  PAYMENT_METHOD_LABEL[order.paymentMethod] ?? order.paymentMethod
+                ) : (
+                  <span className="text-muted">
+                    Not recorded. This sale predates the studio asking.
+                  </span>
+                )}
+              </Row>
+            ) : null}
             <Row label="Payment reference">
               {order.stripePaymentIntent ? (
                 <span className="font-mono text-[13px] break-all select-all">
                   {order.stripePaymentIntent}
                 </span>
+              ) : order.paymentReference ? (
+                /* Typed in by hand, so it is shown as what it is: a number off a
+                   terminal or a Tap to Pay id, not something this shop's own
+                   checkout created. */
+                <span className="font-mono text-[13px] break-all select-all">
+                  {order.paymentReference}
+                </span>
               ) : order.recordedBy ? (
                 <span className="text-muted">
-                  Typed in by a person, so there is no Stripe payment to point at.
+                  {order.paymentMethod === "cash"
+                    ? "Cash, so there is nothing to point at."
+                    : "Typed in by a person, and no reference was recorded."}
                 </span>
               ) : (
                 <span className="text-muted">None recorded.</span>
@@ -299,6 +355,27 @@ export default async function OrderDetailPage({
 
         <DispatchPanel order={order} scoops={scoops} />
       </div>
+
+      {/*
+        * Below the two columns, full width, because a return is a whole-order
+        * event and its form is a row per line.
+        *
+        * Everyone who can open this order can see WHAT came back and why: the
+        * person packing has every reason to know a piece came back faulty
+        * before putting another one of it in a parcel. The refund figures and
+        * the form are gated on "reports", the same line this page already draws
+        * around the making cost of a line, because deciding how much money goes
+        * back to a customer is not a packing job. See `recordReturn`.
+        */}
+      {returnable ? (
+        <ReturnsPanel
+          orderId={order.id}
+          lines={order.lines}
+          returns={returns}
+          returnedByLine={returnedByLine}
+          canRecord={can(staff.role, "reports")}
+        />
+      ) : null}
     </div>
   );
 }

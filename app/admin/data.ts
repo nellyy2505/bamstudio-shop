@@ -720,6 +720,142 @@ export async function getOpenDemand(): Promise<Map<string, number>> {
   return demand;
 }
 
+/* ------------------------------------------------------------- returns */
+
+/**
+ * The reasons a return can be given, and what to call them on a screen.
+ *
+ * A short list rather than free text, because the whole point of recording a
+ * reason is counting it: "broke", "Broken", "arrived broken" and "snapped" are
+ * one fact spelled four ways, and a report over them says nothing. The words go
+ * in the note beside it.
+ *
+ * Exported so the form, the constraint in 0013 and any future report all read
+ * from one list. If a reason is added here it has to be added to the check
+ * constraint too, and the database will refuse the write until it is, which is
+ * the right way round.
+ */
+export const RETURN_REASONS = [
+  "faulty",
+  "damaged_in_post",
+  "wrong_item_sent",
+  "not_as_described",
+  "changed_mind",
+  "other",
+] as const;
+
+export type ReturnReason = (typeof RETURN_REASONS)[number];
+
+export const RETURN_REASON_LABEL: Record<string, string> = {
+  faulty: "Faulty",
+  damaged_in_post: "Damaged in the post",
+  wrong_item_sent: "Wrong item sent",
+  not_as_described: "Not as described",
+  changed_mind: "Changed their mind",
+  other: "Something else",
+};
+
+export type ReturnLine = {
+  id: string;
+  orderItemId: string;
+  productName: string;
+  quantity: number;
+  restocked: boolean;
+};
+
+export type OrderReturn = {
+  id: string;
+  reason: string;
+  note: string | null;
+  refundAmountCents: number;
+  createdAt: string;
+  lines: ReturnLine[];
+};
+
+/**
+ * Every return recorded against one order, newest first.
+ *
+ * Read as its own query rather than nested inside `getOrder`'s select, for the
+ * reason the payment-incident read gives right above it: a return is a fact
+ * that points at an order, not a part of it, and a failure to read returns must
+ * not lose the order. An order page that will not render because a side table
+ * is unhappy is worse than one that renders without a panel.
+ */
+export async function getOrderReturns(orderId: string): Promise<OrderReturn[]> {
+  assertServer("getOrderReturns");
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("order_returns")
+    .select(
+      "id, reason, note, refund_amount_cents, created_at, " +
+        "order_return_items(id, order_item_id, quantity, restocked, " +
+        "order_items(product_name))",
+    )
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: false });
+
+  return (data ?? []).map((raw) => {
+    const row = asRow(raw);
+    const lines = Array.isArray(row.order_return_items) ? row.order_return_items : [];
+
+    return {
+      id: row.id as string,
+      reason: row.reason as string,
+      note: (row.note as string | null) ?? null,
+      refundAmountCents: Number(row.refund_amount_cents ?? 0),
+      createdAt: row.created_at as string,
+      lines: lines.map((entry) => {
+        const line = asRow(entry);
+        // PostgREST returns an embedded to-one either as an object or, on some
+        // shapes, as a single-element array. Both are handled rather than
+        // assumed, the same way mapFilament does it above.
+        const item = line.order_items;
+        const named = Array.isArray(item) ? item[0] : item;
+
+        return {
+          id: line.id as string,
+          orderItemId: line.order_item_id as string,
+          productName:
+            (asRow(named ?? {}).product_name as string | undefined) ?? "A deleted line",
+          quantity: Number(line.quantity ?? 0),
+          restocked: Boolean(line.restocked),
+        };
+      }),
+    };
+  });
+}
+
+/**
+ * How many of each order line have already been sent back.
+ *
+ * Keyed by `order_items.id`. The form subtracts this from the quantity ordered,
+ * so a customer who returns one of three cannot then be recorded as returning
+ * three more: the same guard runs again in `recordReturn`, because a number on
+ * a form is a suggestion and a number the database agrees with is a fact.
+ */
+export async function getReturnedQuantities(
+  orderItemIds: string[],
+): Promise<Map<string, number>> {
+  assertServer("getReturnedQuantities");
+
+  const returned = new Map<string, number>();
+  const ids = [...new Set(orderItemIds.filter(Boolean))];
+  if (ids.length === 0) return returned;
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("order_return_items")
+    .select("order_item_id, quantity")
+    .in("order_item_id", ids);
+
+  for (const row of data ?? []) {
+    const id = row.order_item_id as string;
+    returned.set(id, (returned.get(id) ?? 0) + Number(row.quantity ?? 0));
+  }
+  return returned;
+}
+
 /* ----------------------------------------------------------- inventory */
 
 export type InventoryRow = {
@@ -902,6 +1038,14 @@ export type OrderDetail = OrderRow & {
   giftNote: string | null;
   shippingAddress: Record<string, unknown>;
   stripePaymentIntent: string | null;
+  /**
+   * How a sale off the website was paid for (0013). Null on a website order,
+   * which is a card payment by construction because it has a Stripe session,
+   * and null on a manual sale recorded before that column existed.
+   */
+  paymentMethod: string | null;
+  /** The card reference for a sale taken in person: a Tap to Pay id, a receipt. */
+  paymentReference: string | null;
   recordedBy: string | null;
   /**
    * The Australia Post service the postage on this order was quoted for, e.g.
@@ -1062,6 +1206,7 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
         "id, order_number, email, status, channel, subtotal, shipping, total, " +
           "created_at, shipping_method, tracking_number, quoted_service_code, " +
           "gift_note, shipping_address, stripe_payment_intent, recorded_by, " +
+          "payment_method, payment_reference, " +
           "order_items(id, product_id, product_name, variant_label, unit_price, " +
           "quantity, unit_cost_cents, colour, personalisation)",
       )
@@ -1092,6 +1237,8 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
     giftNote: (row.gift_note as string | null) ?? null,
     shippingAddress: (row.shipping_address as Record<string, unknown> | null) ?? {},
     stripePaymentIntent: (row.stripe_payment_intent as string | null) ?? null,
+    paymentMethod: (row.payment_method as string | null) ?? null,
+    paymentReference: (row.payment_reference as string | null) ?? null,
     recordedBy: (row.recorded_by as string | null) ?? null,
     openIncidents: (incidents.data ?? []).map((incident) => ({
       id: incident.id as string,

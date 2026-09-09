@@ -1,7 +1,7 @@
 -- Schema smoke test.
 --
 -- Run this in the Supabase SQL editor after applying every file in
--- supabase/migrations/ in order and then seed.sql. It returns ONE table of 126
+-- supabase/migrations/ in order and then seed.sql. It returns ONE table of 141
 -- rows and every `pass` must be `t`. These are the guarantees that only fail
 -- in production - a missing grant here means paid orders are never recorded,
 -- and you would first hear about it from a customer.
@@ -11,9 +11,11 @@
 -- letter_eligible default, 65 with 0005 (the confirmation-email stamp, the
 -- observable stock clamp and the refund register), 86 with 0006 (the enquiry
 -- and sign-up tables), 126 with 0007 (the Lucky Scoop tiers, their pools and
--- what went into a packed scoop) - so a shorter table than 126 means an older
--- copy of this file, and an older copy is a green result that never looked at
--- part of the schema. That reads like a pass and is not one.
+-- what went into a packed scoop), 141 with 0013 (returns, what they put back on
+-- the shelf, and how a sale off the website was paid for) - so a shorter table
+-- than 141 means an older copy of this file, and an older copy is a green
+-- result that never looked at part of the schema. That reads like a pass and is
+-- not one.
 --
 -- A migration that is not applied does not shorten the table, it stops the run:
 -- the first assertion that names a missing object raises instead of returning
@@ -63,10 +65,11 @@ union all
 -- filament_stock, shop_settings, accessories and product_filament; 17 since
 -- 0005_sale_integrity.sql added payment_incidents; 19 since 0006_enquiries.sql
 -- added contact_enquiries and newsletter_signups; 23 since 0007_lucky_scoop.sql
--- added scoop_tiers, scoop_tier_products, scoop_packs and scoop_pack_items. A
--- new table that forgets to enable RLS lands in `public` readable by the anon
--- key, so this count is deliberately exact rather than `>=`.
-select 'row-level security everywhere',    count(*) = 23 from pg_tables
+-- added scoop_tiers, scoop_tier_products, scoop_packs and scoop_pack_items; 25
+-- since 0013_returns.sql added order_returns and order_return_items. A new
+-- table that forgets to enable RLS lands in `public` readable by the anon key,
+-- so this count is deliberately exact rather than `>=`.
+select 'row-level security everywhere',    count(*) = 25 from pg_tables
          where schemaname = 'public' and rowsecurity = true
 union all
 -- A client must never be able to write a review: the old policy let any
@@ -1280,6 +1283,90 @@ union all
 select 'nobody can call the pool guard directly',
        not has_function_privilege('anon', 'public.scoop_tier_pool_is_big_enough()', 'execute');
 
+-- ------------------------------------------------------------ 0013 returns
+--
+-- A return names what a customer sent back and why, and carries the refund that
+-- went with it. That is nobody's business but the studio's, so both tables get
+-- the same treatment as every other table that decides money: RLS on with no
+-- policy at all, plus the explicit revoke, because Supabase grants every new
+-- table in `public` to anon and authenticated as it is created.
+insert into _checks (check_name, pass)
+select 'anon cannot read returns' as check,
+       not has_table_privilege('anon', 'public.order_returns', 'select') as pass
+union all
+select 'signed-in cannot read returns',
+       not has_table_privilege('authenticated', 'public.order_returns', 'select')
+union all
+select 'anon cannot read what came back',
+       not has_table_privilege('anon', 'public.order_return_items', 'select')
+union all
+select 'signed-in cannot read what came back',
+       not has_table_privilege('authenticated', 'public.order_return_items', 'select')
+union all
+select 'anon cannot record a return',
+       not has_table_privilege('anon', 'public.order_returns', 'insert')
+union all
+select 'signed-in cannot record a return',
+       not has_table_privilege('authenticated', 'public.order_returns', 'insert')
+union all
+select 'the studio can record a return',
+       has_table_privilege('service_role', 'public.order_returns', 'insert')
+union all
+select 'the studio can record what came back',
+       has_table_privilege('service_role', 'public.order_return_items', 'insert')
+union all
+-- restock_returned_unit is SECURITY DEFINER, the same as decrement_stock, so it
+-- runs with the owner's rights. A function the browser key may EXECUTE is a
+-- function the browser key can be made to run, and this one adds stock.
+select 'nobody can call the restock function directly',
+       not has_function_privilege('anon', 'public.restock_returned_unit(uuid, integer)', 'execute')
+union all
+select 'signed-in cannot call the restock function',
+       not has_function_privilege('authenticated', 'public.restock_returned_unit(uuid, integer)', 'execute')
+union all
+select 'the studio can call the restock function',
+       has_function_privilege('service_role', 'public.restock_returned_unit(uuid, integer)', 'execute');
+
+-- A reason has to be countable, so it is constrained rather than free text, and
+-- a returned quantity of zero is not a return.
+insert into _checks (check_name, pass)
+select 'an invented return reason is refused' as check, (
+         select not exists (
+           select 1 from public.order_returns
+            where reason not in ('faulty', 'damaged_in_post', 'wrong_item_sent',
+                                 'not_as_described', 'changed_mind', 'other')
+         )
+       ) as pass
+union all
+-- `restocked` is NOT NULL with no default: there is no safe guess. True quietly
+-- resells faulty stock, false quietly writes off good stock, so the screen asks.
+select 'whether a return restocks has no default', (
+         select is_nullable = 'NO' and column_default is null
+           from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'order_return_items'
+            and column_name = 'restocked'
+       )
+union all
+-- A return line whose order line vanished would be a quantity of nothing.
+select 'a returned order line cannot be deleted away', (
+         select confdeltype = 'r'
+           from pg_constraint
+          where conrelid = 'public.order_return_items'::regclass
+            and confrelid = 'public.order_items'::regclass
+            and contype = 'f'
+       )
+union all
+-- How a sale outside the website was paid for. Constrained for the same reason
+-- the reason is: 'Cash', 'cash' and 'CASH' are one fact spelled three ways.
+select 'an invented payment method is refused', (
+         select not exists (
+           select 1 from public.orders
+            where payment_method is not null
+              and payment_method not in ('card', 'cash', 'bank_transfer', 'other')
+         )
+       );
+
 -- Search is bounded: a lone wildcard must not match the whole catalogue.
 insert into _checks (check_name, pass)
 select 'search rejects a bare wildcard' as check,
@@ -1288,7 +1375,7 @@ union all
 select 'search ignores empty input',
        (select count(*) from public.search_products('   ')) = 0;
 
--- Every assertion, in one result set. `pass` must be `t` on all 126 rows.
+-- Every assertion, in one result set. `pass` must be `t` on all 141 rows.
 select check_name as check, pass from _checks order by ord;
 
 rollback;

@@ -18,6 +18,23 @@ import { listProducts, type ProductRow } from "../../data";
 const CHANNELS = ["market_stall", "tiktok", "shopee", "other"] as const;
 
 /**
+ * How a sale off the website was paid for (migration 0013).
+ *
+ * A website order has no entry here and needs none: it is a card payment by
+ * construction, because it has a Stripe session. What a stall sale has never
+ * recorded is how the money arrived, so a card sale and a cash sale looked
+ * identical afterwards and neither could be reconciled against anything.
+ */
+const PAYMENT_METHODS = ["cash", "card", "bank_transfer", "other"] as const;
+
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  cash: "Cash",
+  card: "Card",
+  bank_transfer: "Bank transfer",
+  other: "Something else",
+};
+
+/**
  * How many pages of the catalogue this will fetch before giving up.
  *
  * `listProducts` pages at PAGE_SIZE (25) rows, so the whole catalogue has to be
@@ -157,6 +174,41 @@ export default async function RecordSalePage() {
                     </option>
                   ))}
                 </select>
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="How it was paid for"
+                htmlFor="payment_method"
+                hint="Cash at a stall, or a card through Tap to Pay or a terminal."
+              >
+                <select
+                  id="payment_method"
+                  name="payment_method"
+                  defaultValue="cash"
+                  className={inputClass}
+                >
+                  {PAYMENT_METHODS.map((method) => (
+                    <option key={method} value={method}>
+                      {PAYMENT_METHOD_LABEL[method]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field
+                label="Payment reference (optional)"
+                htmlFor="payment_reference"
+                hint="For a card sale: the Stripe payment id or the receipt number off the terminal. It is how you find this sale again in six months."
+              >
+                <input
+                  id="payment_reference"
+                  name="payment_reference"
+                  placeholder="Cash needs none"
+                  maxLength={120}
+                  className={inputClass}
+                />
               </Field>
             </div>
 

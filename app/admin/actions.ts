@@ -5,12 +5,18 @@ import { redirect } from "next/navigation";
 import { randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireStaff, type Capability } from "@/lib/auth/staff";
-import { getOrderScoops, MEASURE_COLOUR_SLOTS, unitCostsAtSale } from "./data";
+import {
+  getOrderScoops,
+  getReturnedQuantities,
+  MEASURE_COLOUR_SLOTS,
+  RETURN_REASONS,
+  unitCostsAtSale,
+} from "./data";
 import { activationBlockers, packCost } from "@/lib/scoop";
 import { SCOOP_THEMES, type ScoopTheme } from "@/lib/types";
 import { siteUrl } from "@/lib/stripe";
 import { SHIPPING } from "@/lib/config";
-import { money } from "@/lib/format";
+import { money, pluralise } from "@/lib/format";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import {
   hashToken,
@@ -1405,6 +1411,17 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
     // start reporting different margins for the same object.
     const unitCostCents = (await unitCostsAtSale([product.id])).get(product.id) ?? null;
 
+    /*
+     * How it was paid for. Validated against the same list as the column's check
+     * constraint, and defaulted to cash rather than to null: this form is a
+     * counter sale, cash is what a counter sale usually is, and null would mean
+     * "nobody recorded it" which is only true of rows that predate 0013.
+     */
+    const paymentMethod = text(form, "payment_method") || "cash";
+    if (!["cash", "card", "bank_transfer", "other"].includes(paymentMethod)) {
+      return fail("Choose how the sale was paid for.");
+    }
+
     const subtotal = unitPrice * quantity;
 
     const { data: order, error } = await admin
@@ -1419,6 +1436,14 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
         shipping_method: "in_person",
         shipping_address: { note: "Sold in person", channel },
         recorded_by: staff.userId,
+        payment_method: paymentMethod,
+        /*
+         * Kept apart from `stripe_payment_intent`, which the webhook writes and
+         * which should mean a payment intent this shop's own checkout created.
+         * A number typed in by hand that merely looks like one would make every
+         * reconciliation against Stripe read as a match it never checked.
+         */
+        payment_reference: text(form, "payment_reference") || null,
         stock_applied: true,
       })
       .select("id")
@@ -1526,6 +1551,194 @@ export async function recordSale(_prev: FormState, form: FormData): Promise<Form
  * hand in Stripe - this only records that it has been, so the overview stops
  * asking. Nothing here can move money.
  */
+/**
+ * A return, recorded against an order, with the stock decision made per line.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * THIS RECORDS A REFUND. IT DOES NOT ISSUE ONE.
+ *
+ * The money moves in Stripe, by hand, the way it always has. Anything else
+ * would make this a second system that can pay customers, and a shop should
+ * have one. `refund_amount_cents` is therefore what she says went back, not
+ * what this code worked out and sent: a goodwill refund can exceed the lines, a
+ * restocking deduction can fall short of them, and postage may or may not be in
+ * it. Zero is a real answer, meaning something came back and no money went out.
+ * ────────────────────────────────────────────────────────────────────────────
+ *
+ * WHETHER A PIECE GOES BACK ON THE SHELF IS ASKED PER LINE. One parcel can hold
+ * a keychain that is perfectly fine and a charm that snapped, and a single
+ * answer for both either throws away a good piece or resells a broken one. The
+ * column has no default for the same reason.
+ *
+ * WHY "reports" AND NOT "orders", WHICH IS THE OBVIOUS ONE.
+ *
+ * Because `packing` holds "orders" and nothing else, and "orders" is what gets
+ * a person to this screen at all. Recording a return decides how much money
+ * goes back to a customer, and the same page already refuses to show that role
+ * the making cost of a line on the grounds that somebody helping post parcels
+ * has no business seeing the margin on what they are packing. Deciding a refund
+ * is the larger version of that judgement, so it cannot be gated on the
+ * capability that merely opens the door.
+ *
+ * "reports" is borrowed rather than earned, exactly as `setEnquiryHandled`
+ * borrows it, and for the same reason: `owner` and `studio` hold it and
+ * `packing` does not, which is precisely the line that needs drawing. It is
+ * still the wrong name for the authority - a `refunds` capability of its own
+ * would say what it means - and both of these should move together if one is
+ * ever added.
+ *
+ * That it also moves stock is a consequence, not the point. `setStock` next
+ * door is the counter-example: that one records an observation about a shelf,
+ * and nothing downstream of it is a claim about money.
+ */
+export async function recordReturn(_prev: FormState, form: FormData): Promise<FormState> {
+  return guard("reports", async () => {
+    const staff = await requireStaff("reports");
+    const orderId = text(form, "order_id");
+    if (!orderId) return fail("No order given.");
+
+    const reason = text(form, "reason");
+    if (!RETURN_REASONS.includes(reason as (typeof RETURN_REASONS)[number])) {
+      return fail("Choose why it came back.");
+    }
+
+    const refund = dollarsToCents(text(form, "refund_amount"));
+    if (refund === null) {
+      return fail("The refund has to be an amount, like 6.49, or 0 if none went back.");
+    }
+
+    const admin = createAdminClient();
+
+    /*
+     * The order's own lines, read from the database rather than trusted from
+     * the form. The form posts a quantity per line id; a line id belonging to
+     * somebody else's order would otherwise let this write a return against an
+     * order the operator is not looking at.
+     */
+    const { data: itemRows } = await admin
+      .from("order_items")
+      .select("id, product_id, product_name, quantity")
+      .eq("order_id", orderId);
+
+    const items = new Map(
+      (itemRows ?? []).map((row) => [
+        row.id as string,
+        {
+          productId: (row.product_id as string | null) ?? null,
+          productName: row.product_name as string,
+          ordered: Number(row.quantity ?? 0),
+        },
+      ]),
+    );
+    if (items.size === 0) return fail("That order has no lines to return.");
+
+    // What has already come back, so three of three cannot be returned twice.
+    const alreadyReturned = await getReturnedQuantities([...items.keys()]);
+
+    const lines: {
+      orderItemId: string;
+      productId: string | null;
+      quantity: number;
+      restocked: boolean;
+    }[] = [];
+
+    for (const [itemId, item] of items) {
+      const quantity = intOr(form, `qty_${itemId}`, 0);
+      if (quantity <= 0) continue;
+
+      const remaining = item.ordered - (alreadyReturned.get(itemId) ?? 0);
+      if (quantity > remaining) {
+        return fail(
+          remaining <= 0
+            ? `All ${item.ordered} of ${item.productName} have already been returned. Nothing has been saved.`
+            : `Only ${remaining} of ${item.productName} can still be returned. Nothing has been saved.`,
+        );
+      }
+
+      lines.push({
+        orderItemId: itemId,
+        productId: item.productId,
+        quantity,
+        // Absent means not ticked means do not restock. The form renders a
+        // checkbox per line, so the operator has answered by leaving it alone.
+        restocked: bool(form, `restock_${itemId}`),
+      });
+    }
+
+    if (lines.length === 0) {
+      return fail("Say how many of something came back. Nothing has been saved.");
+    }
+
+    const { data: created, error } = await admin
+      .from("order_returns")
+      .insert({
+        order_id: orderId,
+        reason,
+        note: text(form, "note") || null,
+        refund_amount_cents: refund,
+        recorded_by: staff.userId,
+      })
+      .select("id")
+      .single();
+
+    if (error) return fail(friendly(error.message));
+
+    const { error: lineError } = await admin.from("order_return_items").insert(
+      lines.map((line) => ({
+        return_id: created.id as string,
+        order_item_id: line.orderItemId,
+        quantity: line.quantity,
+        restocked: line.restocked,
+      })),
+    );
+
+    /*
+     * A return row with no lines is a refund against nothing: it would show on
+     * the order as a return of no pieces and count in any report over reasons.
+     * There are no transactions through PostgREST, so the failed insert is
+     * undone by hand, the same way `recordSale` deletes its order when its line
+     * fails. Deleting the parent is safe here because it was created a moment
+     * ago in this call and nothing else can be pointing at it yet.
+     */
+    if (lineError) {
+      await admin.from("order_returns").delete().eq("id", created.id as string);
+      return fail(friendly(lineError.message));
+    }
+
+    /*
+     * Stock last, and deliberately after the record is safely written. If a
+     * restock fails, the return is still recorded and the shelf is merely one
+     * short, which the inventory screen already shows and a person can correct.
+     * The other order would leave stock moved for a return nobody can see.
+     */
+    const restocked: string[] = [];
+    for (const line of lines) {
+      if (!line.restocked || !line.productId) continue;
+      const { error: stockError } = await admin.rpc("restock_returned_unit", {
+        p_product_id: line.productId,
+        p_quantity: line.quantity,
+      });
+      if (!stockError) restocked.push(line.orderItemId);
+    }
+
+    revalidateOrder(orderId);
+    revalidatePath("/admin/orders");
+    revalidatePath("/admin/inventory");
+    revalidatePath("/admin/reports");
+
+    const pieces = lines.reduce((sum, line) => sum + line.quantity, 0);
+    const backOnShelf = lines
+      .filter((line) => line.restocked)
+      .reduce((sum, line) => sum + line.quantity, 0);
+
+    return ok(
+      `Return recorded: ${pluralise(pieces, "piece")}, ` +
+        `${refund > 0 ? `${money(refund)} refunded` : "no refund"}, ` +
+        `${backOnShelf > 0 ? `${backOnShelf} back on the shelf.` : "nothing back on the shelf."}`,
+    );
+  });
+}
+
 export async function resolveRefundIncident(
   _prev: FormState,
   form: FormData,
