@@ -12,6 +12,8 @@ import {
 import { PageHead, Panel, Unknown } from "../../ui";
 import { PhotoDrop } from "../PhotoDrop";
 import { ProductForm } from "../ProductForm";
+import { ProductTabs, TabPane } from "../ProductTabs";
+import { ProductPreview } from "../ProductPreview";
 import { Breadcrumbs, ButtonLink } from "@/components/ui";
 import { money } from "@/lib/format";
 import {
@@ -78,99 +80,117 @@ export default async function EditProductPage({
         }
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="flex min-w-0 flex-col gap-6">
+      <ProductTabs>
+        <ProductForm
+          product={product}
+          colours={colours}
+          accessories={accessories}
+          defaultBuffer={settings.defaultBufferStock}
+          pricingAside={
+            <>
+              <Panel title="What it costs">
+                {costed.cost.unknown ? (
+                  <div className="flex flex-col gap-3">
+                    <Unknown what={`No ${costed.cost.missing.join(" and no ")} recorded`} />
+                    <p className="text-[13.5px] text-muted">
+                      Until both are filled in there is no unit cost, so there is no margin and no
+                      suggested price. The parts below are what is known so far, they are not a
+                      total.
+                    </p>
+                    <CostLines settings={settings} costed={costed} partial />
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <CostLines settings={settings} costed={costed} />
+                    <div className="flex items-baseline justify-between border-t border-line pt-3">
+                      <span className="font-display font-semibold">Unit cost</span>
+                      <span className="font-display text-[22px] font-semibold tabular-nums">
+                        {money(Math.round(costed.cost.total))}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </Panel>
+
+              <Panel title="What to charge">
+                {/* Profit and margin are worked out from the same `cost.total` the
+                    suggestion is, so gating only on `suggested` let an unmeasured
+                    piece print four false numbers from packaging alone: $0.50
+                    suggested, $8.73 profit, 97% margin. The whole block branches on
+                    the unknown cost. The price she typed in is still a fact and
+                    stays; everything derived from a cost that does not exist goes. */}
+                {costed.cost.unknown || costed.suggested === null ? (
+                  <dl className="flex flex-col gap-2.5 text-[14px]">
+                    {product.price > 0 ? (
+                      <Row label="Your price" value={money(product.price)} />
+                    ) : null}
+                    <Row label="Profit each" value="-" />
+                    <Row label="Actual margin" value="-" />
+                    <p className="mt-1 text-[13.5px] text-muted">
+                      A suggested price, a profit and a margin all need a unit cost. Fill in the
+                      print time and at least one filament colour and they appear here.
+                    </p>
+                  </dl>
+                ) : (
+                  <AtThisPrice
+                    settings={settings}
+                    price={product.price}
+                    unitCostCents={Math.round(costed.cost.total)}
+                    suggested={costed.suggested}
+                    printTimeHours={product.printTimeHours}
+                  />
+                )}
+                <p className="mt-3 border-t border-line pt-3 text-[12px] text-faint">
+                  The mailer is charged once per order, not per piece, so it is not in
+                  here. Nor is your own time, by your decision, which makes every
+                  margin on this page better than the real one.
+                </p>
+              </Panel>
+            </>
+          }
+          reportingAside={
+            /* On the shelf and the buffer are editable in the panel above, so
+               they are not repeated here. What is left is the half nobody types:
+               open demand, and the queue the two of them produce. */
+            <Panel title="What that adds up to">
+              <dl className="flex flex-col gap-2.5 text-[14px]">
+                <Row label="Sold, not yet posted" value={String(ordered)} />
+                <Row label="To print" value={String(queue)} strong />
+              </dl>
+              <p className="mt-3 text-[12px] text-faint">
+                To print = sold, not yet posted + buffer &minus; on the shelf. It
+                counts pieces somebody has already paid for, so it can be more
+                than the buffer alone would ask for.
+              </p>
+              <Link
+                href="/admin/inventory"
+                className="mt-2 inline-block text-[13px] font-bold text-accent hover:text-accent-dark"
+              >
+                Open the print queue &rarr;
+              </Link>
+            </Panel>
+          }
+        />
+
+        {/*
+          * Photographs and the preview sit OUTSIDE the form, after it, and that
+          * is a constraint rather than a layout choice: PhotoDrop posts its own
+          * uploads and deletions through actions of its own, so it contains
+          * `<form>` elements, and a form inside a form is invalid HTML that
+          * browsers resolve by silently dropping the inner one. After, rather
+          * than before, so the reading order on this tab is the words, then the
+          * pictures, then the page they add up to.
+          */}
+        <TabPane tab="customer" className="mt-6 flex flex-col gap-6">
           <Panel title="Photographs" note="Shown on the shop in this order. The first one is the main picture.">
             <PhotoDrop productId={product.id} photos={product.photos} publicBase={photoBase} />
           </Panel>
 
-          <ProductForm
-            product={product}
-            colours={colours}
-            accessories={accessories}
-            defaultBuffer={settings.defaultBufferStock}
-          />
-        </div>
-
-        <aside className="flex flex-col gap-4 lg:sticky lg:top-8">
-          <Panel title="What it costs">
-            {costed.cost.unknown ? (
-              <div className="flex flex-col gap-3">
-                <Unknown what={`No ${costed.cost.missing.join(" and no ")} recorded`} />
-                <p className="text-[13.5px] text-muted">
-                  Until both are filled in there is no unit cost, so there is no margin and no
-                  suggested price. The parts below are what is known so far, they are not a
-                  total.
-                </p>
-                <CostLines settings={settings} costed={costed} partial />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <CostLines settings={settings} costed={costed} />
-                <div className="flex items-baseline justify-between border-t border-line pt-3">
-                  <span className="font-display font-semibold">Unit cost</span>
-                  <span className="font-display text-[22px] font-semibold tabular-nums">
-                    {money(Math.round(costed.cost.total))}
-                  </span>
-                </div>
-              </div>
-            )}
+          <Panel title="How it looks in the shop">
+            <ProductPreview slug={product.slug} active={product.active} />
           </Panel>
-
-          <Panel title="What to charge">
-            {/* Profit and margin are worked out from the same `cost.total` the
-                suggestion is, so gating only on `suggested` let an unmeasured
-                piece print four false numbers from packaging alone: $0.50
-                suggested, $8.73 profit, 97% margin. The whole block branches on
-                the unknown cost. The price she typed in is still a fact and
-                stays; everything derived from a cost that does not exist goes. */}
-            {costed.cost.unknown || costed.suggested === null ? (
-              <dl className="flex flex-col gap-2.5 text-[14px]">
-                {product.price > 0 ? (
-                  <Row label="Your price" value={money(product.price)} />
-                ) : null}
-                <Row label="Profit each" value="-" />
-                <Row label="Actual margin" value="-" />
-                <p className="mt-1 text-[13.5px] text-muted">
-                  A suggested price, a profit and a margin all need a unit cost. Fill in the
-                  print time and at least one filament colour and they appear here.
-                </p>
-              </dl>
-            ) : (
-              <AtThisPrice
-                settings={settings}
-                price={product.price}
-                unitCostCents={Math.round(costed.cost.total)}
-                suggested={costed.suggested}
-                printTimeHours={product.printTimeHours}
-              />
-            )}
-            <p className="mt-3 border-t border-line pt-3 text-[12px] text-faint">
-              The mailer is charged once per order, not per piece, so it is not in
-              here. Nor is your own time, by your decision, which makes every
-              margin on this page better than the real one.
-            </p>
-          </Panel>
-
-          <Panel title="Stock">
-            <dl className="flex flex-col gap-2.5 text-[14px]">
-              <Row label="On the shelf" value={String(product.stockOnHand)} />
-              <Row label="Sold, not yet posted" value={String(ordered)} />
-              <Row label="Buffer you keep" value={String(product.bufferStock)} />
-              <Row label="To print" value={String(queue)} strong />
-            </dl>
-            <p className="mt-3 text-[12px] text-faint">
-              To print = sold, not yet posted + buffer − on the shelf.
-            </p>
-            <Link
-              href="/admin/inventory"
-              className="mt-2 inline-block text-[13px] font-bold text-accent hover:text-accent-dark"
-            >
-              Open the print queue →
-            </Link>
-          </Panel>
-        </aside>
-      </div>
+        </TabPane>
+      </ProductTabs>
     </div>
   );
 }

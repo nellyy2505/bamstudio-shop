@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { AdminForm, SubmitButton } from "../AdminForm";
 import { saveProduct } from "../actions";
 import { Button, Field, Icon, cx, inputClass } from "@/components/ui";
+import { TabPane } from "./ProductTabs";
 import type { Accessory, ColourRow, ProductDetail } from "../data";
 
 /**
@@ -16,17 +18,44 @@ import type { Accessory, ColourRow, ProductDetail } from "../data";
  *
  * Nothing on this page is trusted. The form can be edited in a browser's
  * developer tools; the action treats every field as if it had been.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * THE FIELDS ARE SPLIT ACROSS THREE TABS AND ARE STILL ONE FORM AND ONE SAVE.
+ *
+ * `TabPane` hides an inactive tab, it does not unmount it, so every field is in
+ * the payload whichever tab is on screen when Save is pressed. That is what
+ * makes the split safe: `saveProduct` writes every column it reads, so a pane
+ * that vanished would blank the fields it owned.
+ *
+ * ONE CONSEQUENCE, AND IT IS A DELIBERATE TRADE. The `required` attributes came
+ * off name, SKU, price and weight when the tabs went in. A browser refuses to
+ * submit a form containing an invalid required field, and it tries to focus it
+ * to say so; a hidden field cannot take focus, so Chrome logs "not focusable"
+ * and the save silently does nothing. Nothing lost that matters: `saveProduct`
+ * already rejects each of those with a sentence in her own words, they were
+ * never the real check, and an error from the action renders outside the panes
+ * where it is readable from any tab.
+ * ────────────────────────────────────────────────────────────────────────────
+ *
+ * `pricingAside` and `reportingAside` are server-rendered panels handed in as
+ * props: the cost breakdown reads settings with the service-role key, so it
+ * cannot be built here, but it belongs beside the price rather than in a sidebar
+ * detached from the fields it explains.
  */
 export function ProductForm({
   product,
   colours,
   accessories,
   defaultBuffer,
+  pricingAside,
+  reportingAside,
 }: {
   product: ProductDetail | null;
   colours: ColourRow[];
   accessories: Accessory[];
   defaultBuffer: number;
+  pricingAside?: React.ReactNode;
+  reportingAside?: React.ReactNode;
 }) {
   const [recipe, setRecipe] = useState<{ colourId: string; grams: string }[]>(
     product?.filament.map((f) => ({ colourId: f.colourId, grams: String(f.grams) })) ?? [],
@@ -38,19 +67,20 @@ export function ProductForm({
     <AdminForm action={saveProduct} className="gap-6">
       {product ? <input type="hidden" name="id" value={product.id} /> : null}
 
+      <TabPane tab="customer" className="flex flex-col gap-6">
       <Panel title="What it is">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name" htmlFor="name" hint="What a customer sees.">
-            <input id="name" name="name" defaultValue={product?.name ?? ""} className={inputClass} required />
+            <input id="name" name="name" defaultValue={product?.name ?? ""} className={inputClass} />
           </Field>
           <Field label="Short name" htmlFor="short_name" hint="For tight spaces, like the cart.">
             <input id="short_name" name="short_name" defaultValue={product?.shortName ?? ""} className={inputClass} />
           </Field>
           <Field label="SKU" htmlFor="sku" hint="How your spreadsheet finds it. CLK-014, KEY-H02.">
-            <input id="sku" name="sku" defaultValue={product?.sku ?? ""} className={`${inputClass} font-mono`} required />
+            <input id="sku" name="sku" defaultValue={product?.sku ?? ""} className={`${inputClass} font-mono`} />
           </Field>
           <Field label="Web address" htmlFor="slug" hint="bamstudio.com/product/…">
-            <input id="slug" name="slug" defaultValue={product?.slug ?? ""} className={`${inputClass} font-mono`} required />
+            <input id="slug" name="slug" defaultValue={product?.slug ?? ""} className={`${inputClass} font-mono`} />
           </Field>
           <Field label="Category" htmlFor="category">
             <input id="category" name="category" defaultValue={product?.category ?? ""} className={inputClass} list="admin-categories" />
@@ -71,6 +101,9 @@ export function ProductForm({
         </Field>
       </Panel>
 
+      </TabPane>
+
+      <TabPane tab="pricing" className="flex flex-col gap-6">
       <Panel
         title="What it costs to make"
         note="These two are what every price in the studio is worked out from. Leave one blank and the piece has no cost, which is honest, not broken."
@@ -183,7 +216,7 @@ export function ProductForm({
         </fieldset>
       </Panel>
 
-      <Panel title="Price and stock">
+      <Panel title="What you charge">
         <div className="grid gap-4 sm:grid-cols-3">
           {/* The hint used to read "In dollars, GST included." The shop is under
               the $75,000 threshold and is not registered (SHOP.gstRegistered), so no
@@ -195,16 +228,17 @@ export function ProductForm({
               defaultValue={product ? (product.price / 100).toFixed(2) : ""}
               className={inputClass}
               inputMode="decimal"
-              required
             />
           </Field>
-          <Field label="On the shelf" htmlFor="stock_on_hand">
-            <input id="stock_on_hand" name="stock_on_hand" type="number" min="0" defaultValue={product?.stockOnHand ?? 0} className={inputClass} />
-          </Field>
-          <Field label="Buffer" htmlFor="buffer_stock" hint="How many you like to have spare.">
-            <input id="buffer_stock" name="buffer_stock" type="number" min="0" defaultValue={product?.bufferStock ?? defaultBuffer} className={inputClass} />
-          </Field>
         </div>
+        <p className="text-[13px] text-muted">
+          To set this against every other product at once, and see which of them
+          miss the target margin or the printer-hour bar, use{" "}
+          <Link href="/admin/products/pricing" className="font-bold text-accent">
+            bulk repricing
+          </Link>
+          .
+        </p>
       </Panel>
 
       <Panel
@@ -213,7 +247,7 @@ export function ProductForm({
       >
         <div className="grid gap-4 sm:grid-cols-4">
           <Field label="Weight (g)" htmlFor="weight_grams">
-            <input id="weight_grams" name="weight_grams" type="number" min="1" defaultValue={product?.weightGrams ?? 60} className={inputClass} required />
+            <input id="weight_grams" name="weight_grams" type="number" min="1" defaultValue={product?.weightGrams ?? 60} className={inputClass} />
           </Field>
           <Field label="Length (mm)" htmlFor="length_mm">
             <input id="length_mm" name="length_mm" type="number" min="1" defaultValue={product?.lengthMm ?? 100} className={inputClass} />
@@ -227,6 +261,24 @@ export function ProductForm({
         </div>
       </Panel>
 
+      {pricingAside}
+      </TabPane>
+
+      <TabPane tab="reporting" className="flex flex-col gap-6">
+      <Panel title="What is on the shelf">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="On the shelf" htmlFor="stock_on_hand">
+            <input id="stock_on_hand" name="stock_on_hand" type="number" min="0" defaultValue={product?.stockOnHand ?? 0} className={inputClass} />
+          </Field>
+          <Field label="Buffer" htmlFor="buffer_stock" hint="How many you like to have spare.">
+            <input id="buffer_stock" name="buffer_stock" type="number" min="0" defaultValue={product?.bufferStock ?? defaultBuffer} className={inputClass} />
+          </Field>
+        </div>
+      </Panel>
+      {reportingAside}
+      </TabPane>
+
+      <TabPane tab="customer" className="flex flex-col gap-6">
       <Panel title="Where it sells">
         <div className="flex flex-col gap-3">
           <Check name="active" label="Listed in the online shop" defaultChecked={product?.active ?? true} />
@@ -240,6 +292,8 @@ export function ProductForm({
           <Check name="is_new" label="Show as new" defaultChecked={product?.isNew ?? false} />
         </div>
       </Panel>
+
+      </TabPane>
 
       {!product ? (
         <input type="hidden" name="art" value="macaron" />
