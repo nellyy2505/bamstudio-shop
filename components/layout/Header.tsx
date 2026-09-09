@@ -1,12 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Icon, cx } from "@/components/ui";
 import { SearchBar } from "./SearchBar";
 import { useCart } from "@/components/cart/CartProvider";
-import { isFreeShipping, SHIPPING } from "@/lib/config";
+import { isFreeShipping, SHIPPING, SHOP } from "@/lib/config";
 import { money } from "@/lib/format";
 
 /**
@@ -88,11 +89,28 @@ export function Header({
             <Icon name={mobileOpen ? "x" : "menu"} size={22} />
           </button>
 
-          <Link
-            href="/"
-            className="font-display text-[22px] font-bold tracking-tight whitespace-nowrap md:text-[27px]"
-          >
-            Bam<span className="text-accent">Studio</span>
+          {/*
+            * The logo, as artwork rather than as type.
+            *
+            * `priority` because it is the largest thing above the fold on every
+            * page and Next lazy-loads images by default, which would leave the
+            * header empty for the first moment of every cold load.
+            *
+            * The intrinsic size is the file's own 720x351, and the rendered size
+            * is set in CSS, so the browser reserves the right box before the
+            * bytes arrive and the header does not jump. The file is the logo with
+            * its cream backing removed, so it sits on the page's own background
+            * rather than in a pink rectangle.
+            */}
+          <Link href="/" className="shrink-0">
+            <Image
+              src="/bam-studio-logo.png"
+              alt={SHOP.name}
+              width={720}
+              height={351}
+              priority
+              className="h-9 w-auto md:h-11"
+            />
           </Link>
 
           <div className="hidden flex-1 md:block">
