@@ -154,6 +154,27 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
 
     const accessoryId = text(form, "accessory_id") || null;
 
+    /*
+     * How this product is personalised, and how big a box it is.
+     *
+     * These were writable only by `scripts/generate-seed.mjs` until now, which
+     * meant a new bakery box could not be created from the Studio at all: the
+     * mode is what makes a product a box, and the piece count is what picks its
+     * rung out of the `bakery_box` ladder.
+     *
+     * The piece count is cleared for anything that is not a box. A leftover
+     * count on a keychain is harmless today and is exactly the kind of stale
+     * field that a later query filters on by accident.
+     */
+    const mode = text(form, "personalisation_mode");
+    if (mode && !["builder", "text", "bakery"].includes(mode)) {
+      return fail("That is not a kind of personalisation.");
+    }
+    const pieceCount = mode === "bakery" ? intOr(form, "bakery_piece_count", 0) : 0;
+    if (mode === "bakery" && (pieceCount < 1 || pieceCount > 12)) {
+      return fail("A bakery box has to hold between 1 and 12 pieces.");
+    }
+
     const fields = {
       sku,
       slug,
@@ -171,6 +192,12 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
       length_mm: intOr(form, "length_mm", 100),
       width_mm: intOr(form, "width_mm", 80),
       thickness_mm: intOr(form, "thickness_mm", 20),
+      personalisation_mode: mode || null,
+      // `is_personalised` is what the shopfront branches on to decide whether a
+      // product goes through a builder at all, so it has to follow the mode
+      // rather than being a second switch somebody can leave disagreeing.
+      is_personalised: Boolean(mode),
+      bakery_piece_count: mode === "bakery" ? pieceCount : null,
       active: bool(form, "active"),
       on_market_stall: bool(form, "on_market_stall"),
       is_bestseller: bool(form, "is_bestseller"),
@@ -1079,6 +1106,133 @@ export async function saveCharmDiscount(
     revalidatePath("/build");
     revalidatePath("/admin/settings");
     return ok(`Saved. A charm now costs ${money(discount)} less inside a build.`);
+  });
+}
+
+/* -------------------------------------------------------- the bakery box */
+
+/**
+ * Which products may go in a box, and in what order they are offered.
+ *
+ * "catalogue", because a filling pool decides what the shop sells and what a
+ * box costs to make.
+ *
+ * REPLACED WHOLESALE, like every other list in this file: a product unticked in
+ * the form has to leave the pool, and a diff that only handles adds is how a
+ * withdrawn piece keeps being offered.
+ *
+ * A pool row is INSERTED rather than the product being edited, and the two are
+ * deliberately different things. Whether a piece can go in a box is a property
+ * of the box range; whether it is sold on its own is `products.active`. Most
+ * fillings are inactive and in the pool at the same time, which is exactly the
+ * owner's answer: sold inside a box, not on their own.
+ */
+export async function saveBakeryFillings(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  return guard("catalogue", async () => {
+    const ids = [...new Set(form.getAll("filling").map(String).filter(Boolean))];
+
+    const admin = createAdminClient();
+    const { error: clearError } = await admin
+      .from("bakery_fillings")
+      .delete()
+      .neq("product_id", "00000000-0000-0000-0000-000000000000");
+    if (clearError) return fail(friendly(clearError.message));
+
+    if (ids.length > 0) {
+      const { error } = await admin.from("bakery_fillings").insert(
+        ids.map((product_id, index) => ({
+          product_id,
+          sort_order: index * 10,
+          active: true,
+        })),
+      );
+      if (error) return fail(friendly(error.message));
+    }
+
+    revalidatePath("/bakery");
+    revalidatePath("/admin/bakery");
+    return ok(
+      ids.length === 0
+        ? "Saved. Nothing is offered in a box, so the builder will say it is not ready."
+        : `Saved. ${pluralise(ids.length, "piece")} can go in a box.`,
+    );
+  });
+}
+
+/**
+ * Which colours boxes are printed in.
+ *
+ * Pointers at `colours` rows, never copies of their names and hexes, so
+ * renaming a filament colour renames it here and there is no second swatch to
+ * drift from the first.
+ */
+export async function saveBakeryColours(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  return guard("catalogue", async () => {
+    const ids = [...new Set(form.getAll("colour").map(String).filter(Boolean))];
+
+    const admin = createAdminClient();
+    const { error: clearError } = await admin
+      .from("bakery_box_colours")
+      .delete()
+      .neq("colour_id", "00000000-0000-0000-0000-000000000000");
+    if (clearError) return fail(friendly(clearError.message));
+
+    if (ids.length > 0) {
+      const { error } = await admin.from("bakery_box_colours").insert(
+        ids.map((colour_id, index) => ({
+          colour_id,
+          sort_order: index * 10,
+          active: true,
+        })),
+      );
+      if (error) return fail(friendly(error.message));
+    }
+
+    revalidatePath("/bakery");
+    revalidatePath("/admin/bakery");
+    return ok(`Saved. Boxes come in ${pluralise(ids.length, "colour")}.`);
+  });
+}
+
+/** One box design: the lid. Saved on its own row, like an accessory. */
+export async function saveBakeryDesign(
+  _prev: FormState,
+  form: FormData,
+): Promise<FormState> {
+  return guard("catalogue", async () => {
+    const id = text(form, "id");
+    const name = text(form, "name");
+    if (!name) return fail("A design needs a name.");
+
+    const slug = text(form, "slug");
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      return fail("The design's short name can only use lowercase letters, numbers and hyphens.");
+    }
+
+    const fields = {
+      slug,
+      name,
+      blurb: text(form, "blurb"),
+      has_window: bool(form, "has_window"),
+      sort_order: intOr(form, "sort_order", 0),
+      active: bool(form, "active"),
+    };
+
+    const admin = createAdminClient();
+    const { error } = id
+      ? await admin.from("bakery_box_designs").update(fields).eq("id", id)
+      : await admin.from("bakery_box_designs").insert(fields);
+    if (error) return fail(friendly(error.message));
+
+    revalidatePath("/bakery");
+    revalidatePath("/admin/bakery");
+    return ok(id ? "Saved." : "Design added.");
   });
 }
 

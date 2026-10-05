@@ -45,9 +45,11 @@ export type FallbackRung = { units: number; priceCents: number };
  * marginal letter itself earns $1.34 an hour at $1.00 and 10c an hour at 50c.
  * See claude/planner-workbook-fixes.md.
  *
- * BAKERY BOX: four pieces, one price, whichever pieces the customer picks.
- * $15 is a placeholder the owner named while the concept is still being
- * designed, not a costed figure.
+ * BAKERY BOX: one price a box, whichever pieces the customer picks, and the
+ * same $12 for both sizes. A birthday cake is one large decorated print and
+ * four pastries are four small ones, and the owner has priced them as the same
+ * job. Placeholders in the sense that nothing has been costed against them yet,
+ * not in the sense that they are guesses: both are figures she named.
  */
 export const BUILDER_PRICING_FALLBACK: Record<BuilderKind, FallbackRung[]> = {
   letter_caps: [
@@ -57,7 +59,10 @@ export const BUILDER_PRICING_FALLBACK: Record<BuilderKind, FallbackRung[]> = {
     { units: 4, priceCents: 650 },
     { units: 5, priceCents: 700 },
   ],
-  bakery_box: [{ units: 4, priceCents: 1500 }],
+  bakery_box: [
+    { units: 1, priceCents: 1200 },
+    { units: 4, priceCents: 1200 },
+  ],
 };
 
 /**

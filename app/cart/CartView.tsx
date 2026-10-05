@@ -262,6 +262,10 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
       custom: line.custom
         ? { letters: line.custom.letters, with_charm: line.custom.with_charm }
         : null,
+      // A box's postage depends on the box, not its contents: the weight is the
+      // box product's own worst case. The quote still needs to know it IS a box
+      // so the signature changes when one is swapped for another.
+      bakery: line.bakery ? { fillings: line.bakery.fillings.length } : null,
     })),
     scoop_lines: lines
       .filter(isScoopLine)
@@ -378,6 +382,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
             attachment_id: line.attachment_id,
             quantity: line.quantity,
             custom: line.custom,
+            bakery: line.bakery,
             personalisation_text: line.personalisation_text ?? undefined,
           })),
           /*

@@ -3,6 +3,9 @@ import { z } from "zod";
 import { getStripe, siteUrl } from "@/lib/stripe";
 import { createAdminClient, getUser } from "@/lib/supabase/server";
 import {
+  getBakeryColours,
+  getBakeryDesigns,
+  getBakeryFillings,
   getCollections,
   isDatabaseConfigured,
   loadProductsBySlug,
@@ -41,6 +44,13 @@ import {
   scoopVariantLabel,
   toScoopShippingLines,
 } from "@/lib/scoop-line";
+import {
+  costOfFillings,
+  describeProblem,
+  describeSelection,
+  validateSelection,
+  type BakerySelection,
+} from "@/lib/bakery";
 import { quoteBasket } from "@/lib/shipping/quote";
 import type { Product } from "@/lib/types";
 
@@ -54,6 +64,22 @@ const LineSchema = z.object({
   quantity: z.number().int().min(1).max(BASKET_LIMITS.maxLineQuantity),
   /** "text" mode personalisation - one printed line, e.g. a pet's name. */
   personalisation_text: z.string().max(PERSONALISATION_TEXT_MAX).optional(),
+  /**
+   * A bakery box: the design, the colour and the pieces that go in it.
+   *
+   * The array bound is a rail on payload size, not the rule. How many pieces a
+   * box holds is `products.bakery_piece_count` on the row being bought, which a
+   * module-scope schema cannot await; the real count is checked below by
+   * `validateSelection`, which is also where a withdrawn design or filling is
+   * refused.
+   */
+  bakery: z
+    .object({
+      design: z.string().min(1).max(60),
+      colour_id: z.string().min(1).max(64),
+      fillings: z.array(z.string().min(1).max(80)).min(1).max(12),
+    })
+    .optional(),
   custom: z
     .object({
       collection_slug: z.string().min(1).max(60),
@@ -135,6 +161,16 @@ type SummaryLine = {
   unit_price: number;
   quantity: number;
   personalisation: unknown;
+  /**
+   * The product ids of a bakery box's contents, one per piece, duplicates
+   * included.
+   *
+   * Carried separately from `personalisation` (which holds slugs, because that
+   * is what a packing slip and a customer can read) so the staging step can
+   * cost the box from four measured pieces instead of from the empty container,
+   * and so the webhook knows which shelves to take them off.
+   */
+  filling_product_ids?: string[];
 };
 
 /**
@@ -276,10 +312,44 @@ async function savePendingOrder(input: {
     // costing tables were unreadable would be a far worse trade.
     let costs = new Map<string, number | null>();
     try {
-      costs = await unitCostsAtSale(input.items.map((item) => item.product_id));
+      /*
+       * The box products AND everything inside them. A bakery box's own product
+       * row is an empty container: costing a line from it alone would report the
+       * lid and none of the four pieces, which on a flat-priced box is exactly
+       * the number that would hide the problem flat pricing creates.
+       */
+      costs = await unitCostsAtSale([
+        ...input.items.map((item) => item.product_id),
+        ...input.items.flatMap((item) => item.filling_product_ids ?? []),
+      ]);
     } catch (error) {
       console.error("Could not cost the basket; lines keep a null cost:", error);
     }
+
+    /**
+     * What one of these lines cost to make.
+     *
+     * For a bakery box: the container plus its contents, and null the moment
+     * any one piece has never been measured. Null rather than a partial sum for
+     * the reason `unitCostsAtSale` returns null for an unmeasured product - a
+     * box costed from three of its four pieces is a flattering number that
+     * looks like a real one, and the reports already know how to say "some of
+     * these carry no cost" but cannot know a number is short.
+     */
+    const lineCost = (item: (typeof input.items)[number]): number | null => {
+      const box = costs.get(item.product_id) ?? null;
+      if (!item.filling_product_ids || item.filling_product_ids.length === 0) {
+        return box;
+      }
+      const contents = costOfFillings(
+        item.filling_product_ids,
+        new Map(item.filling_product_ids.map((id) => [id, costs.get(id) ?? null])),
+      );
+      if (contents === null) return null;
+      // A container nobody has measured makes the whole box unmeasured, the
+      // same as an unmeasured piece would.
+      return box === null ? null : box + contents;
+    };
 
     const { error: itemsError } = await supabase.from("order_items").insert([
       ...input.items.map((item) => ({
@@ -297,7 +367,7 @@ async function savePendingOrder(input: {
         personalisation: item.personalisation,
         // Null for a product nobody has measured - an honest gap the reports
         // count and say out loud, rather than a zero that reads as 100% margin.
-        unit_cost_cents: costs.get(item.product_id) ?? null,
+        unit_cost_cents: lineCost(item),
       })),
       /*
        * A SCOOP LINE. Everything below is decided by one fact: this was sold
@@ -511,6 +581,32 @@ export async function POST(request: Request) {
     getCharmDiscountCents(),
   ]);
 
+  /*
+   * The bakery reference data, and only when a box is actually in the basket.
+   *
+   * Read HERE, at the moment of charging, and never taken from the request: a
+   * design withdrawn or a filling deactivated while somebody had the builder
+   * open has to fail now, because this is the last point before money moves.
+   * The fillings map is slug to product, so a box can be costed and its stock
+   * moved from rows this server looked up rather than names a client sent.
+   */
+  const wantsBakery = body.lines.some((line) => line.bakery);
+  const [boxLadder, bakeryDesigns, bakeryColours, bakeryFillings] = wantsBakery
+    ? await Promise.all([
+        getLadder("bakery_box"),
+        getBakeryDesigns(),
+        getBakeryColours(),
+        getBakeryFillings(),
+      ])
+    : [null, [], [], []];
+
+  const designSlugs = new Set(bakeryDesigns.map((d) => d.slug));
+  const colourIds = new Set(bakeryColours.map((c) => c.id));
+  const fillingSlugs = new Set(bakeryFillings.map((f) => f.slug));
+  const fillingProducts = wantsBakery
+    ? await loadProductsBySlug([...fillingSlugs])
+    : new Map<string, Product>();
+
   const lineItems: {
     price_data: {
       currency: string;
@@ -544,12 +640,34 @@ export async function POST(request: Request) {
 
     let unitPrice: number;
     let description: string;
+    let bakerySelection: BakerySelection | null = null;
+    let fillingProductIds: string[] | undefined;
 
     // A `custom` block carries builder bundle pricing, so it must only ever
     // reach a builder product - otherwise an $18 item could be bought for $3.
     if (line.custom && product.personalisation_mode !== "builder") {
       return NextResponse.json(
         { error: `“${product.short_name}” is not built in the designer.` },
+        { status: 400 },
+      );
+    }
+    /*
+     * The same guard the builder line has, for the same reason: a `bakery` block
+     * carries box pricing, so it must only ever reach a bakery product, or a $15
+     * box could be bought at the price of whatever else was pointed at. And the
+     * converse, which the builder does not need because a name with no letters
+     * cannot be added: an empty box IS a coherent request and must be refused,
+     * or somebody buys a container for the price of a filled one.
+     */
+    if (line.bakery && product.personalisation_mode !== "bakery") {
+      return NextResponse.json(
+        { error: `“${product.short_name}” is not a bakery box.` },
+        { status: 400 },
+      );
+    }
+    if (!line.bakery && product.personalisation_mode === "bakery") {
+      return NextResponse.json(
+        { error: `“${product.short_name}” has to be filled before you can buy it.` },
         { status: 400 },
       );
     }
@@ -662,6 +780,62 @@ export async function POST(request: Request) {
       ]
         .filter(Boolean)
         .join(" · ");
+    } else if (line.bakery) {
+      /*
+       * A BOX IS PRICED BY ITS SIZE, NOT ITS CONTENTS. The rung is looked up by
+       * `products.bakery_piece_count`, and the fillings do not move it, which is
+       * the owner's decision. The consequence is written down in lib/bakery.ts:
+       * the studio carries the difference between a cheap box and a dear one,
+       * so `unit_cost_cents` below is stamped from the four real pieces and not
+       * from the empty container, or the gap would never show up in a report.
+       */
+      const pieceCount = product.bakery_piece_count ?? 0;
+      const boxPrice = boxLadder ? priceFor(boxLadder, pieceCount) : null;
+
+      const selection: BakerySelection = {
+        kind: "bakery",
+        design: line.bakery.design,
+        colour_id: line.bakery.colour_id,
+        fillings: line.bakery.fillings,
+      };
+
+      const problems = validateSelection(
+        selection,
+        { slug: product.slug, pieceCount },
+        { designSlugs, colourIds, fillingSlugs, priceCents: boxPrice },
+      );
+      if (problems.length > 0) {
+        return NextResponse.json(
+          { error: describeProblem(problems[0]) },
+          // 409 rather than 400: the commonest cause is something withdrawn
+          // between building the box and paying for it, which is a conflict
+          // with the shop's current state and not a malformed request.
+          { status: 409 },
+        );
+      }
+
+      unitPrice = boxPrice as number;
+
+      const design = bakeryDesigns.find((d) => d.slug === selection.design);
+      const boxColour = bakeryColours.find((c) => c.id === selection.colour_id);
+      const nameBySlug = new Map(bakeryFillings.map((f) => [f.slug, f.short_name || f.name]));
+
+      colour = boxColour?.name ?? null;
+      description = describeSelection(selection, {
+        design: design?.name ?? "Box",
+        colour: boxColour?.name ?? "",
+        fillingNames: selection.fillings.map((s) => nameBySlug.get(s) ?? s),
+      });
+
+      bakerySelection = selection;
+      // Ids, not slugs: what the cost read and the stock decrement both key on.
+      // A filling whose product row went missing between the pool read and here
+      // is dropped rather than faked, and `costOfFillings` then answers null
+      // because the map has no cost for it.
+      fillingProductIds = selection.fillings.flatMap((slug) => {
+        const row = fillingProducts.get(slug);
+        return row ? [row.id] : [];
+      });
     } else {
       // Colour is free text on the wire; only a colour this product actually
       // comes in may reach the Stripe line description or the order record.
@@ -747,10 +921,12 @@ export async function POST(request: Request) {
       unit_price: unitPrice,
       quantity: line.quantity,
       personalisation:
+        bakerySelection ??
         line.custom ??
         (line.personalisation_text
           ? { text: line.personalisation_text.trim() }
           : null),
+      ...(fillingProductIds ? { filling_product_ids: fillingProductIds } : {}),
     });
   }
 

@@ -38,6 +38,7 @@ import {
   type ScoopAvailability,
   type ScoopCostBasis,
 } from "@/lib/scoop";
+import { fillingQuantities, fillingSlugsOf, isBakeryLine } from "@/lib/bakery";
 import type { ScoopTheme } from "@/lib/types";
 import { SERVICE_CODES } from "@/lib/shipping/quote";
 import { isEmailConfigured } from "@/lib/email";
@@ -224,6 +225,8 @@ export type ProductDetail = ProductRow & {
   isNew: boolean;
   isPersonalised: boolean;
   personalisationMode: string | null;
+  /** Pieces a bakery box holds. Null unless the mode is "bakery". */
+  bakeryPieceCount: number | null;
   personalisationLabel: string | null;
   weightGrams: number;
   lengthMm: number;
@@ -460,7 +463,7 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
     .select(
       PRODUCT_COLUMNS +
         ", description, is_bestseller, is_new, is_personalised, " +
-        "personalisation_mode, personalisation_label, weight_grams, " +
+        "personalisation_mode, personalisation_label, bakery_piece_count, weight_grams, " +
         "length_mm, width_mm, thickness_mm, gallery, colours, attachments, details",
     )
     .eq("id", id)
@@ -476,6 +479,10 @@ export async function getProduct(id: string): Promise<ProductDetail | null> {
     isNew: Boolean(row.is_new),
     isPersonalised: Boolean(row.is_personalised),
     personalisationMode: (row.personalisation_mode as string | null) ?? null,
+    bakeryPieceCount:
+      row.bakery_piece_count === null || row.bakery_piece_count === undefined
+        ? null
+        : Number(row.bakery_piece_count),
     personalisationLabel: (row.personalisation_label as string | null) ?? null,
     weightGrams: Number(row.weight_grams ?? 0),
     lengthMm: Number(row.length_mm ?? 0),
@@ -712,15 +719,52 @@ export async function getOpenDemand(): Promise<Map<string, number>> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("order_items")
-    .select("product_id, quantity, orders!inner(status)")
+    .select("product_id, quantity, personalisation, orders!inner(status)")
     .in("orders.status", DEMAND_STATUSES as unknown as string[]);
 
   const demand = new Map<string, number>();
+  const bump = (id: string, by: number) =>
+    demand.set(id, (demand.get(id) ?? 0) + by);
+
+  /*
+   * A BAKERY BOX IS DEMAND FOR FIVE THINGS, NOT ONE.
+   *
+   * The box itself is printed to order like anything else, and so is every
+   * piece inside it. Counting only `product_id` would put the container in the
+   * print queue and leave the four cakes out of it, so the queue would say
+   * "print 2 boxes" and never mention the eight pastries that go in them. The
+   * buy list reads the same demand, so the filament for them would be missing
+   * too.
+   *
+   * The fillings are held as slugs on the line (that is what a packing slip can
+   * read), and this map is keyed by product id, so they are resolved in one
+   * query below rather than one per line.
+   */
+  const fillingCounts = new Map<string, number>();
   for (const row of data ?? []) {
+    const quantity = Number(row.quantity ?? 0);
+    if (quantity <= 0) continue;
+
     const id = row.product_id as string | null;
-    if (!id) continue;
-    demand.set(id, (demand.get(id) ?? 0) + Number(row.quantity ?? 0));
+    if (id) bump(id, quantity);
+
+    for (const [slug, per] of fillingQuantities(fillingSlugsOf(row.personalisation))) {
+      fillingCounts.set(slug, (fillingCounts.get(slug) ?? 0) + per * quantity);
+    }
   }
+
+  if (fillingCounts.size > 0) {
+    const { data: rows } = await admin
+      .from("products")
+      .select("id, slug")
+      .in("slug", [...fillingCounts.keys()]);
+
+    for (const row of rows ?? []) {
+      const count = fillingCounts.get(row.slug as string);
+      if (count) bump(row.id as string, count);
+    }
+  }
+
   return demand;
 }
 
@@ -858,6 +902,114 @@ export async function getReturnedQuantities(
     returned.set(id, (returned.get(id) ?? 0) + Number(row.quantity ?? 0));
   }
   return returned;
+}
+
+/* --------------------------------------------------------- the bakery box */
+
+export type BakeryDesignRow = {
+  id: string;
+  slug: string;
+  name: string;
+  blurb: string;
+  hasWindow: boolean;
+  sortOrder: number;
+  active: boolean;
+};
+
+export type BakeryStudio = {
+  designs: BakeryDesignRow[];
+  /** Every colour, with whether boxes are printed in it. */
+  colours: (ColourRow & { chosen: boolean })[];
+  /** Every product, with whether it can go in a box. */
+  candidates: {
+    id: string;
+    sku: string;
+    name: string;
+    category: string;
+    active: boolean;
+    chosen: boolean;
+  }[];
+  /** Boxes: products in bakery mode, with how many pieces each holds. */
+  boxes: { id: string; slug: string; name: string; pieceCount: number | null }[];
+};
+
+/**
+ * Everything the bakery screen edits, in one read.
+ *
+ * The colour and candidate lists are the FULL lists with a `chosen` flag rather
+ * than just what is currently selected, because the screen is a set of
+ * checkboxes: it has to render the things that are not chosen as much as the
+ * things that are, and a second query per unchosen row would be the same read
+ * done twice.
+ */
+export async function getBakeryStudio(): Promise<BakeryStudio> {
+  assertServer("getBakeryStudio");
+
+  const admin = createAdminClient();
+  const [designs, colours, chosenColours, products, chosenFillings] = await Promise.all([
+    admin
+      .from("bakery_box_designs")
+      .select("id, slug, name, blurb, has_window, sort_order, active")
+      .order("sort_order", { ascending: true }),
+    getColours(),
+    admin.from("bakery_box_colours").select("colour_id").eq("active", true),
+    admin
+      .from("products")
+      .select("id, sku, name, category, active, slug, personalisation_mode, bakery_piece_count")
+      .order("category", { ascending: true })
+      .order("name", { ascending: true }),
+    admin.from("bakery_fillings").select("product_id, sort_order").eq("active", true),
+  ]);
+
+  const colourChosen = new Set(
+    (chosenColours.data ?? []).map((row) => row.colour_id as string),
+  );
+  const fillingOrder = new Map(
+    (chosenFillings.data ?? []).map((row) => [
+      row.product_id as string,
+      Number(row.sort_order ?? 0),
+    ]),
+  );
+
+  const rows = (products.data ?? []).map(asRow);
+
+  return {
+    designs: (designs.data ?? []).map((row) => ({
+      id: row.id as string,
+      slug: row.slug as string,
+      name: row.name as string,
+      blurb: (row.blurb as string) ?? "",
+      hasWindow: Boolean(row.has_window),
+      sortOrder: Number(row.sort_order ?? 0),
+      active: Boolean(row.active),
+    })),
+    colours: colours.map((colour) => ({
+      ...colour,
+      chosen: colourChosen.has(colour.id),
+    })),
+    candidates: rows
+      // A box cannot go inside a box.
+      .filter((row) => row.personalisation_mode !== "bakery")
+      .map((row) => ({
+        id: row.id as string,
+        sku: row.sku as string,
+        name: row.name as string,
+        category: (row.category as string) ?? "",
+        active: Boolean(row.active),
+        chosen: fillingOrder.has(row.id as string),
+      })),
+    boxes: rows
+      .filter((row) => row.personalisation_mode === "bakery")
+      .map((row) => ({
+        id: row.id as string,
+        slug: row.slug as string,
+        name: row.name as string,
+        pieceCount:
+          row.bakery_piece_count === null || row.bakery_piece_count === undefined
+            ? null
+            : Number(row.bakery_piece_count),
+      })),
+  };
 }
 
 /* ----------------------------------------------------------- inventory */
@@ -2482,6 +2634,62 @@ export async function getPickList(): Promise<PickList> {
         continue;
       }
 
+      /*
+       * A BAKERY BOX IS TWO ENTRIES ON THIS SHEET, AND BOTH ARE NEEDED.
+       *
+       * The box is a single: each one is a different object (its own lid,
+       * colour and four pieces) so pooling two of them would lose which pieces
+       * go in which. Its `variant_label` already reads "Window lid, Baby Pink:
+       * 2 × Macaron, Croissant", written at checkout, so the bench can see what
+       * to assemble.
+       *
+       * The PIECES are pooled with everything else, because they are ordinary
+       * plain pieces and that is the whole point of this sheet: nine macarons
+       * across four boxes is one print batch and one trip to one drawer, not
+       * nine lines.
+       *
+       * Without this a box line fell through to the pooled branch below and
+       * listed as "Bakery box × 1" with no mention of what goes in it, which is
+       * an instruction nobody can follow.
+       */
+      if (isBakeryLine(item.personalisation)) {
+        singles.push({
+          key: `box-${item.id as string}`,
+          kind: "personalised",
+          name,
+          sku: (product?.sku as string) ?? null,
+          quantity,
+          colour,
+          variantLabel,
+          personalisation: null,
+          orders: [ref],
+        });
+
+        for (const [slug, per] of fillingQuantities(fillingSlugsOf(item.personalisation))) {
+          const fillingKey = `filling|${slug}`;
+          const already = plain.get(fillingKey);
+          if (already) {
+            already.quantity += per * quantity;
+            if (!already.orders.some((o) => o.id === ref.id)) already.orders.push(ref);
+          } else {
+            plain.set(fillingKey, {
+              key: `plain-${fillingKey}`,
+              kind: "plain",
+              // The slug, until the names are resolved below. A filling is not
+              // an `order_items` row, so there is no product_name to take.
+              name: slug,
+              sku: null,
+              quantity: per * quantity,
+              colour: null,
+              variantLabel: "for a bakery box",
+              personalisation: null,
+              orders: [ref],
+            });
+          }
+        }
+        continue;
+      }
+
       if (personalisation) {
         singles.push({
           key: `custom-${item.id as string}`,
@@ -2527,6 +2735,30 @@ export async function getPickList(): Promise<PickList> {
     }
   }
 
+  /*
+   * Box fillings were pooled under their slug, because a filling has no
+   * `order_items` row to take a name from. Resolved to real names and SKUs in
+   * one query: a sheet that said "cinnamon-roll" would be asking the person at
+   * the bench to translate.
+   */
+  const fillingKeys = [...plain.keys()].filter((key) => key.startsWith("filling|"));
+  if (fillingKeys.length > 0) {
+    const slugs = fillingKeys.map((key) => key.slice("filling|".length));
+    const { data: rows } = await admin
+      .from("products")
+      .select("slug, name, short_name, sku")
+      .in("slug", slugs);
+
+    const bySlug = new Map((rows ?? []).map((row) => [row.slug as string, row]));
+    for (const key of fillingKeys) {
+      const entry = plain.get(key);
+      const row = bySlug.get(key.slice("filling|".length));
+      if (!entry || !row) continue;
+      entry.name = ((row.short_name as string) || (row.name as string)) ?? entry.name;
+      entry.sku = (row.sku as string) ?? null;
+    }
+  }
+
   const entries = [
     ...[...plain.values()].sort((a, b) => a.name.localeCompare(b.name)),
     ...singles.sort((a, b) => a.name.localeCompare(b.name)),
@@ -2553,6 +2785,33 @@ export async function getPickList(): Promise<PickList> {
  */
 export function describePersonalisationText(value: unknown): string | null {
   if (value === null || value === undefined) return null;
+
+  /*
+   * A BAKERY BOX IS ALREADY DESCRIBED, IN WORDS, ON THE LINE ITSELF.
+   *
+   * Its blob holds a design slug, a colour UUID and a list of product slugs,
+   * and the generic object branch below would render exactly that on a packing
+   * slip: "colour id: 3f2a9c1e-..." next to "fillings: macaron,macaron". Nobody
+   * can pack from it.
+   *
+   * `order_items.variant_label` carries the readable version, built by
+   * `describeSelection` in lib/bakery.ts at checkout, in names rather than
+   * slugs: "Window lid, Baby Pink: 2 × Macaron, Croissant". The slip and the
+   * order screen both render it above this box already.
+   *
+   * SO THIS ADDS NOTHING AND RETURNS NULL. The dependency is worth stating
+   * because it is not obvious: if `variant_label` is ever dropped from a box
+   * line, a box becomes unpackable and this is the function that stopped
+   * covering for it.
+   */
+  if (
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>).kind === "bakery"
+  ) {
+    return null;
+  }
+
   if (typeof value === "string") return value.trim() || null;
   if (Array.isArray(value)) {
     const parts = value.map((part) => String(part)).filter(Boolean);

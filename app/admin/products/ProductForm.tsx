@@ -279,6 +279,55 @@ export function ProductForm({
       </TabPane>
 
       <TabPane tab="customer" className="flex flex-col gap-6">
+      <Panel
+        title="Personalisation"
+        note="Whether a customer designs this before buying it, and how."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Designed by the customer"
+            htmlFor="personalisation_mode"
+            hint="Leave as Not personalised for an ordinary product."
+          >
+            <select
+              id="personalisation_mode"
+              name="personalisation_mode"
+              defaultValue={product?.personalisationMode ?? ""}
+              className={inputClass}
+            >
+              <option value="">Not personalised</option>
+              <option value="builder">Letter caps, in the name builder</option>
+              <option value="text">One line of text they type</option>
+              <option value="bakery">A bakery box they fill</option>
+            </select>
+          </Field>
+
+          <Field
+            label="Pieces the box holds"
+            htmlFor="bakery_piece_count"
+            hint="Bakery boxes only. 4 for the pastry box, 1 for a birthday cake. The price comes from the matching rung in Settings."
+          >
+            <input
+              id="bakery_piece_count"
+              name="bakery_piece_count"
+              type="number"
+              min="1"
+              max="12"
+              defaultValue={product?.bakeryPieceCount ?? ""}
+              placeholder="not a box"
+              className={inputClass}
+            />
+          </Field>
+        </div>
+
+        <p className="text-[13px] text-muted">
+          A personalised product is <b>not priced by the Price field above</b>.
+          Letter caps and bakery boxes are priced by their ladder in Settings, so
+          the price on this page is ignored for them and the shop shows the
+          cheapest thing the builder can make.
+        </p>
+      </Panel>
+
       <Panel title="Where it sells">
         <div className="flex flex-col gap-3">
           <Check name="active" label="Listed in the online shop" defaultChecked={product?.active ?? true} />

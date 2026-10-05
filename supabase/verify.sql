@@ -1,7 +1,7 @@
 -- Schema smoke test.
 --
 -- Run this in the Supabase SQL editor after applying every file in
--- supabase/migrations/ in order and then seed.sql. It returns ONE table of 150
+-- supabase/migrations/ in order and then seed.sql. It returns ONE table of 163
 -- rows and every `pass` must be `t`. These are the guarantees that only fail
 -- in production - a missing grant here means paid orders are never recorded,
 -- and you would first hear about it from a customer.
@@ -13,8 +13,8 @@
 -- and sign-up tables), 126 with 0007 (the Lucky Scoop tiers, their pools and
 -- what went into a packed scoop), 141 with 0013 (returns, what they put back on
 -- the shelf, and how a sale off the website was paid for), 150 with 0014 (the
--- builder prices, out of the code at last) - so a shorter table than 150 means
--- an older copy of this file, and an older copy is a green
+-- builder prices, out of the code at last), 163 with 0015 (the bakery box) - so
+-- a shorter table than 163 means an older copy of this file, and an older copy is a green
 -- result that never looked at part of the schema. That reads like a pass and is
 -- not one.
 --
@@ -68,10 +68,11 @@ union all
 -- added contact_enquiries and newsletter_signups; 23 since 0007_lucky_scoop.sql
 -- added scoop_tiers, scoop_tier_products, scoop_packs and scoop_pack_items; 25
 -- since 0013_returns.sql added order_returns and order_return_items; 26 since
--- 0014_builder_pricing.sql added builder_pricing. A new table that forgets to
--- enable RLS lands in `public` readable by the anon key, so this count is
--- deliberately exact rather than `>=`.
-select 'row-level security everywhere',    count(*) = 26 from pg_tables
+-- 0014_builder_pricing.sql added builder_pricing; 29 since 0015_bakery_box.sql
+-- added bakery_box_designs, bakery_box_colours and bakery_fillings. A new table
+-- that forgets to enable RLS lands in `public` readable by the anon key, so
+-- this count is deliberately exact rather than `>=`.
+select 'row-level security everywhere',    count(*) = 29 from pg_tables
          where schemaname = 'public' and rowsecurity = true
 union all
 -- A client must never be able to write a review: the old policy let any
@@ -1405,8 +1406,21 @@ select 'the first letter is $3.50', (
           where kind = 'letter_caps' and units = 1
        )
 union all
-select 'the bakery box has one flat price', (
-         select count(*) = 1 from public.builder_pricing where kind = 'bakery_box'
+-- Two sizes, and deliberately the same price: a birthday cake box and a pastry
+-- box are the same job. A rung is keyed on piece count, so nothing needed a
+-- special case to express it.
+select 'both box sizes are priced', (
+         select count(*) = 2 from public.builder_pricing where kind = 'bakery_box'
+       )
+union all
+select 'both boxes cost the same', (
+         select count(distinct price_cents) = 1
+           from public.builder_pricing where kind = 'bakery_box'
+       )
+union all
+select 'a box costs $12', (
+         select price_cents = 1200 from public.builder_pricing
+          where kind = 'bakery_box' and units = 4
        )
 union all
 -- An invented builder cannot be priced, for the reason every enum here is a
@@ -1418,6 +1432,72 @@ select 'an invented builder kind is refused', (
          )
        );
 
+-- ----------------------------------------------------- 0015 the bakery box
+--
+-- The three tables the builder draws from are readable by the browser key, the
+-- way products and collections are, and writable only by the service role.
+insert into _checks (check_name, pass)
+select 'the shop can read box designs' as check,
+       has_table_privilege('anon', 'public.bakery_box_designs', 'select') as pass
+union all
+select 'the shop can read box colours',
+       has_table_privilege('anon', 'public.bakery_box_colours', 'select')
+union all
+select 'the shop can read box fillings',
+       has_table_privilege('anon', 'public.bakery_fillings', 'select')
+union all
+select 'anon cannot add a box design',
+       not has_table_privilege('anon', 'public.bakery_box_designs', 'insert')
+union all
+select 'signed-in cannot change the filling pool',
+       not has_table_privilege('authenticated', 'public.bakery_fillings', 'update')
+union all
+select 'the studio can change the filling pool',
+       has_table_privilege('service_role', 'public.bakery_fillings', 'insert')
+union all
+-- A piece somebody can put in a box must not vanish from under the builder
+-- because the product was deleted somewhere else. Deactivate it instead.
+select 'a filling product cannot be deleted away', (
+         select confdeltype = 'r'
+           from pg_constraint
+          where conrelid = 'public.bakery_fillings'::regclass
+            and confrelid = 'public.products'::regclass
+            and contype = 'f'
+       )
+union all
+-- The box colour is a POINTER at a colour row, never a copy of its name and
+-- hex, so renaming a colour renames it in the builder and no second swatch can
+-- drift from the first.
+select 'a box colour points at a real colour', (
+         select count(*) = 1
+           from pg_constraint
+          where conrelid = 'public.bakery_box_colours'::regclass
+            and confrelid = 'public.colours'::regclass
+            and contype = 'f'
+       )
+union all
+select 'bakery is a kind of personalisation', (
+         select count(*) = 1 from pg_constraint
+          where conrelid = 'public.products'::regclass
+            and conname = 'products_personalisation_mode_check'
+            and pg_get_constraintdef(oid) like '%bakery%'
+       )
+union all
+-- Three designs ship with the migration so the builder can render at all; they
+-- are the owner's to rename or switch off.
+select 'the box designs are seeded', (
+         select count(*) = 3 from public.bakery_box_designs
+       )
+union all
+-- A box that holds nothing is not a box. NULL means "not a box at all", which
+-- is a different statement and the one almost every product makes.
+select 'a box cannot hold zero pieces', (
+         select not exists (
+           select 1 from public.products where bakery_piece_count is not null
+             and bakery_piece_count < 1
+         )
+       );
+
 -- Search is bounded: a lone wildcard must not match the whole catalogue.
 insert into _checks (check_name, pass)
 select 'search rejects a bare wildcard' as check,
@@ -1426,7 +1506,7 @@ union all
 select 'search ignores empty input',
        (select count(*) from public.search_products('   ')) = 0;
 
--- Every assertion, in one result set. `pass` must be `t` on all 150 rows.
+-- Every assertion, in one result set. `pass` must be `t` on all 163 rows.
 select check_name as check, pass from _checks order by ord;
 
 rollback;

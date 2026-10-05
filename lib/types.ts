@@ -65,7 +65,16 @@ export type Product = {
   /** Personalised items cannot be returned and skip the ready-to-ship path. */
   is_personalised: boolean;
   /** How personalisation is collected - see PersonalisationMode. */
-  personalisation_mode: "builder" | "text" | null;
+  /**
+   *  - "builder": the keycap letter builder, priced by the `letter_caps` ladder.
+   *  - "text":    one free-text line, priced at the product's own price.
+   *  - "bakery":  a box the customer fills, priced by the `bakery_box` rung
+   *               matching `bakery_piece_count`.
+   *  - null:      not personalised.
+   */
+  personalisation_mode: "builder" | "text" | "bakery" | null;
+  /** Pieces a bakery box holds. Null unless the mode is "bakery". */
+  bakery_piece_count?: number | null;
   /** Field label for "text" mode, e.g. "Pet's name". */
   personalisation_label: string | null;
   /**
@@ -145,6 +154,19 @@ export type CartLine = {
   };
   /** "text" mode only: the single line the customer asked us to print. */
   personalisation_text?: string | null;
+  /**
+   * Bakery boxes only: the design, the colour and the pieces chosen.
+   *
+   * Slugs and an id, never names or prices. What the basket sends is a
+   * selection; checkout looks every part of it up again and prices the box from
+   * the ladder, so nothing here can decide what anybody is charged.
+   */
+  bakery?: {
+    design: string;
+    colour_id: string;
+    /** Filling product slugs, one per piece, duplicates allowed. */
+    fillings: string[];
+  };
 };
 
 export type OrderStatus =

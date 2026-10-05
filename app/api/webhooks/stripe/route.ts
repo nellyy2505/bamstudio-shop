@@ -19,6 +19,7 @@ import { unitCostsAtSale } from "@/lib/cost-basis";
 // keys carry the tier, what the promise reads as, and which illustration goes
 // in the two NOT NULL columns a scoop has no product to fill.
 import { SCOOP_METADATA, scoopArt, scoopVariantLabel } from "@/lib/scoop-line";
+import { fillingSlugsOf } from "@/lib/bakery";
 import { money } from "@/lib/format";
 
 export const runtime = "nodejs";
@@ -1614,6 +1615,49 @@ async function decrementStock(
     throw new Error("stock item read failed");
   }
 
+  /*
+   * A BAKERY BOX'S CONTENTS COME OFF THE SHELF, AND HERE IS WHERE THEY ARE
+   * FOUND.
+   *
+   * The line below that skips anything carrying `personalisation` is right for
+   * the letter builder, because letters are not products and there is no shelf
+   * to take them from. It would be SILENTLY WRONG for a box: a box line carries
+   * personalisation too, so four real cakes would leave the studio without the
+   * inventory, the print queue or the buy list ever noticing.
+   *
+   * The box's own product row still moves nothing. It is a container printed
+   * with the order, not a thing on a shelf.
+   *
+   * `order_items.personalisation` holds filling SLUGS, because that is what a
+   * packing slip and a customer can read. `decrement_stock` takes an id, so the
+   * slugs are resolved here in one query for the whole order rather than a
+   * lookup per line.
+   */
+  const fillingSlugs = new Set<string>();
+  for (const item of items ?? []) {
+    for (const slug of fillingSlugsOf(item.personalisation)) fillingSlugs.add(slug);
+  }
+
+  const idBySlug = new Map<string, string>();
+  if (fillingSlugs.size > 0) {
+    const { data: rows, error: lookupError } = await supabase
+      .from("products")
+      .select("id, slug")
+      .in("slug", [...fillingSlugs]);
+
+    if (lookupError) {
+      // Nothing has moved yet, so the claim is safe to release and a retry can
+      // do the whole movement cleanly. Carrying on would post the boxes with
+      // their contents never taken off the shelf.
+      console.error("Could not resolve box fillings:", lookupError.message);
+      await releaseStockClaim(supabase, orderId);
+      throw new Error("bakery filling lookup failed");
+    }
+    for (const row of rows ?? []) {
+      idBySlug.set(row.slug as string, row.id as string);
+    }
+  }
+
   let applied = 0;
   for (const item of items ?? []) {
     /*
@@ -1634,10 +1678,20 @@ async function decrementStock(
      * drawn. Asking the question directly is what makes the rule survive that.
      */
     if (item.scoop_tier_id) continue;
-    if (!item.product_id || item.personalisation) continue;
+
+    /*
+     * What this one line takes off which shelves. Usually one product; for a
+     * bakery box, one entry per DISTINCT filling with a quantity, because
+     * duplicates are allowed and four of the same macaron is one product times
+     * four. Calling the decrement four times would work and would also record
+     * four separate oversell events for what is a single shortfall of four.
+     */
+    const movements = stockMovementsFor(item, idBySlug);
+
+    for (const movement of movements) {
     const { data: shortfall, error } = await supabase.rpc("decrement_stock", {
-      p_product_id: item.product_id,
-      p_quantity: item.quantity ?? 1,
+      p_product_id: movement.productId,
+      p_quantity: movement.quantity,
     });
     if (error) {
       // Logging and carrying on returned 200 with the counts un-moved and the
@@ -1648,7 +1702,7 @@ async function decrementStock(
       // every product on it.
       console.error(
         `Stock decrement failed for order ${orderId}, product ` +
-          `${item.product_id} (${applied} line(s) already applied):`,
+          `${movement.productId} (${applied} line(s) already applied):`,
         error.message,
       );
       if (applied === 0) await releaseStockClaim(supabase, orderId);
@@ -1671,12 +1725,56 @@ async function decrementStock(
     const oversold = Number(shortfall ?? 0);
     if (oversold > 0) {
       console.warn(
-        `Order ${orderId} oversold product ${item.product_id} by ${oversold} ` +
+        `Order ${orderId} oversold product ${movement.productId} by ${oversold} ` +
           "unit(s), the buffer was short. Print these first; the count is on " +
           "products.oversold_units.",
       );
     }
+    }
   }
+}
+
+/**
+ * What one order line takes off which shelves.
+ *
+ * The three cases, and the reason each is what it is:
+ *
+ *  - A BAKERY BOX moves its contents and not itself. One movement per distinct
+ *    filling, quantity multiplied by how many of the box were bought, and a
+ *    filling whose product row has gone missing is skipped rather than guessed
+ *    at. The box product is a container, not stock.
+ *  - ANYTHING ELSE CARRYING PERSONALISATION moves nothing. That is the letter
+ *    builder: its letters are not products and there is no shelf involved.
+ *  - AN ORDINARY LINE moves its own product.
+ */
+function stockMovementsFor(
+  item: { product_id: string | null; quantity: number | null; personalisation: unknown },
+  idBySlug: ReadonlyMap<string, string>,
+): { productId: string; quantity: number }[] {
+  const bought = item.quantity ?? 1;
+  const fillings = fillingSlugsOf(item.personalisation);
+
+  if (fillings.length > 0) {
+    const perBox = new Map<string, number>();
+    for (const slug of fillings) perBox.set(slug, (perBox.get(slug) ?? 0) + 1);
+
+    return [...perBox.entries()].flatMap(([slug, count]) => {
+      const productId = idBySlug.get(slug);
+      if (!productId) {
+        // Named rather than silent: the piece left the studio and the shelf
+        // count will be one high until somebody corrects it, which is worth
+        // being able to find in a log.
+        console.error(
+          `Box filling "${slug}" has no product row; its stock was not moved.`,
+        );
+        return [];
+      }
+      return [{ productId, quantity: count * bought }];
+    });
+  }
+
+  if (!item.product_id || item.personalisation) return [];
+  return [{ productId: item.product_id, quantity: bought }];
 }
 
 /**

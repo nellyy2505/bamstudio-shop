@@ -361,6 +361,139 @@ export async function searchProducts(term: string): Promise<Product[]> {
  *   fallback data. Strict mode allows that, or the builder would be unusable
  *   in local development.
  */
+/* --------------------------------------------------------- the bakery box */
+
+export type BakeryDesign = {
+  slug: string;
+  name: string;
+  blurb: string;
+  has_window: boolean;
+};
+
+export type BakeryColour = { id: string; name: string; hex: string };
+
+export type BakeryFilling = {
+  slug: string;
+  name: string;
+  short_name: string;
+  art: string;
+  tint: string;
+};
+
+/**
+ * The boxes on sale: products in `bakery` mode, each carrying how many pieces
+ * it holds.
+ *
+ * Sorted by piece count so the four-piece pastry box comes before the
+ * single-cake box rather than in whatever order the table hands back, which is
+ * the order a shopper expects to read them in and the order the builder's
+ * switcher renders.
+ */
+export async function getBakeryBoxes(): Promise<Product[]> {
+  if (!isDatabaseConfigured()) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("personalisation_mode", "bakery")
+    .eq("active", true)
+    .order("bakery_piece_count", { ascending: false });
+
+  if (error) {
+    console.error("getBakeryBoxes failed:", error.message);
+    return [];
+  }
+  // Through withBuilderPrices for the same reason every other shopfront read
+  // is: a box's `price` column means nothing, its price is a rung.
+  return withBuilderPrices((data ?? []) as Product[]);
+}
+
+export async function getBakeryDesigns(): Promise<BakeryDesign[]> {
+  if (!isDatabaseConfigured()) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("bakery_box_designs")
+    .select("slug, name, blurb, has_window")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    console.error("getBakeryDesigns failed:", error.message);
+    return [];
+  }
+  return (data ?? []) as BakeryDesign[];
+}
+
+/**
+ * The colours boxes are printed in: a curated subset of `colours`, joined
+ * rather than copied.
+ *
+ * The name and the hex live on the colour row and are read from it, so
+ * renaming a filament colour renames it here too and there is no second swatch
+ * to drift. A colour deactivated in the Studio disappears from the builder even
+ * if somebody forgot to take it out of the box list, because the join filters
+ * on the colour's own `active` as well as this row's.
+ */
+export async function getBakeryColours(): Promise<BakeryColour[]> {
+  if (!isDatabaseConfigured()) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("bakery_box_colours")
+    .select("sort_order, colours!inner(id, name, hex, active)")
+    .eq("active", true)
+    .eq("colours.active", true)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    console.error("getBakeryColours failed:", error.message);
+    return [];
+  }
+
+  return (data ?? []).flatMap((row) => {
+    // PostgREST renders an embedded to-one as an object or, on some shapes, a
+    // single-element array. Both are handled rather than assumed.
+    const raw = (row as Record<string, unknown>).colours;
+    const colour = (Array.isArray(raw) ? raw[0] : raw) as
+      | { id: string; name: string; hex: string }
+      | undefined;
+    return colour ? [{ id: colour.id, name: colour.name, hex: colour.hex }] : [];
+  });
+}
+
+/**
+ * The pool a box is filled from.
+ *
+ * Note it does NOT filter on `products.active`. Most fillings are deliberately
+ * inactive: they are sold inside a box and not on their own, which was the
+ * owner's answer, and `active` is what keeps them off the shop grid. Filtering
+ * on it here would empty the builder of exactly the pieces it exists to offer.
+ * The pool's own `active` column is what withdraws a filling.
+ */
+export async function getBakeryFillings(): Promise<BakeryFilling[]> {
+  if (!isDatabaseConfigured()) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("bakery_fillings")
+    .select("sort_order, products!inner(slug, name, short_name, art, tint)")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    console.error("getBakeryFillings failed:", error.message);
+    return [];
+  }
+
+  return (data ?? []).flatMap((row) => {
+    const raw = (row as Record<string, unknown>).products;
+    const product = (Array.isArray(raw) ? raw[0] : raw) as BakeryFilling | undefined;
+    return product ? [product] : [];
+  });
+}
+
 export async function getCollections(strict = false): Promise<Collection[]> {
   if (!isDatabaseConfigured()) return FALLBACK_COLLECTIONS;
 

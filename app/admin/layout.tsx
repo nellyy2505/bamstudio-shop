@@ -78,6 +78,13 @@ const NAV: { label: string; links: (AdminLink & { capability: Capability | null 
        * authority.
        */
       { href: "/admin/scoops", label: "Lucky Scoop", icon: "bag", capability: "catalogue" },
+      /*
+       * Its own entry rather than a page under Products, for the reason Lucky
+       * Scoop has one: a bakery box is not one product to edit but four things
+       * that all have to line up before anything sells - a priced box, a design,
+       * a colour and a pool. The screen leads with which of them are missing.
+       */
+      { href: "/admin/bakery", label: "Bakery box", icon: "gift", capability: "catalogue" },
       { href: "/admin/colours", label: "Colours", icon: "sparkle", capability: "colours" },
     ],
   },
