@@ -41,8 +41,8 @@ export const metadata: Metadata = {
    */
   robots: { index: false },
   description: CAN_SIGN_IN
-    ? "Sign in to your Bam Studio account to track orders, see favourites and check out faster."
-    : "Bam Studio accounts aren't open yet, so there's nothing to sign in to just now.",
+    ? "Sign in to your Bam Studio account to see your orders and favourites."
+    : "Sign-in is unavailable right now. You can still shop as a guest.",
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -67,10 +67,10 @@ export default async function LoginPage({
   // Map the callback's error code to our own copy - never render text that
   // arrived in the URL.
   const AUTH_ERRORS: Record<string, string> = {
-    denied: "Sign-in was cancelled. You can try again below.",
-    expired: "That sign-in link has expired. Request a new one.",
-    invalid: "That sign-in link was incomplete. Try signing in again.",
-    failed: "We couldn't complete sign-in. Please try again.",
+    denied: "Sign-in was cancelled. Try again below.",
+    expired: "That link has expired. Request a new one.",
+    invalid: "That link didn't work. Try signing in again.",
+    failed: "We couldn't sign you in. Please try again.",
   };
   const errorCode = one(params.error);
   const error = errorCode ? (AUTH_ERRORS[errorCode] ?? AUTH_ERRORS.failed) : undefined;
@@ -82,8 +82,8 @@ export default async function LoginPage({
           <h1 className="text-[28px]">Welcome back</h1>
           <p className="mt-1.5 mb-6 text-sm text-muted">
             {CAN_SIGN_IN
-              ? "Sign in to track orders, see favourites and check out faster."
-              : "Accounts aren't open yet, so there's nothing to sign in to just now. The whole shop is here to browse in the meantime."}
+              ? "Sign in to see your orders and favourites."
+              : "Sign-in is unavailable right now. You can still shop as a guest."}
           </p>
           <LoginForm next={next} initialError={error} />
         </div>
@@ -110,14 +110,12 @@ export default async function LoginPage({
             </>
           ) : (
             <>
-              Nothing to sign in to yet, but you can{" "}
               <Link
                 href="/shop"
                 className="font-bold text-accent underline underline-offset-2 hover:text-accent-dark"
               >
-                have a look around the shop
-              </Link>{" "}
-              instead.
+                Browse the shop
+              </Link>
             </>
           )}
         </p>

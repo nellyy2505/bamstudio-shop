@@ -8,6 +8,7 @@ import {
   getBakeryFillings,
   getCollections,
   isDatabaseConfigured,
+  loadFillingProductsBySlug,
   loadProductsBySlug,
   loadScoopTiersBySlug,
 } from "@/lib/queries";
@@ -57,10 +58,10 @@ import type { Product } from "@/lib/types";
 export const runtime = "nodejs";
 
 const LineSchema = z.object({
-  product_id: z.string().min(1),
-  slug: z.string().min(1),
-  colour: z.string().nullable().optional(),
-  attachment_id: z.string().nullable().optional(),
+  product_id: z.string().min(1).max(64),
+  slug: z.string().min(1).max(120),
+  colour: z.string().max(60).nullable().optional(),
+  attachment_id: z.string().max(60).nullable().optional(),
   quantity: z.number().int().min(1).max(BASKET_LIMITS.maxLineQuantity),
   /** "text" mode personalisation - one printed line, e.g. a pet's name. */
   personalisation_text: z.string().max(PERSONALISATION_TEXT_MAX).optional(),
@@ -604,7 +605,7 @@ export async function POST(request: Request) {
   const colourIds = new Set(bakeryColours.map((c) => c.id));
   const fillingSlugs = new Set(bakeryFillings.map((f) => f.slug));
   const fillingProducts = wantsBakery
-    ? await loadProductsBySlug([...fillingSlugs])
+    ? await loadFillingProductsBySlug([...fillingSlugs])
     : new Map<string, Product>();
 
   const lineItems: {
@@ -856,6 +857,14 @@ export async function POST(request: Request) {
       const attachment = (product.attachments ?? []).find(
         (a) => a.id === line.attachment_id,
       );
+      // An attachment this product is not sold with would be charged at the
+      // base price and then packed as something nobody paid for.
+      if (line.attachment_id && !attachment) {
+        return NextResponse.json(
+          { error: `“${product.short_name}” doesn't come with that attachment.` },
+          { status: 400 },
+        );
+      }
       unitPrice = product.price + (attachment?.price_delta ?? 0);
 
       let printed: string | null = null;
@@ -1081,6 +1090,19 @@ export async function POST(request: Request) {
     ],
     body.shipping_method,
   );
+  // Australia Post will not carry a domestic parcel over 22 kg, and the
+  // fallback table would price one as if it could. Ask the customer to get in
+  // touch instead of charging postage that cannot cover the delivery.
+  if (quote.weightGrams > 22_000) {
+    return NextResponse.json(
+      {
+        error:
+          "That's too heavy for one parcel. Please split it into smaller orders or contact us.",
+      },
+      { status: 409 },
+    );
+  }
+
   const shipping = shippingCharge(
     quote.amountCents,
     subtotal,

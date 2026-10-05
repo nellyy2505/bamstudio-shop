@@ -31,13 +31,13 @@ const PREFERENCES: {
     key: "marketing_opt_in",
     label: "New drops and offers",
     description:
-      "Say yes and we will count you in when there is a list to add you to: a note when a new colourway lands, no more than monthly.",
+      "A note when a new colourway lands, no more than monthly.",
   },
   {
     key: "review_reminders",
     label: "Review reminders",
     description:
-      "Say yes and you would not mind a nudge to review, a couple of weeks after a parcel arrives.",
+      "A nudge to leave a review, a couple of weeks after your parcel arrives.",
   },
   {
     key: "restock_alerts",
@@ -135,7 +135,7 @@ export function EmailPreferences({
       setError(
         cause instanceof Error
           ? cause.message
-          : "Could not save that preference. Please try again.",
+          : "We couldn't save that preference. Please try again.",
       );
     }
   }
@@ -152,14 +152,12 @@ export function EmailPreferences({
           secrets or no secrets. So the denial is narrowed to these three
           switches and the mail that does go out is named. */}
       <p className="mt-1 text-[13.5px] text-muted">
-        We do not send any of these yet. There is no mailing list, no review
-        reminders and no restock alerts. Flicking a switch saves your choice for
-        the day we can act on it, and nothing goes out in the meantime. The only
-        mail you get from us is{" "}
+        We don&apos;t send these emails yet. Switching one on saves your choice
+        for later. The only mail you get from us is{" "}
         {canSendEmail
           ? "the order confirmation when you pay, and the emails that confirm your address or reset your password"
           : "the emails that confirm your address or reset your password"},
-        and none of it is affected by these switches.
+        and these switches don&apos;t affect it.
       </p>
 
       <div className="mt-5 flex flex-col divide-y divide-line border-t border-line">
@@ -198,9 +196,9 @@ export function EmailPreferences({
           <b className="text-[14.5px]">Order updates</b>
           <p className="mt-0.5 text-[13px] text-muted">
             {canSendEmail
-              ? "We email you one order confirmation when your payment goes through, listing what you ordered and the total paid. We do not email printing progress or tracking."
-              : "We do not email receipts, printing progress or tracking."}{" "}
-            Your order number, its progress and any tracking number are on your{" "}
+              ? "We email one order confirmation when your payment goes through, with what you ordered and the total paid. We don't email printing progress or tracking."
+              : "We don't email receipts, printing progress or tracking."}{" "}
+            Find your order number, progress and any tracking number on your{" "}
             <Link
               href="/account/orders"
               className="font-bold text-accent underline underline-offset-2"

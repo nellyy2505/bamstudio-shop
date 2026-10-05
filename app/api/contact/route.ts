@@ -24,6 +24,10 @@ const BodySchema = z.object({
     .trim()
     .min(10, "A few more words, so we know what you need.")
     .max(2000),
+  // Spam traps. `website` is a field real people never see, so anything in it
+  // is a bot; `elapsedMs` is how long the form was open before sending.
+  website: z.string().max(200).optional(),
+  elapsedMs: z.number().optional(),
 });
 
 // Every bound above is mirrored by a CHECK constraint on
@@ -170,6 +174,13 @@ export async function POST(request: Request) {
         ? (error.issues[0]?.message ?? "Please check the form and try again.")
         : "Please check the form and try again.";
     return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  // A bot that filled the hidden field, or a submit faster than a person can
+  // type, gets the normal success answer and nothing is stored or emailed, so
+  // it cannot spend the email quota order confirmations rely on.
+  if (body.website || (typeof body.elapsedMs === "number" && body.elapsedMs < 2500)) {
+    return NextResponse.json({ ok: true, delivered: true, stored: true });
   }
 
   // STORE FIRST, THEN SEND. The order is the whole fix. An enquiry that is on

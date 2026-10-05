@@ -67,6 +67,25 @@ function postageText(cents: number | null): string {
   return cents === null ? "Calculated at checkout" : money(cents);
 }
 
+/**
+ * A bakery box's fillings, for the line under its name: "2 × Macaron, Tart".
+ *
+ * The line carries filling slugs only (names and prices are looked up again at
+ * checkout), so the label is the slug made readable. Display only.
+ */
+function fillingsLabel(slugs: string[]): string | null {
+  if (slugs.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const slug of slugs) counts.set(slug, (counts.get(slug) ?? 0) + 1);
+  return [...counts]
+    .map(([slug, n]) => {
+      const words = slug.replace(/^filling-/, "").replace(/-/g, " ");
+      const name = words.charAt(0).toUpperCase() + words.slice(1);
+      return n > 1 ? `${n} × ${name}` : name;
+    })
+    .join(", ");
+}
+
 function LineRow({ line }: { line: BasketLine }) {
   const { setQuantity, remove } = useCart();
   // Client component, so a hook id is safe and is stable across renders. A
@@ -92,6 +111,8 @@ function LineRow({ line }: { line: BasketLine }) {
         line.custom
           ? `${line.custom.collection_name} · ${line.custom.letters}`
           : null,
+        line.bakery ? fillingsLabel(line.bakery.fillings) : null,
+        line.personalisation_text ? `“${line.personalisation_text}”` : null,
       ]
         .filter(Boolean)
         .join(" · ");
@@ -105,7 +126,12 @@ function LineRow({ line }: { line: BasketLine }) {
           TINT_BG[line.tint],
         )}
       >
-        <ProductArt art={line.art} size={64} />
+        {"photo" in line && line.photo ? (
+          // eslint-disable-next-line @next/next/no-img-element -- Storage is not a next/image loader.
+          <img src={line.photo} alt="" className="h-full w-full rounded-2xl object-cover" />
+        ) : (
+          <ProductArt art={line.art} size={64} />
+        )}
       </Link>
 
       <div className="min-w-0 flex-1">
@@ -125,12 +151,12 @@ function LineRow({ line }: { line: BasketLine }) {
                 one the studio had never agreed to. */}
             {scoop ? (
               <p className="mt-1 text-xs text-faint">
-                Drawn by hand after you order. The pieces are a surprise
+                Picked by hand after you order. Contents are a surprise.
               </p>
             ) : null}
             {!scoop && line.is_personalised ? (
               <p className="mt-1 text-xs text-faint">
-                Personalised, can only be returned if faulty
+                Personalised. Returnable only if faulty.
               </p>
             ) : null}
           </div>
@@ -200,8 +226,7 @@ function LineRow({ line }: { line: BasketLine }) {
             reads it again to anyone who tabs back onto the + button. */}
         {atMax ? (
           <p id={capNoteId} role="status" className="mt-2 text-xs text-muted">
-            {BASKET_LIMITS.maxLineQuantity} is the most we can print of one item in a
-            single order. Need more? Get in touch and we&apos;ll sort it out.
+            Up to {BASKET_LIMITS.maxLineQuantity} per order. Need more? Get in touch.
           </p>
         ) : null}
       </div>
@@ -438,7 +463,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
         {cancelled ? (
           <div className="mx-auto mb-8 max-w-xl">
             <Alert tone="info">
-              Checkout was cancelled. Nothing has been charged.
+              Checkout cancelled. Nothing was charged.
             </Alert>
           </div>
         ) : null}
@@ -448,8 +473,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
           </span>
           <h1 className="mt-7 text-3xl">Your basket is empty</h1>
           <p className="mt-2.5 max-w-md text-muted">
-            Nothing to click yet. Bestsellers are a good place to start, or
-            design a name charm from scratch.
+            Start with our bestsellers or design your own name charm.
           </p>
           <div className="mt-7 flex flex-wrap justify-center gap-3.5">
             <ButtonLink href="/shop">Shop bestsellers</ButtonLink>
@@ -480,8 +504,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
       {cancelled ? (
         <div className="mb-6">
           <Alert tone="info">
-            Checkout was cancelled. Your basket is exactly as you left it and
-            nothing has been charged.
+            Checkout cancelled. Nothing was charged and your basket is saved.
           </Alert>
         </div>
       ) : null}
@@ -505,7 +528,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
               maxLength={500}
               value={giftNote}
               onChange={(event) => setGiftNote(event.target.value)}
-              placeholder="“Happy birthday Mia!”, we'll handwrite it on the card…"
+              placeholder="“Happy birthday Mia!” We'll handwrite it on the card."
               className="mt-1.5 w-full rounded-xl border border-line2 bg-surface p-3.5 text-[15px] placeholder:text-faint focus:border-accent focus:outline-none"
             />
           </div>
@@ -528,14 +551,14 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                   <Icon name="truck" size={14} className="mt-0.5 shrink-0" />
                   <span>
                     {!freeRateReached && !subsidyReached
-                      ? `We pay ${subsidyPercentLabel} of ${freeRateLabel} shipping from ${money(SHIPPING.subsidyThreshold)}, all of it from ${money(SHIPPING.freeThreshold)}`
+                      ? `${subsidyPercentLabel} off ${freeRateLabel} shipping from ${money(SHIPPING.subsidyThreshold)}, free from ${money(SHIPPING.freeThreshold)}`
                       : subsidyReached
                         ? selectedIsSubsidised
-                          ? `We're paying ${subsidyPercentLabel} of your ${freeRateLabel} shipping`
-                          : `We'd pay ${subsidyPercentLabel} of ${freeRateLabel} shipping, but ${selectedMethodLabel} is charged in full`
+                          ? `${subsidyPercentLabel} off your ${freeRateLabel} shipping`
+                          : `${subsidyPercentLabel} off ${freeRateLabel} shipping. ${selectedMethodLabel} is full price`
                         : selectedIsFree
                           ? `Free ${freeRateLabel} shipping unlocked`
-                          : `Free ${freeRateLabel} shipping unlocked, but ${selectedMethodLabel} is still charged`}
+                          : `Free ${freeRateLabel} shipping unlocked. ${selectedMethodLabel} is full price`}
                   </span>
                 </span>
                 <b
@@ -572,7 +595,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
               {freeRateReached ? null : (
                 <p className="mt-1.5 text-[11.5px] text-faint">
                   {subsidyReached
-                    ? `${money(freeShippingRemaining)} more and ${freeRateLabel} post is free.`
+                    ? `Spend ${money(freeShippingRemaining)} more for free ${freeRateLabel} post.`
                     : `Then ${money(
                         Math.max(
                           0,
@@ -637,7 +660,7 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
                           : transitRangeLabel(option.id)}
                         {optionQuote?.estimated ? " · estimated" : ""}
                         {optionSubsidised && optionQuote
-                          ? ` · ${subsidyPercentLabel} paid by us`
+                          ? ` · ${subsidyPercentLabel} off`
                           : ""}
                       </span>
                     </span>
@@ -713,11 +736,11 @@ export function CartView({ suggestions }: { suggestions: Product[] }) {
           </div>
           <p className="mt-3 flex items-center justify-center gap-2 text-center text-[12.5px] text-muted">
             <Icon name="shield" size={15} />
-            Card details go straight to Stripe. We never see them
+            Secure payment by Stripe. We never see your card.
           </p>
           <p className="mt-2 flex items-start gap-2 text-[12.5px] text-muted">
             <Icon name="box" size={15} className="mt-px shrink-0" />
-            Printing takes {PRINT_LEAD_TIME.label} before dispatch
+            Printed in {PRINT_LEAD_TIME.label}, then posted
           </p>
           {lines.some((l) => l.is_personalised) ? (
             <div className="mt-3">

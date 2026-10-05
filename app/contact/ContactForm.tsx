@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Field, Icon, inputClass } from "@/components/ui";
 import { SHOP } from "@/lib/config";
 import { hasStudioMailbox } from "@/lib/contact";
@@ -14,16 +14,22 @@ const TOPICS = [
 ];
 
 /**
- * Nothing persists an enquiry - the email to the studio IS the delivery - so
- * "sent" may only be claimed when /api/contact reports `delivered: true`.
- * `undelivered` is a 200 whose enquiry reached nobody: the form stays on
- * screen with the customer's words intact, because telling someone to write to
- * us another way after wiping what they wrote is its own small betrayal.
+ * /api/contact stores the enquiry as a row first, then emails the studio
+ * (0006_enquiries.sql). `stored: true` means the message is in the studio
+ * inbox (/admin/enquiries) whether or not the email went out, so both
+ * `delivered` and `stored` count as received - "sent". Only a 200 with neither
+ * is `undelivered`: the enquiry reached nobody, so the form stays on screen with
+ * the customer's words intact. No reply time is promised in either case.
  */
 type Status = "idle" | "sending" | "sent" | "undelivered" | "error";
 
 export function ContactForm() {
   const [status, setStatus] = useState<Status>("idle");
+  // When the form appeared, for the server's too-fast-to-be-human check.
+  const openedAt = useRef(0);
+  useEffect(() => {
+    openedAt.current = Date.now();
+  }, []);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -44,6 +50,8 @@ export function ContactForm() {
           topic: String(data.get("topic") ?? ""),
           orderNumber: String(data.get("orderNumber") ?? ""),
           message: String(data.get("message") ?? ""),
+          website: String(data.get("website") ?? ""),
+          elapsedMs: openedAt.current ? Date.now() - openedAt.current : undefined,
         }),
       });
 
@@ -52,7 +60,7 @@ export function ContactForm() {
         setError(
           typeof body?.error === "string"
             ? body.error
-            : "We could not send that just now. Please try again in a moment.",
+            : "That didn't send. Please try again in a moment.",
         );
         setStatus("error");
         return;
@@ -61,8 +69,8 @@ export function ContactForm() {
       const body = await res.json().catch(() => null);
 
       // 200 says the submission was valid, not that it arrived. Only clear the
-      // form once we know the enquiry actually reached the studio.
-      if (body?.delivered) {
+      // form once the enquiry is stored in the studio inbox or was emailed.
+      if (body?.delivered || body?.stored) {
         form.reset();
         setStatus("sent");
         return;
@@ -70,7 +78,7 @@ export function ContactForm() {
       setStatus("undelivered");
     } catch {
       setError(
-        "We could not reach the studio. Check your connection and try again.",
+        "We couldn't connect. Check your connection and try again.",
       );
       setStatus("error");
     }
@@ -83,16 +91,11 @@ export function ContactForm() {
           <Icon name="check" size={28} strokeWidth={2.4} />
         </span>
         <h2 className="mt-5 text-2xl">Message sent</h2>
-        {/* Only rendered on delivered:true, so "landed in our inbox" is a
-            report of what happened rather than a hope.
-
-            The clock is gone. Nothing in this codebase measures or guarantees a
-            turnaround, /contact says exactly that a few lines up, and the same
-            promise was removed from the product page and /order/confirmed on
-            that principle - leaving it here made the site contradict itself. */}
+        {/* Rendered on delivered:true or stored:true. Either way the message
+            is in the studio inbox, so "received" is a report, not a hope. No
+            reply time: nothing in this codebase measures a turnaround. */}
         <p className="mt-2 max-w-[48ch] text-[15px] text-muted">
-          Thank you. It has landed in our inbox. One of us reads every message
-          personally and answers between print runs and market weekends.
+          Thanks, we&apos;ve got your message. We read every one ourselves.
         </p>
         <Button
           variant="soft"
@@ -109,11 +112,17 @@ export function ContactForm() {
     <div className="card p-7 sm:p-9">
       <h2 className="text-2xl">Send us a message</h2>
       <p className="mt-1.5 text-[14.5px] text-muted">
-        Fields marked with an asterisk are required. If it is about an order,
-        adding the order number saves us both a round trip.
+        Fields marked * are required.
       </p>
 
       <form onSubmit={onSubmit} className="mt-7 flex flex-col gap-4">
+        {/* Hidden from people and screen readers; bots fill it in. */}
+        <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+          <label>
+            Website
+            <input type="text" name="website" tabIndex={-1} autoComplete="off" />
+          </label>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Your name *" htmlFor="contact-name">
             <input
@@ -134,6 +143,7 @@ export function ContactForm() {
               name="email"
               type="email"
               required
+              maxLength={200}
               autoComplete="email"
               placeholder="you@example.com"
               className={inputClass}
@@ -161,7 +171,7 @@ export function ContactForm() {
           <Field
             label="Order number"
             htmlFor="contact-order"
-            hint="Optional. It looks like BS-1042-9F3A."
+            hint="Optional, e.g. BS-1042-9F3A"
           >
             <input
               id="contact-order"
@@ -177,7 +187,7 @@ export function ContactForm() {
         <Field
           label="Message *"
           htmlFor="contact-message"
-          hint="Ten characters or more. Photos can follow once we reply."
+          hint="At least 10 characters."
         >
           <textarea
             id="contact-message"
@@ -186,7 +196,7 @@ export function ContactForm() {
             minLength={10}
             maxLength={2000}
             rows={6}
-            placeholder="Tell us what you need: colours, quantities, dates, anything that helps."
+            placeholder="How can we help?"
             className="w-full rounded-xl border border-line2 bg-surface px-4 py-3 text-[15px] text-ink placeholder:text-faint focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
           />
         </Field>
@@ -197,22 +207,21 @@ export function ContactForm() {
 
         {status === "undelivered" ? (
           <Alert tone="error">
-            We could not get that to the studio, so nobody has read it, so please
-            do not wait on a reply. Your message is still here.{" "}
+            That didn&apos;t reach us. Your message is still here.{" "}
             {/* Built from NEXT_PUBLIC_ config only, so it is identical on the
                 server and in the browser - safe in a client component. Whether
                 the form DELIVERS is decided by the server page, which renders
                 this component only when it does. */}
             {hasStudioMailbox ? (
               <>
-                Send it straight to{" "}
+                Please email it to{" "}
                 <a
                   href={`mailto:${SHOP.supportEmail}`}
                   className="font-bold underline underline-offset-2"
                 >
                   {SHOP.supportEmail}
-                </a>{" "}
-                and it will reach us.
+                </a>
+                .
               </>
             ) : (
               <>Try again in a few minutes.</>
@@ -226,7 +235,7 @@ export function ContactForm() {
             <Icon name="arrow" size={18} />
           </Button>
           <span className="text-xs text-muted">
-            We only use your details to answer you.
+            We only use your details to reply.
           </span>
         </div>
       </form>

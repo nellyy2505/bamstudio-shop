@@ -223,9 +223,9 @@ export const PERSONALISATION_TEXT_PATTERN = /^[A-Za-z0-9 '&.\-/]+$/;
  */
 
 export const BUILDER_ATTACHMENTS = [
-  { id: "cord", label: "Bag charm cord", price_delta: 0 },
-  { id: "keyring", label: "Keyring", price_delta: 0 },
-  { id: "strap", label: "Phone strap", price_delta: 0 },
+  // The bag charm cord is no longer stocked (workbook Settings D32); name
+  // charms ship on a ball chain, like the clickers (Products column H).
+  { id: "ballchain", label: "Ball chain", price_delta: 0 },
 ] as const;
 
 /**

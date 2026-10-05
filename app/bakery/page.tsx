@@ -15,7 +15,7 @@ export const revalidate = 300;
 
 export const metadata: Metadata = {
   ...selfCanonical("/bakery"),
-  title: "Design your own bakery box",
+  title: "Design your own cake box",
   /*
    * No price in this sentence, deliberately, for the reason the letter
    * builder's metadata carries none: page metadata is static and is what search
@@ -67,19 +67,41 @@ export default async function BakeryPage() {
   return (
     <>
       <div className="border-b border-line bg-blush">
-        <div className="wrap py-12 text-center">
-          <Pill tone="surface" className="text-accent-dark">
-            <Icon name="sparkle" size={14} />
-            New from the studio
-          </Pill>
-          <h1 className="mt-3.5 mb-2 text-[32px] md:text-[40px]">
-            Design your own bakery box
-          </h1>
-          <p className="mx-auto max-w-2xl text-[#5F5769] md:text-base">
-            Pick your box, its design and its colour, then fill it with whatever
-            you like. One price whatever goes in, printed to order in{" "}
-            {PRINT_LEAD_TIME.label}.
-          </p>
+        <div className="wrap grid items-center gap-8 py-10 md:grid-cols-[1.1fr_1fr] md:py-14">
+          <div>
+            <Pill tone="surface" className="text-accent-dark">
+              <Icon name="sparkle" size={14} />
+              Design your own
+            </Pill>
+            <h1 className="mt-3.5 mb-3 text-[32px] leading-tight md:text-[42px]">
+              Design your own cake box
+            </h1>
+            <p className="max-w-xl text-[#5F5769] md:text-base">
+              Pick a box colour, then fill each spot with a mini pastry. Doubles
+              are welcome. One price whatever goes in, printed in{" "}
+              {PRINT_LEAD_TIME.label}.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static site photo */}
+            <img
+              src="/products/bakery-box/1-sm.jpg"
+              alt="Open brown mini cake box holding four pastries"
+              className="col-span-2 aspect-[4/3] w-full rounded-[22px] object-cover"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element -- static site photo */}
+            <img
+              src="/products/bakery-box/2-sm.jpg"
+              alt="Brown and pink cake boxes with pastries"
+              className="aspect-square w-full rounded-2xl object-cover"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element -- static site photo */}
+            <img
+              src="/products/bakery-box/3-sm.jpg"
+              alt="Cake box filled with four pastries"
+              className="aspect-square w-full rounded-2xl object-cover"
+            />
+          </div>
         </div>
       </div>
 
@@ -91,10 +113,9 @@ export default async function BakeryPage() {
          * fill and a button that cannot work.
          */
         <div className="wrap py-20 text-center">
-          <h2 className="text-2xl">The bakery is still being set up</h2>
+          <h2 className="text-2xl">Cake boxes aren&rsquo;t open yet</h2>
           <p className="mx-auto mt-2 max-w-lg text-muted">
-            The boxes, the designs or the pieces to go in them have not all been
-            added yet. It will be here shortly.
+            In the meantime, <a href="/shop" className="font-bold text-accent underline underline-offset-2">shop all</a>.
           </p>
         </div>
       ) : (

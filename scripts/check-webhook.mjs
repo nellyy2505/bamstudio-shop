@@ -823,8 +823,8 @@ async function postCheckout(body) {
     JSON.stringify(costBasis.costCalls),
   );
   /*
-   * Two scoops at $25 is $50, over the $49 free-standard-postage threshold, so
-   * the customer is charged nothing for postage - and the real quote is STILL
+   * Two scoops at $25 is $50, in the half-postage band ($49 to $89), so
+   * the customer pays half of postage - and the real quote is STILL
    * recorded on the order. That is the invariant `isFreeShipping()` and
    * `quoteBasket()` are kept apart to protect: waiving the charge must not
    * erase what the carrier actually wants, or a postage bill can never be
@@ -832,7 +832,13 @@ async function postCheckout(body) {
    * matters most, since the studio has no product row to re-derive a weight
    * from later.
    */
-  check("the promotion waived the charge", order?.shipping === 0, String(order?.shipping));
+  // Three-band postage (lib/config.ts): $50 sits in the half-paid band, so
+  // the customer pays a share of the quote, not nothing.
+  check(
+    "the half-postage band charged a share, not nothing",
+    typeof order?.shipping === "number" && order.shipping > 0,
+    String(order?.shipping),
+  );
   check(
     "but the real quote was still recorded",
     (order?.quoted_weight_grams ?? 0) > 0 && Boolean(order?.quoted_service_code),

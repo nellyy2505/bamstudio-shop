@@ -185,6 +185,7 @@ export const DEFAULT_DIMENSIONS: ItemDimensions = {
  * jump ring, a woven phone-strap loop, a length of bag-charm cord.
  */
 export const ATTACHMENT_WEIGHTS_G: Record<string, number> = {
+  ballchain: 3,
   cord: 2,
   keyring: 4,
   strap: 5,

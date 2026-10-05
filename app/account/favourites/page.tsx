@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ProductArt } from "@/components/ProductArt";
+import { productPhotos } from "@/lib/photos";
 import { FavouritesSync } from "@/components/product/FavouriteButton";
 import { ButtonLink, EmptyState, Icon, Stars, cx } from "@/components/ui";
 import { money, pluralise } from "@/lib/format";
@@ -10,7 +11,7 @@ import { firstOf, requireAccount } from "../data";
 
 export const metadata: Metadata = {
   title: "Your favourites",
-  description: "Everything you've hearted, saved in one place.",
+  description: "Everything you've saved, in one place.",
   robots: { index: false, follow: false },
 };
 
@@ -62,7 +63,7 @@ export default async function FavouritesPage() {
             </span>
           }
           title="Nothing saved yet"
-          body="Tap the heart on any product and it lands here, handy for keeping an eye on a colourway before you commit."
+          body="Tap the heart on any product to save it here."
         >
           <ButtonLink href="/shop">Browse the range</ButtonLink>
         </EmptyState>
@@ -75,8 +76,7 @@ export default async function FavouritesPage() {
       <FavouritesSync />
       <h1 className="mb-1.5 text-3xl md:text-4xl">Your favourites</h1>
       <p className="mb-7 text-sm text-muted">
-        {pluralise(products.length, "saved item")} · the heart on any product
-        adds to this list.
+        {pluralise(products.length, "saved item")} · tap a heart to add more
       </p>
 
       <div className="grid grid-cols-2 gap-5 sm:gap-6 lg:grid-cols-3">
@@ -90,11 +90,20 @@ export default async function FavouritesPage() {
                 TINT_BG[product.tint] ?? "bg-cream",
               )}
             >
-              <ProductArt
-                art={product.art}
-                size={150}
-                className="transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-              />
+              {productPhotos(product)[0] ? (
+                // eslint-disable-next-line @next/next/no-img-element -- product photo
+                <img
+                  src={productPhotos(product)[0].thumb}
+                  alt=""
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
+                />
+              ) : (
+                <ProductArt
+                  art={product.art}
+                  size={150}
+                  className="transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                />
+              )}
             </Link>
 
             <div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ProductArt } from "@/components/ProductArt";
+import { productPhotos } from "@/lib/photos";
 import { Keycap, KeycapWord } from "@/components/builder/Keycap";
 import { Button, Icon, Pill, cx } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
@@ -110,6 +111,7 @@ export function BuilderClient({
       slug: anchor.slug,
       name: `${word} ${anchor.short_name.toLowerCase()}`,
       art: collection.charm_art as ArtKey,
+      photo: productPhotos(anchor)[0]?.thumb ?? null,
       tint: collection.tint,
       colour: collection.name,
       attachment_id: attachment.id,
@@ -183,7 +185,12 @@ export function BuilderClient({
                           TINT_BG[item.tint],
                         )}
                       >
-                        <ProductArt art={item.charm_art as ArtKey} size={28} />
+                        {item.charm_photo ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- product photo
+                          <img src={item.charm_photo} alt="" className="h-full w-full rounded-[10px] object-cover" />
+                        ) : (
+                          <ProductArt art={item.charm_art as ArtKey} size={28} />
+                        )}
                       </span>
                     </span>
                     <span>
@@ -224,15 +231,14 @@ export function BuilderClient({
                 printed to order, so the shop's own lead time applies whichever
                 letters are chosen. */}
             <p className="mb-4 text-[13.5px] text-muted">
-              Tap letters to add them. Every letter is printed for your order,
-              so the print time is {PRINT_LEAD_TIME.label} whichever ones you
-              choose.
+              Tap letters to add them. Printed to order in{" "}
+              {PRINT_LEAD_TIME.label}.
             </p>
 
             <div className="mb-3.5 flex min-h-[56px] flex-wrap items-center gap-2 rounded-2xl bg-cream p-3">
               {letters.length === 0 ? (
                 <span className="px-1 text-sm text-faint">
-                  Your letters appear here…
+                  Your letters appear here
                 </span>
               ) : (
                 letters.map((letter, i) => (
@@ -304,8 +310,7 @@ export function BuilderClient({
 
             {full ? (
               <p className="mt-3 text-center text-[13px] font-bold text-accent-dark">
-                That&apos;s the {maxLetters}-letter maximum. Remove one
-                to swap it out.
+                {maxLetters} letters max. Remove one to swap.
               </p>
             ) : null}
           </section>
@@ -340,7 +345,7 @@ export function BuilderClient({
                 <span className="flex-1">
                   <b className="text-[14.5px]">Letters only</b>
                   <span className="block text-[13px] text-muted">
-                    Just the caps on the holder
+                    Letter caps on the holder
                   </span>
                 </span>
                 <b>Included</b>
@@ -370,9 +375,10 @@ export function BuilderClient({
                       Add the {collection.charm_name} charm
                     </b>
                     <span className="block text-[13px] text-muted">
-                      The matching clicker, threaded on the end,{" "}
-                      {money(charmDiscount)} less than buying it
-                      on its own
+                      Matching clicker on the end
+                      {charmDiscount > 0
+                        ? `, ${money(charmDiscount)} less than on its own.`
+                        : "."}
                     </span>
                   </span>
                   <b>+{money(charmPrice!)}</b>
@@ -413,7 +419,7 @@ export function BuilderClient({
           <div className="my-4 flex flex-col items-center gap-3 rounded-2xl bg-cream px-4 py-7">
             {letters.length === 0 ? (
               <p className="py-6 text-center text-sm text-faint">
-                Pick some letters and your charm builds itself here.
+                Your design appears here as you add letters.
               </p>
             ) : (
               <>
@@ -512,7 +518,7 @@ export function BuilderClient({
               onClick={() => router.push("/cart")}
               className="mt-3 w-full text-center text-[13.5px] font-extrabold text-accent underline underline-offset-2"
             >
-              Go to basket →
+              Go to basket
             </button>
           ) : null}
 

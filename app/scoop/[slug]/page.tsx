@@ -6,7 +6,6 @@ import { ScoopArt } from "@/components/scoop/ScoopArt";
 import { ProductGrid } from "@/components/product/ProductCard";
 import { Breadcrumbs, ButtonLink, Icon, Pill } from "@/components/ui";
 import { SHOP } from "@/lib/config";
-import { hasSocialAccount, socialLinks } from "@/lib/contact";
 import { money, pluralise } from "@/lib/format";
 import { getScoopTierBySlug } from "@/lib/queries";
 import type { ScoopTierListing } from "@/lib/queries";
@@ -28,10 +27,10 @@ function themeLabel(theme: ScoopTierListing["theme"]): string {
  * the page's own summary line, so the two cannot drift apart.
  */
 function promiseLine(tier: ScoopTierListing): string {
-  return `${pluralise(tier.piece_count, "piece")} drawn by hand from the ${pluralise(
+  return `${pluralise(tier.piece_count, "piece")}, hand-picked from the ${pluralise(
     tier.pool.length,
     "design",
-  )} listed on this page.`;
+  )} below.`;
 }
 
 export async function generateMetadata({
@@ -162,8 +161,8 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
             {/* Drawn by hand from the pool below. No claim either way about
                 which pieces were already printed - like everything else here,
                 what is short is printed before the order goes out. */}
-            <Icon name="box" size={14} className="inline" /> Drawn by hand from
-            the {pluralise(tier.pool.length, "design")} below
+            <Icon name="box" size={14} className="inline" /> Packed and posted
+            from {SHOP.city}
           </p>
 
           {/* ALWAYS MOUNTED. This used to be gated on `availability.sellable`,
@@ -187,46 +186,29 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
           */}
           <div className="card mt-5 flex flex-col gap-3 p-4 text-[13.5px]">
             <p className="flex items-start gap-2.5">
-              <Icon name="box" size={18} className="mt-0.5 shrink-0" />
-              <span>
-                <b>{pluralise(tier.piece_count, "piece")} in the bag.</b> That
-                number is the bowl. It does not vary with what we have in.
-              </span>
-            </p>
-            <p className="flex items-start gap-2.5">
               <Icon name="check" size={18} className="mt-0.5 shrink-0" />
               <span>
-                <b>
-                  Every piece comes from the{" "}
-                  {pluralise(tier.pool.length, "design")} below.
-                </b>{" "}
-                Nothing outside that list goes in.
+                Always {pluralise(tier.piece_count, "piece")}, only from the
+                list below.
               </span>
             </p>
             <p className="flex items-start gap-2.5">
               <Icon name="heart" size={18} className="mt-0.5 shrink-0" />
-              <span>
-                <b>We pick them, not you.</b> One of us draws your pieces out of
-                the bowl by hand when your order is packed. There is no
-                randomiser and nothing to choose at checkout.
-              </span>
+              <span>We pick your pieces by hand when we pack your order.</span>
             </p>
             <p className="flex items-start gap-2.5">
               <Icon name="truck" size={18} className="mt-0.5 shrink-0" />
-              <span>
-                Postage is worked out from the weight of your basket at
-                Australia Post&rsquo;s rates and shown in full before you pay.
-              </span>
+              <span>Postage by weight, shown before you pay.</span>
             </p>
             <p className="flex items-start gap-2.5">
               <Icon name="shield" size={18} className="mt-0.5 shrink-0" />
               <span>
-                A scoop is not a personalised item:{" "}
+                Your Australian Consumer Law rights apply ·{" "}
                 <Link
                   href="/legal/refunds"
                   className="text-accent underline underline-offset-2"
                 >
-                  refund policy
+                  Refund policy
                 </Link>
               </span>
             </p>
@@ -249,9 +231,8 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
       <section className="mt-16">
         <h2 className="text-2xl md:text-[27px]">What can be in it</h2>
         <p className="mt-2 mb-6 max-w-2xl text-[14.5px] text-muted">
-          This is the whole pool: all{" "}
-          {pluralise(tier.pool.length, "design")}, not a selection of them. Your{" "}
-          {tier.piece_count} pieces come out of this list and nowhere else.
+          The full list. Your {tier.piece_count} pieces come from these{" "}
+          {pluralise(tier.pool.length, "design")} only.
         </p>
 
         {tier.pool.length > 0 ? (
@@ -259,65 +240,24 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
         ) : null}
       </section>
 
-      {/* ------------------------------------------------------- how it goes */}
+      {/* ------------------------------------------------------- if it goes wrong */}
+      {/*
+        Silent, on purpose, on the owner's three open scoop decisions
+        (0007_lucky_scoop.sql): duplicates, filming, and change of mind. The
+        filming paragraph and the "we cannot swap a piece" line that were here
+        are gone for that reason. What remains is the ACL position, which is
+        not a decision anyone gets to make.
+      */}
       <section className="mt-16">
-        <div className="card grid gap-8 bg-cream p-8 md:grid-cols-2 md:p-10">
-          <div>
-            <h2 className="mb-3 text-xl">How your scoop is chosen</h2>
-            <p className="text-[14.5px] text-muted">
-              By hand, at the packing table, from the bowl above. We do not run
-              a randomiser and you do not get a picker at checkout, just a person
-              takes {tier.piece_count} out and bags them.
-            </p>
-            <p className="mt-3 text-[14.5px] text-muted">
-              {/*
-                Filming is worded as a habit, not a term of sale. "We film every
-                order" printed beside a price becomes part of what was bought,
-                and a week she cannot film becomes a failure to deliver as
-                described - over a video nobody was charged for. So: no promise
-                of a video, no platform, no timing, and the accounts are only
-                named where one exists (lib/contact.ts).
-              */}
-              Most scoops get filmed while they are drawn and packed
-              {hasSocialAccount ? (
-                <>
-                  , and that is what ends up on{" "}
-                  {socialLinks.map((link, index) => (
-                    <span key={link.label}>
-                      {index > 0 ? " and " : ""}
-                      <a
-                        href={link.href}
-                        className="font-bold text-accent underline underline-offset-2"
-                      >
-                        {link.label}
-                      </a>
-                    </span>
-                  ))}
-                </>
-              ) : null}
-              . It is something we do, not part of what you are buying, so we
-              cannot promise your scoop will be filmed or that a video of it
-              will be shared.
-            </p>
-          </div>
-
-          <div>
-            <h2 className="mb-3 text-xl">If it is not right</h2>
-            <p className="text-[14.5px] text-muted">
-              A scoop is a normal sale of normal goods. If a bag turns up short,
-              with something that was not in the pool above, or with a piece
-              that is faulty or damaged, that is not what was described and we
-              put it right.
-            </p>
-            <p className="mt-3 text-[14.5px] text-muted">
-              What we cannot do is swap a piece you did not want for one you
-              did. Which pieces come out is the part a scoop leaves open, and it
-              is the only part.
-            </p>
-            <ButtonLink href="/legal/refunds" variant="soft" className="mt-4">
-              Refund policy
-            </ButtonLink>
-          </div>
+        <div className="card bg-cream p-7 md:p-8">
+          <h2 className="mb-2 text-xl">If something&rsquo;s not right</h2>
+          <p className="max-w-2xl text-[14.5px] text-muted">
+            If your bag is short, holds a piece not on the list, or arrives
+            faulty or damaged, we&rsquo;ll put it right.
+          </p>
+          <ButtonLink href="/legal/refunds" variant="soft" className="mt-4">
+            Refund policy
+          </ButtonLink>
         </div>
       </section>
 
@@ -327,7 +267,7 @@ export default async function ScoopTierPage({ params }: { params: Params }) {
           className="inline-flex items-center gap-1.5 text-sm font-bold text-accent underline underline-offset-2 hover:text-accent-dark"
         >
           <Icon name="back" size={15} />
-          All the bowls
+          All bowls
         </Link>
       </section>
     </div>

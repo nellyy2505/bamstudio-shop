@@ -44,3 +44,6 @@ next-env.d.ts
 
 # supabase CLI scratch - version-check cache, not project state
 supabase/.temp/
+
+# local scratch moved aside, never part of the repo
+/_to_delete/

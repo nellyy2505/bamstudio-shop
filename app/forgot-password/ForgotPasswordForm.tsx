@@ -43,13 +43,13 @@ const CAN_RESET = isSupabaseConfigured();
  * address the customer typed - none of that is theirs to fix.
  */
 const UNAVAILABLE =
-  "Password resets aren't switched on yet, this shop isn't connected to its accounts system, so we can't send you a reset link. Nothing you type here would reach us. Please try again later.";
+  "Password resets are unavailable right now. Please try again later.";
 
 const OFFLINE =
-  "We couldn't reach the shop just now. Check your connection and try again.";
+  "We couldn't connect just now. Check your connection and try again.";
 
 const RESET_FAILED =
-  "We couldn't send that reset link just now. Please try again in a moment.";
+  "We couldn't send the link just now. Please try again in a moment.";
 
 /** Supabase raises this (status 0) when the request never got a response. */
 function isOffline(error: { name?: string; status?: number }): boolean {
@@ -128,8 +128,8 @@ export function ForgotPasswordForm() {
           </p>
         </div>
         <Alert tone="info">
-          The link expires after 30 minutes. If it hasn&apos;t landed in a
-          couple of minutes, check your spam folder.
+          The link expires after 30 minutes. Not there? Check your spam
+          folder.
         </Alert>
       </div>
     );
@@ -169,8 +169,8 @@ export function ForgotPasswordForm() {
           nothing can send. */}
       {CAN_RESET ? (
         <Alert tone="info">
-          The link expires after 30 minutes. If it hasn&apos;t landed in a
-          couple of minutes, check your spam folder.
+          The link expires after 30 minutes. Not there? Check your spam
+          folder.
         </Alert>
       ) : null}
     </div>

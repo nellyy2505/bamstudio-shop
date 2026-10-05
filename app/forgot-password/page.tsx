@@ -34,8 +34,8 @@ export const metadata: Metadata = {
    */
   robots: { index: false },
   description: CAN_RESET
-    ? "Send yourself a link to set a new password for your Bam Studio account."
-    : "Setting a new password for your Bam Studio account isn't available just yet.",
+    ? "Get a link to set a new password for your Bam Studio account."
+    : "Password resets are unavailable right now.",
 };
 
 export default function ForgotPasswordPage() {
@@ -46,8 +46,8 @@ export default function ForgotPasswordPage() {
           <h1 className="text-[28px]">Reset your password</h1>
           <p className="mt-1.5 mb-6 text-sm text-muted">
             {CAN_RESET
-              ? "Pop in your email and we'll send you a link to set a new one."
-              : "Setting a new password isn't available just yet."}
+              ? "Enter your email and we'll send you a reset link."
+              : "Password resets are unavailable right now."}
           </p>
           <ForgotPasswordForm />
         </div>

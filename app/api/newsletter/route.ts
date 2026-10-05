@@ -61,15 +61,16 @@ const BodySchema = z.object({
  * Never throws, for the reason `/api/contact` gives: a database that is
  * unreachable must not take the notification attempt down with it.
  */
-async function storeSignup(email: string): Promise<boolean> {
+async function storeSignup(email: string): Promise<{ stored: boolean; isNew: boolean }> {
   try {
     const supabase = createAdminClient();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("newsletter_signups")
       .upsert({ email, source: "footer" }, {
         onConflict: "email",
         ignoreDuplicates: true,
-      });
+      })
+      .select("email");
 
     if (error) {
       // PostgREST text about the statement, never the address - the log stream
@@ -90,9 +91,10 @@ async function storeSignup(email: string): Promise<boolean> {
         route: "/api/newsletter",
         tags: { code: error.code ?? null, reason: error.message },
       }).catch(() => {});
-      return false;
+      return { stored: false, isNew: false };
     }
-    return true;
+    // A duplicate inserts nothing and returns no row.
+    return { stored: true, isNew: (data ?? []).length > 0 };
   } catch (error) {
     // `createAdminClient()` throws when SUPABASE_SERVICE_ROLE_KEY is unset.
     console.error("[newsletter] request NOT stored", {
@@ -105,7 +107,7 @@ async function storeSignup(email: string): Promise<boolean> {
       route: "/api/newsletter",
       tags: { reason: error instanceof Error ? error.message : "unknown" },
     }).catch(() => {});
-    return false;
+    return { stored: false, isNew: false };
   }
 }
 
@@ -149,7 +151,7 @@ export async function POST(request: Request) {
   }
 
   // Store first, then notify - same order and same reason as /api/contact.
-  const stored = await storeSignup(body.email);
+  const { stored, isNew } = await storeSignup(body.email);
 
   let delivered = false;
   let failure: string | null = null;
@@ -157,7 +159,10 @@ export async function POST(request: Request) {
   // The same condition the footer uses to decide whether to offer the box at
   // all - lib/contact.ts `formsReachStudio(isEmailConfigured())`. It now
   // decides only whether the owner is told, not whether the request survives.
-  if (isEmailConfigured() && SHOP.hasSupportEmail) {
+  // Only a NEW address is worth an email to the studio. Re-submitting the same
+  // address over and over must not be a way to spend the sending quota that
+  // order confirmations depend on.
+  if (isNew && isEmailConfigured() && SHOP.hasSupportEmail) {
     const result = await sendEmail({
       to: SHOP.supportEmail,
       subject: `[${SHOP.name}] newsletter sign-up request`,

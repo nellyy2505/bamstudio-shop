@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ProductArt } from "@/components/ProductArt";
 import { ProductGrid } from "@/components/product/ProductCard";
 import { ButtonLink, Icon, Pill, SectionHead } from "@/components/ui";
-import { KeycapWord } from "@/components/builder/Keycap";
-import { ScoopArt } from "@/components/scoop/ScoopArt";
-import { getCollections, getProducts, getScoopTiers } from "@/lib/queries";
+import { getBakeryFillings, getProducts } from "@/lib/queries";
+import { getLadder, priceFor } from "@/lib/pricing/builder";
+import { photoUrl, thumbFor } from "@/lib/photos";
 import {
   PRINT_LEAD_TIME,
   SHIPPING,
@@ -13,8 +12,7 @@ import {
   isFreeShipping,
   transitDays,
 } from "@/lib/config";
-import { money, pluralise } from "@/lib/format";
-import type { ArtKey, Tint } from "@/lib/types";
+import { money } from "@/lib/format";
 import { selfCanonical } from "./seo";
 
 export const revalidate = 300;
@@ -25,42 +23,6 @@ export const revalidate = 300;
  * rel=canonical anywhere, so `/?utm_source=…` and `/` were two pages.
  */
 export const metadata: Metadata = selfCanonical("/");
-
-/** Tailwind scans source statically, so tint classes must appear literally. */
-const TINT_BG: Record<Tint, string> = {
-  blush: "bg-blush",
-  butter: "bg-butter",
-  sage: "bg-sage",
-  sky: "bg-sky",
-  lilac: "bg-lilac",
-  cream: "bg-cream",
-};
-
-const CATEGORY_TILES: { label: string; art: ArtKey; tint: Tint; href: string }[] =
-  [
-    { label: "Food", art: "cinnamon", tint: "butter", href: "/shop?theme=Food" },
-    { label: "Drinks", art: "coffee", tint: "cream", href: "/shop?theme=Drinks" },
-    {
-      label: "Plants",
-      art: "tulip",
-      tint: "sage",
-      href: "/shop?theme=Plants+%26+flowers",
-    },
-    {
-      label: "Names",
-      art: "letters",
-      tint: "lilac",
-      href: "/shop?theme=Letters+%26+names",
-    },
-    { label: "Animals", art: "corgi", tint: "blush", href: "/shop?theme=Animals" },
-    { label: "Sport", art: "tennis", tint: "sky", href: "/shop?theme=Sport" },
-    {
-      label: "Phone & bag",
-      art: "stand",
-      tint: "cream",
-      href: "/shop?category=Phone+%26+bag",
-    },
-  ];
 
 /**
  * §0.10: free postage is the standard rate only - shippingCost() charges
@@ -103,27 +65,27 @@ const [STANDARD_MIN, STANDARD_MAX] = transitDays("standard");
  * is printing only - and the free rate is named for the method it applies to.
  */
 const DELIVERY_PROMISE = FREE_RATE_METHOD
-  ? `That's printing time, not delivery. ${FREE_RATE_METHOD.label.toLowerCase()} post adds ${FREE_RATE_METHOD.transitDays[0]}–${FREE_RATE_METHOD.transitDays[1]} business days, is half-price from ${money(SHIPPING.subsidyThreshold)} and free from ${money(SHIPPING.freeThreshold)}` +
+  ? `Printed in ${PRINT_LEAD_TIME.label}, then ${FREE_RATE_METHOD.transitDays[0]}–${FREE_RATE_METHOD.transitDays[1]} business days by ${FREE_RATE_METHOD.label.toLowerCase()} post. Half-price from ${money(SHIPPING.subsidyThreshold)}, free from ${money(SHIPPING.freeThreshold)}` +
     (PAID_METHOD_COUNT > 0
-      ? `; ${PAID_METHOD_LABELS} ${PAID_METHOD_COUNT === 1 ? "is" : "are"} always charged.`
+      ? ` (${PAID_METHOD_LABELS} always charged).`
       : ".")
-  : `That's printing time, not delivery. standard post adds ${STANDARD_MIN}–${STANDARD_MAX} business days.`;
+  : `Printed in ${PRINT_LEAD_TIME.label}, then ${STANDARD_MIN}–${STANDARD_MAX} business days by standard post.`;
 
 const PROMISES = [
   {
     icon: "box" as const,
     title: "Printed to order",
-    body: "Made fresh for every order, checked and packed by hand.",
+    body: "Made fresh for you, checked and packed by hand.",
   },
   {
     icon: "truck" as const,
-    title: `Dispatched in ${PRINT_LEAD_TIME.label}`,
+    title: "Australia Post delivery",
     body: DELIVERY_PROMISE,
   },
   {
     icon: "shield" as const,
     title: "Secure checkout",
-    body: "Payments run through Stripe. Your card details never touch us.",
+    body: "Payments run through Stripe. We never see your card details.",
   },
   {
     icon: "gift" as const,
@@ -133,53 +95,31 @@ const PROMISES = [
 ];
 
 export default async function HomePage() {
-  const [{ products: bestsellers }, { products: fresh }, collections, tiers] =
-    await Promise.all([
-      getProducts({ sort: "popular", perPage: 4 }),
-      getProducts({ sort: "new", perPage: 4 }),
-      getCollections(),
-      getScoopTiers(),
-    ]);
-
-  const hero = bestsellers.slice(0, 4);
-  const featured = collections.find((c) => c.is_popular) ?? collections[0];
-
-  /*
-   * The Lucky Scoop is advertised here ONLY when there is a tier on sale.
-   *
-   * `sellable` is the whole gate (lib/scoop.ts) and it now asks two things
-   * only: is the tier switched on, and is it priced. A tier nobody has priced
-   * is not something to send a shopper to from the home page.
-   *
-   * IT IS BLIND TO STOCK, deliberately. This comment used to exclude a tier
-   * "whose pool cannot currently fill it" as well. That gate existed and the
-   * owner removed it: **the shop prints to order**, so a short bowl is a print
-   * job she does before packing, never a reason to stop offering a paid
-   * product. A scoop follows the same rule as everything else in the catalogue.
-   * If you are about to filter this strip on `scoopsAvailable` because a
-   * comment somewhere still describes the old behaviour - don't; that number is
-   * studio information and lib/scoop.ts records the correction at length.
-   * ("Unweighed" has gone from the list for a different reason: a packed weight
-   * is required to ACTIVATE a tier, 0007_lucky_scoop.sql, so it sits upstream
-   * of `sellable` rather than inside it.)
-   *
-   * Nothing is seeded, so this is empty on every
-   * environment right now and the section below simply does not render - which
-   * is the honest answer, not a placeholder. `/scoop` itself stays a real page
-   * either way; it is just not promoted from here until it has something to
-   * sell.
-   */
-  const scoopTiers = tiers.filter((tier) => tier.availability.sellable);
-  const scoopPrices = scoopTiers
-    .map((tier) => tier.price_cents)
-    .filter((cents): cents is number => cents !== null);
-  const scoopFrom = scoopPrices.length > 0 ? Math.min(...scoopPrices) : null;
+  const [{ products }, fillings, boxLadder] = await Promise.all([
+    getProducts({ sort: "popular", perPage: 24 }),
+    getBakeryFillings(),
+    getLadder("bakery_box"),
+  ]);
+  const boxPrice = priceFor(boxLadder, 4);
+  // The cake box has its own section below, so it is not repeated in a grid.
+  const keychains = products.filter((p) => p.category === "Clicker keychain");
+  const others = products.filter(
+    (p) => p.category !== "Clicker keychain" && p.personalisation_mode !== "bakery",
+  );
+  const fillingPhotos = fillings
+    .map((f) => {
+      const path = f.photos?.[0]?.path;
+      const src = path ? photoUrl(path) : null;
+      return src ? { src: thumbFor(src), name: f.short_name || f.name } : null;
+    })
+    .filter((f): f is { src: string; name: string } => f !== null)
+    .slice(0, 6);
 
   return (
     <>
       {/* ---------------------------------------------------------- hero */}
-      <section className="border-b border-line bg-gradient-to-br from-butter via-blush to-sage">
-        <div className="wrap grid items-center gap-10 py-14 lg:grid-cols-2 lg:py-16">
+      <section className="border-b border-line bg-[#F7EFE6]">
+        <div className="wrap grid items-center gap-10 py-12 lg:grid-cols-[1fr_1.1fr] lg:py-16">
           <div>
             <Pill tone="surface" className="text-accent-dark">
               Handmade in {SHOP.city} · Printed to order
@@ -188,166 +128,147 @@ export default async function HomePage() {
               {SHOP.tagline}
             </h1>
             <p className="mb-7 max-w-[460px] text-[17px] text-[#5C564C]">
-              Fidget clickers, name charms and desk pieces, 3D-printed just for
-              you, from matcha sets to macarons.
+              Clicky keychains, mini cake boxes and desk pieces, designed by our
+              family and printed for you.
             </p>
             <div className="flex flex-wrap gap-3.5">
-              <ButtonLink href="/shop" size="lg">
-                Shop bestsellers
+              <ButtonLink href="#shop" size="lg">
+                Shop the range
               </ButtonLink>
-              <ButtonLink href="/builder" variant="ghost" size="lg">
+              <ButtonLink href="/bakery" variant="ghost" size="lg">
                 <Icon name="sparkle" size={18} />
-                Design your own
+                Design a cake box
               </ButtonLink>
             </div>
             <ul className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13.5px] text-[#5C564C]">
               {HERO_FACTS.map((fact) => (
                 <li key={fact.label} className="flex items-center gap-1.5">
-                  <Icon
-                    name={fact.icon}
-                    size={15}
-                    className="shrink-0 text-accent-dark"
-                  />
+                  <Icon name={fact.icon} size={15} className="shrink-0 text-accent-dark" />
                   {fact.label}
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {hero.map((product, i) => (
-              <Link
-                key={product.id}
-                href={`/product/${product.slug}`}
-                className={`flex h-[180px] items-center justify-center rounded-[22px] bg-surface shadow-[0_14px_34px_rgba(34,31,26,0.10)] transition-transform hover:-translate-y-1 sm:h-[225px] ${
-                  i % 2 === 1 ? "mt-6 sm:mt-8" : ""
-                }`}
-              >
-                <ProductArt art={product.art} size={130} />
-                <span className="sr-only">{product.short_name}</span>
-              </Link>
-            ))}
+          <div className="grid grid-cols-[1.35fr_1fr] gap-3 sm:gap-4">
+            <Link href="/bakery" className="row-span-2 overflow-hidden rounded-[22px]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- static site photo */}
+              <img
+                src="/products/bakery-box/1.jpg"
+                alt="Open mini cake box holding four pastries"
+                fetchPriority="high"
+                className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.03]"
+              />
+            </Link>
+            <Link href="/product/macaron" className="overflow-hidden rounded-[22px]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- static site photo */}
+              <img
+                src="/products/macaron/1-sm.jpg"
+                alt="Macaron keychains"
+                className="aspect-square w-full object-cover transition-transform duration-500 hover:scale-[1.03]"
+              />
+            </Link>
+            <Link href="/product/love-cactus-planters" className="overflow-hidden rounded-[22px]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- static site photo */}
+              <img
+                src="/products/love-cactus-planters/1-sm.jpg"
+                alt="LOVE cactus planters"
+                className="aspect-square w-full object-cover transition-transform duration-500 hover:scale-[1.03]"
+              />
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* ---------------------------------------------------- categories */}
-      <section className="wrap pt-14">
-        <SectionHead title="Shop by category" href="/shop" linkText="All categories" />
-        <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-7">
-          {CATEGORY_TILES.map((tile) => (
-            <Link
-              key={tile.label}
-              href={tile.href}
-              className="flex flex-col items-center gap-2.5"
-            >
-              <span
-                className={`flex aspect-square w-full items-center justify-center rounded-full ${TINT_BG[tile.tint]} transition-transform hover:scale-105`}
-              >
-                <ProductArt art={tile.art} size={64} />
-              </span>
-              <span className="text-center text-[13.5px] font-extrabold">
-                {tile.label}
-              </span>
-            </Link>
-          ))}
-        </div>
+      {/* ------------------------------------------------------ the range */}
+      <section id="shop" className="wrap scroll-mt-24 pt-14">
+        <SectionHead
+          title="Clicky keychains"
+          href="/shop?category=Clicker+keychain"
+          linkText="See all"
+        />
+        <ProductGrid products={keychains} columns={keychains.length === 5 ? 5 : 4} />
       </section>
 
-      {/* --------------------------------------------------- bestsellers */}
+      {/* ------------------------------------------------- cake box promo */}
       <section className="wrap pt-16">
-        <SectionHead title="Bestsellers" href="/shop" linkText="Shop all products" />
-        <ProductGrid products={bestsellers} />
-      </section>
-
-      {/* -------------------------------------------------- builder promo */}
-      <section className="wrap pt-16">
-        <div className="grid items-center gap-10 rounded-[26px] bg-ink px-8 py-14 text-[#F6F2EA] lg:grid-cols-[1.1fr_1fr] lg:px-16">
-          <div>
-            <Pill className="bg-[#3B3630] text-[#F3C89B]">
-              The market favourite, now online
+        <div className="grid items-center gap-8 overflow-hidden rounded-[26px] bg-blush lg:grid-cols-2">
+          {/* eslint-disable-next-line @next/next/no-img-element -- static site photo */}
+          <img
+            src="/products/bakery-box/2-sm.jpg"
+            alt="Brown and pink mini cake boxes surrounded by tiny pastries"
+            loading="lazy"
+            className="aspect-square h-full w-full object-cover lg:aspect-auto"
+          />
+          <div className="px-7 pb-10 lg:py-12 lg:pr-14 lg:pl-2">
+            <Pill tone="surface" className="text-accent-dark">
+              <Icon name="sparkle" size={14} />
+              Design your own
             </Pill>
-            <h2 className="mt-4 mb-3 text-[32px] leading-tight text-[#F6F2EA] lg:text-[38px]">
-              Spell it out. Click it together.
+            <h2 className="mt-4 mb-3 text-[30px] leading-tight lg:text-[36px]">
+              Build your own cake box
             </h2>
-            <p className="mb-7 max-w-[420px] text-[#BDB6AA]">
-              Pick a collection, spell a name in printed letter caps, and
-              we&apos;ll thread it with a matching charm. One flat price by name
-              length.
+            <p className="mb-6 max-w-[440px] text-[#5F5769]">
+              Choose a brown or pink box, then fill all four spots with mini
+              donuts, conchas and tarts.
+              {boxPrice !== null ? ` ${money(boxPrice)} whatever you pick.` : ""}
             </p>
-            <ButtonLink
-              href="/builder"
-              className="bg-[#F6F2EA] text-ink hover:bg-white"
-            >
-              <Icon name="sparkle" size={18} />
-              Start designing
+            {fillingPhotos.length > 0 ? (
+              <div className="mb-7 flex flex-wrap gap-2.5">
+                {fillingPhotos.map((f) => (
+                  // eslint-disable-next-line @next/next/no-img-element -- static site photo
+                  <img
+                    key={f.src}
+                    src={f.src}
+                    alt={f.name}
+                    title={f.name}
+                    loading="lazy"
+                    className="h-14 w-14 rounded-full border-2 border-white object-cover shadow-sm"
+                  />
+                ))}
+              </div>
+            ) : null}
+            <ButtonLink href="/bakery" size="lg">
+              Build your box
             </ButtonLink>
           </div>
-          {featured ? (
-            <div className="flex flex-col items-center gap-4">
-              <KeycapWord word="MIA" collection={featured} size={72} withCharm />
-              <span className="text-[12.5px] text-[#948D80]">
-                {collections.length} colourway collections · 1–5 letters
-              </span>
-            </div>
-          ) : null}
         </div>
       </section>
 
-      {/* ---------------------------------------------------- scoop promo */}
-      {/*
-        The shop's second "not an ordinary product", in the same register as
-        Design your own above: one card, one idea, one way in.
+      {/* ------------------------------------------------ desk and more */}
+      {others.length > 0 ? (
+        <section className="wrap pt-16 pb-6">
+          <SectionHead title="For your desk and more" href="/shop" linkText="Shop all" />
+          <ProductGrid products={others} columns={others.length === 3 ? 3 : 4} />
+        </section>
+      ) : null}
 
-        What it may NOT do is sell the surprise on its own. The line that earns
-        the click here is the same line that makes the sale honest - every bowl
-        lists what it can draw - so it is in the card rather than saved for the
-        page. Rendered only when `scoopTiers` has something sellable in it; see
-        the gate above.
-      */}
-      {scoopTiers.length > 0 ? (
-        <section className="wrap pt-16">
-          <div className="grid items-center gap-10 rounded-[26px] bg-sky px-8 py-14 lg:grid-cols-[1.1fr_1fr] lg:px-16">
-            <div>
-              <Pill tone="surface" className="text-accent-dark">
-                Also from the stall
-              </Pill>
-              <h2 className="mt-4 mb-3 text-[32px] leading-tight lg:text-[38px]">
-                The Lucky Scoop.
-              </h2>
-              <p className="mb-7 max-w-[440px] text-[#4F5A63]">
-                A bowl of little printed pieces. You pick the bowl and how many
-                come out of it; we draw them by hand when we pack your order.
-                Every bowl lists the whole pool it draws from, so the only
-                surprise is which pieces you get.
-              </p>
-              <ButtonLink href="/scoop" size="lg">
-                <Icon name="gift" size={18} />
-                See the bowls
-              </ButtonLink>
-            </div>
-            <div className="flex flex-col items-center gap-4">
-              <ScoopArt size={150} />
-              <span className="text-[12.5px] text-[#5C6670]">
-                {pluralise(scoopTiers.length, "bowl")}
-                {scoopFrom !== null ? ` · from ${money(scoopFrom)}` : ""}
-              </span>
-            </div>
+      {/* -------------------------------------------------- builder promo */}
+      <section className="wrap pt-10">
+        <div className="grid items-center gap-8 overflow-hidden rounded-[26px] bg-ink text-[#F6F2EA] lg:grid-cols-2">
+          <div className="order-2 px-7 pb-10 lg:order-1 lg:py-12 lg:pl-14">
+            <Pill className="bg-[#3B3630] text-[#F3C89B]">The market favourite</Pill>
+            <h2 className="mt-4 mb-3 text-[30px] leading-tight text-[#F6F2EA] lg:text-[36px]">
+              Spell it out in keycaps
+            </h2>
+            <p className="mb-7 max-w-[420px] text-[#BDB6AA]">
+              Pick a colourway and spell a name, initials or a little word, up to
+              five letters. Every colourway costs the same.
+            </p>
+            <ButtonLink href="/builder" className="bg-[#F6F2EA] text-ink hover:bg-white">
+              <Icon name="sparkle" size={18} />
+              Design a name charm
+            </ButtonLink>
           </div>
-        </section>
-      ) : null}
-
-      {/* --------------------------------------------------------- new in */}
-      {fresh.length > 0 ? (
-        <section className="wrap pt-16">
-          <SectionHead
-            title="New this month"
-            href="/shop?sort=new"
-            linkText="See what's new"
+          {/* eslint-disable-next-line @next/next/no-img-element -- static site photo */}
+          <img
+            src="/products/custom-name-charm/1-sm.jpg"
+            alt="Name keychains spelling BAM, FINN, CS and XO"
+            loading="lazy"
+            className="order-1 aspect-square h-full w-full object-cover lg:order-2 lg:aspect-auto"
           />
-          <ProductGrid products={fresh} />
-        </section>
-      ) : null}
+        </div>
+      </section>
 
       {/* ------------------------------------------------------- promises */}
       <section className="wrap pt-16">

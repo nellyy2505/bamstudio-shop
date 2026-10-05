@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   // Static metadata cannot branch on the config flags below, so it says what
   // holds however the shop is configured rather than promising an answer.
   description:
-    "Questions about an order, a return, a custom design or a market stall? Here is how to reach Bam Studio.",
+    "Get in touch with Bam Studio about an order, a return, a custom design or a market date.",
 };
 
 /**
@@ -60,15 +60,15 @@ function ReachUsCard() {
       <div className="card p-7 sm:p-9">
         <h2 className="text-2xl">Write to us</h2>
         <p className="mt-2 max-w-[52ch] text-[15px] text-muted">
-          Email is the way to reach us. Send your question to{" "}
+          Email us at{" "}
           <a
             href={`mailto:${SHOP.supportEmail}`}
             className="font-bold text-accent underline underline-offset-2"
           >
             {SHOP.supportEmail}
           </a>{" "}
-          and add your order number if you have one. One of us reads every
-          message personally.
+          with your order number if you have one. We read every message
+          ourselves.
         </p>
       </div>
     );
@@ -79,8 +79,7 @@ function ReachUsCard() {
       <div className="card p-7 sm:p-9">
         <h2 className="text-2xl">Find us on social</h2>
         <p className="mt-2 max-w-[52ch] text-[15px] text-muted">
-          Our DMs are the way to reach us at the moment. Send the order number
-          if it is about a parcel and we will pick it up there.
+          Send us a DM, with your order number if it&apos;s about a parcel.
         </p>
       </div>
     );
@@ -90,15 +89,14 @@ function ReachUsCard() {
     <div className="card p-7 sm:p-9">
       <h2 className="text-2xl">Reaching us</h2>
       <p className="mt-2 max-w-[52ch] text-[15px] text-muted">
-        The studio inbox is not set up yet, so there is no way to send us a
-        message from here. If you are chasing a parcel,{" "}
+        Chasing a parcel?{" "}
         <Link
           href="/track"
           className="font-bold text-accent underline underline-offset-2"
         >
-          tracking
+          Track your order
         </Link>{" "}
-        will tell you where it is with your order number and email.
+        with your order number and email.
       </p>
     </div>
   );
@@ -118,10 +116,9 @@ export default function ContactPage() {
             measures or guarantees a turnaround, and a page that cannot promise
             a channel certainly cannot promise a clock. */}
         <p className="text-muted">
-          There is no support team here. It is the three of us.
           {canReachStudio
-            ? " Reach us any of the ways below and you get an actual answer from someone who printed the thing."
-            : " We have not published a way to reach us yet, so here is what you can do in the meantime."}
+            ? "Questions about an order, a custom idea or a market date? Send us a note. We read every message ourselves."
+            : "Questions about an order or a market date? Start here."}
         </p>
       </div>
 
@@ -138,7 +135,7 @@ export default function ContactPage() {
               </span>
               <h2 className="mt-4 text-lg">Email</h2>
               <p className="mt-1.5 text-[14px] text-muted">
-                {canReceiveMessages ? "Prefer your own inbox? Write to " : "Write to "}
+                {canReceiveMessages ? "Prefer email? Write to " : "Write to "}
                 <a
                   href={`mailto:${SHOP.supportEmail}`}
                   className="font-bold text-accent underline underline-offset-2"
@@ -146,13 +143,6 @@ export default function ContactPage() {
                   {SHOP.supportEmail}
                 </a>
                 . Include your order number if you have one.
-              </p>
-              {/* Was "Replies weekdays. Market weekends run a day or two
-                  behind." - a turnaround promise with nothing behind it. This
-                  sets the same expectation without committing to a clock. */}
-              <p className="mt-2 text-[12.5px] text-faint">
-                We answer these ourselves, between print runs and market
-                weekends.
               </p>
             </section>
           ) : null}
@@ -168,8 +158,7 @@ export default function ContactPage() {
               </span>
               <h2 className="mt-4 text-lg">Social</h2>
               <p className="mt-1.5 text-[14px] text-muted">
-                New designs, print fails and restock news go up first on social.
-                We read our DMs too, they just take us a bit longer.
+                New designs and restocks go up here first. DMs welcome.
               </p>
               <div className="mt-3 flex flex-wrap gap-3 text-sm font-bold">
                 {SHOP.socials.instagram ? (
@@ -198,18 +187,10 @@ export default function ContactPage() {
             </span>
             <h2 className="mt-4 text-lg">In person</h2>
             <p className="mt-1.5 text-[14px] text-muted">
-              We run a stall at {SHOP.city} weekend markets with the DIY
-              letter-charm bar, so you can spell a name and walk away with it.
-            </p>
-            {/* The next stall was an unfilled [MARKET NAME AND DATE]
-                placeholder. Naming a market we have not booked would be worse
-                than naming none, so this says only what holds. */}
-            <p className="mt-2 text-[14px] text-muted">
-              Dates move around week to week, and we are not at the same market
-              every weekend, so it is worth checking before you make the trip.
-            </p>
-            <p className="mt-2 text-[12.5px] text-faint">
-              We are online-only otherwise, so there is no shopfront to visit.
+              {/* No market is named: none is booked, so this says only what
+                  holds. */}
+              Find our DIY letter-charm bar at {SHOP.city} weekend markets.
+              Dates change, so check before you visit.
             </p>
           </section>
 
@@ -222,12 +203,11 @@ export default function ContactPage() {
                 follow when no channel exists, so only the part about how the
                 printing works is left standing in that case. */}
             <p className="mt-1.5 text-[14px] text-muted">
-              Party favours, a name run for a classroom, or a stockist order:
+              Party favours, classroom name sets or stockist orders
               {canReachStudio
-                ? " tell us the quantity and the date you need it by."
-                : " these are all things we do."}{" "}
-              One printer means lead times grow with the order, so earlier is
-              better.
+                ? ": tell us how many and when you need them."
+                : " are all welcome."}{" "}
+              Bigger orders take longer, so ask early.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Pill tone="line">No licensed characters</Pill>
@@ -249,8 +229,8 @@ export default function ContactPage() {
               className="font-bold text-accent underline underline-offset-2"
             >
               help centre
-            </Link>{" "}
-            first{canReachStudio ? ". It is often faster than waiting for us." : "."}
+            </Link>
+            .
           </p>
         </aside>
       </div>

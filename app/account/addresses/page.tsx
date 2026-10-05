@@ -4,7 +4,7 @@ import { requireAccount, type SavedAddress } from "../data";
 
 export const metadata: Metadata = {
   title: "Your addresses",
-  description: "An address book you can copy from at checkout.",
+  description: "Your saved delivery addresses.",
   robots: { index: false, follow: false },
 };
 
@@ -40,9 +40,7 @@ export default async function AddressesPage() {
     <div>
       <h1 className="mb-1.5 text-3xl md:text-4xl">Your addresses</h1>
       <p className="mb-7 text-sm text-muted">
-        An address book for the places you post to most, so you can copy one
-        across instead of digging out a postcode. Checkout still asks for the
-        delivery address itself. These are not filled in for you yet.
+        Save the addresses you post to most, ready to copy into checkout.
       </p>
 
       <AddressManager initial={addresses} userId={user.id} />

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button, Icon } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
 import type { Product } from "@/lib/types";
+import { productPhotos } from "@/lib/photos";
 
 export function AddToBasketButton({ product }: { product: Product }) {
   const { add } = useCart();
@@ -28,6 +29,7 @@ export function AddToBasketButton({ product }: { product: Product }) {
       slug: product.slug,
       name: product.short_name,
       art: product.art,
+      photo: productPhotos(product)[0]?.thumb ?? null,
       tint: product.tint,
       colour: product.colours?.[0]?.name ?? null,
       attachment_id: attachment?.id ?? null,

@@ -269,6 +269,7 @@ export function ProductForm({
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="On the shelf" htmlFor="stock_on_hand">
             <input id="stock_on_hand" name="stock_on_hand" type="number" min="0" defaultValue={product?.stockOnHand ?? 0} className={inputClass} />
+            <input type="hidden" name="stock_on_hand_loaded" value={product ? String(product.stockOnHand ?? 0) : ""} />
           </Field>
           <Field label="Buffer" htmlFor="buffer_stock" hint="How many you like to have spare.">
             <input id="buffer_stock" name="buffer_stock" type="number" min="0" defaultValue={product?.bufferStock ?? defaultBuffer} className={inputClass} />

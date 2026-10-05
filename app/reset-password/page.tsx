@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   robots: { index: false },
   description: CAN_SET_PASSWORD
     ? "Choose a new password for your Bam Studio account."
-    : "Changing your Bam Studio password isn't available just yet.",
+    : "Password changes are unavailable right now.",
 };
 
 export default async function ResetPasswordPage() {
@@ -71,8 +71,7 @@ export default async function ResetPasswordPage() {
           {!CAN_SET_PASSWORD ? (
             <>
               <p className="mt-1.5 mb-6 text-sm text-muted">
-                Accounts aren&apos;t open yet, so there&apos;s no password to
-                change here just now.
+                Password changes are unavailable right now.
               </p>
               <ResetPasswordForm viaRecovery={viaRecovery} />
             </>
@@ -80,27 +79,26 @@ export default async function ResetPasswordPage() {
             <>
               <p className="mt-1.5 mb-6 text-sm text-muted">
                 {viaRecovery
-                  ? "Pick something you haven't used before, at least 8 characters."
-                  : "Confirm your current password, then pick a new one, at least 8 characters."}
+                  ? "Use at least 8 characters."
+                  : "Enter your current password, then a new one of at least 8 characters."}
               </p>
               <ResetPasswordForm viaRecovery={viaRecovery} />
             </>
           ) : (
             <>
               <p className="mt-1.5 mb-6 text-sm text-muted">
-                This link has expired, or you&apos;re not signed in on this
-                device.
+                This link has expired, or you&apos;re signed out on this device.
               </p>
               <Alert tone="info">
-                Password reset links are single-use and expire after 30 minutes.
-                Request a fresh one and open it on this device.
+                Reset links work once and expire after 30 minutes. Request a new
+                one and open it on this device.
               </Alert>
               <p className="mt-6 text-sm text-muted">
                 <Link
                   href="/forgot-password"
                   className="font-bold text-accent underline underline-offset-2 hover:text-accent-dark"
                 >
-                  Send me a new reset link
+                  Send a new link
                 </Link>
               </p>
             </>

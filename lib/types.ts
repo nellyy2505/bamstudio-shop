@@ -53,6 +53,11 @@ export type Product = {
   art: ArtKey;
   tint: Tint;
   gallery: ProductImage[];
+  /**
+   * Real photographs uploaded in the studio, as storage paths. When this has
+   * anything in it the shop shows photos; otherwise it shows `gallery` art.
+   */
+  photos?: { path: string; alt?: string | null }[];
   colours: { name: string; hex: string }[];
   attachments: Attachment[];
   details: { title: string; body: string }[];
@@ -114,6 +119,8 @@ export type Collection = {
    * rather than guessing a price for it.
    */
   charm_slug: string | null;
+  /** Photo of the charm product, resolved on the server when it has one. */
+  charm_photo?: string | null;
   tint: Tint;
   is_popular: boolean;
 };
@@ -138,6 +145,8 @@ export type CartLine = {
   name: string;
   art: ArtKey;
   tint: Tint;
+  /** First product photo URL at the time of adding, for the basket thumbnail. */
+  photo?: string | null;
   colour: string | null;
   attachment_id: string | null;
   attachment_label: string | null;

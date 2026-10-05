@@ -33,27 +33,22 @@ export const metadata: Metadata = {
   ...selfCanonical("/track"),
   title: "Track your order",
   description:
-    "Check where your Bam Studio order is, whether confirmed, printing, packed or shipped, with your order number and email. No account needed.",
+    "Check on your Bam Studio order with your order number and email. No account needed.",
 };
 
 const NOTES = [
   {
     icon: "box" as const,
-    title: "Printing comes first",
-    body: `Nothing is posted until it is printed, and printing takes ${PRINT_LEAD_TIME.label}. An order sitting on "Printing" for a couple of days is behaving normally.`,
+    title: "Printing",
+    body: PRINT_LEAD_TIME.label,
   },
   {
     icon: "truck" as const,
-    title: "Then the post",
+    title: "Australia Post",
     // Postage is quoted per basket from Australia Post, so no fixed price
     // belongs on this page - and tracking depends on the service the quote
     // picks, which a general explainer cannot know. Transit ranges only.
-    body: `Postage is worked out from the weight of your basket at Australia Post's current rates and shown before you pay. After dispatch, standard post takes ${transitRangeLabel("standard")} and express takes ${transitRangeLabel("express")}.`,
-  },
-  {
-    icon: "lock" as const,
-    title: "Guest friendly",
-    body: "We match the order number against the email you ordered with, so nobody can look up a parcel that is not theirs.",
+    body: `Standard ${transitRangeLabel("standard")}, express ${transitRangeLabel("express")}.`,
   },
 ];
 
@@ -64,26 +59,27 @@ export default function TrackPage() {
         items={[{ label: "Home", href: "/" }, { label: "Track your order" }]}
       />
 
-      <div className="mb-9 max-w-2xl">
-        <h1 className="mb-2.5 text-3xl md:text-4xl">Where is my order?</h1>
+      <div className="mb-8 max-w-2xl">
+        <h1 className="mb-2.5 text-3xl md:text-4xl">Track your order</h1>
         <p className="text-muted">
-          Every order goes through the same four stages: confirmed, printing,
-          packed, shipped. Put in your order number and email to see which one
-          yours is on.
+          Enter your order number and email to see where it&apos;s up to.
         </p>
       </div>
 
-      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+      <div className="max-w-3xl">
         <TrackForm />
 
-        <aside className="flex flex-col gap-4">
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
           {NOTES.map((note) => (
-            <section key={note.title} className="card p-6">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cream">
-                <Icon name={note.icon} size={22} />
-              </span>
-              <h2 className="mt-4 text-lg">{note.title}</h2>
-              <p className="mt-1.5 text-[14px] text-muted">{note.body}</p>
+            <section
+              key={note.title}
+              className="flex items-start gap-3 rounded-xl bg-cream px-4 py-3"
+            >
+              <Icon name={note.icon} size={20} className="mt-0.5 shrink-0" />
+              <div>
+                <h2 className="text-[14px]">{note.title}</h2>
+                <p className="text-[13px] text-muted">{note.body}</p>
+              </div>
             </section>
           ))}
 
@@ -93,22 +89,23 @@ export default function TrackPage() {
               after the response and can fail - so it is named as a second place
               to look rather than the place, and only when one is actually
               sent. */}
-          <p className="px-1 text-[13px] text-muted">
-            Do not have your order number? It is shown on the confirmation page
-            straight after you pay
-            {SENDS_CONFIRMATION
-              ? ", and on the confirmation email if one reached you"
-              : ""}
-            . If you have lost it,{" "}
-            <Link
-              href="/contact"
-              className="font-bold text-accent underline underline-offset-2"
-            >
-              {canReachStudio ? "message us" : "see how to reach us"}
-            </Link>
-            {canReachStudio ? ". We can look it up from our side." : "."}
-          </p>
-        </aside>
+          <section className="flex items-start gap-3 rounded-xl bg-cream px-4 py-3">
+            <Icon name="help" size={20} className="mt-0.5 shrink-0" />
+            <div>
+              <h2 className="text-[14px]">Lost your order number?</h2>
+              <p className="text-[13px] text-muted">
+                It&apos;s on your confirmation page
+                {SENDS_CONFIRMATION ? " and email" : ""}.{" "}
+                <Link
+                  href="/contact"
+                  className="font-bold text-accent underline underline-offset-2"
+                >
+                  {canReachStudio ? "Contact us" : "See how to reach us"}
+                </Link>
+              </p>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );

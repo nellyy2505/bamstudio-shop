@@ -275,13 +275,22 @@ function lineKey(line: NewBasketLine): string {
   const custom = line.custom
     ? `${line.custom.collection_slug}:${line.custom.letters}:${line.custom.with_charm}`
     : "";
-  return [
+  const base = [
     line.product_id,
     line.colour ?? "",
     line.attachment_id ?? "",
     custom,
     line.personalisation_text ?? "",
-  ].join("|");
+  ];
+  // Two different bakery boxes must never merge: the design, colour and the
+  // pieces chosen are what gets printed. Appended only when present, so every
+  // key already stored in a browser for a non-bakery line is unchanged.
+  if (line.bakery) {
+    base.push(
+      `bakery:${line.bakery.design}:${line.bakery.colour_id}:${[...line.bakery.fillings].join(",")}`,
+    );
+  }
+  return base.join("|");
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {

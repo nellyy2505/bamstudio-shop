@@ -157,13 +157,13 @@ export function FilterSidebar({
         <div className="mt-3 rounded-2xl bg-lilac p-4">
           <b className="text-[13.5px]">Can&apos;t find their name?</b>
           <p className="mt-1.5 mb-2.5 text-[12.5px] text-muted">
-            Build a custom charm letter by letter.
+            Spell it out in our name builder.
           </p>
           <a
             href="/builder"
             className="inline-flex items-center gap-1.5 text-[13px] font-extrabold text-accent underline underline-offset-2"
           >
-            Design Your Own
+            Start designing
             <Icon name="arrow" size={14} />
           </a>
         </div>

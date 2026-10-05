@@ -9,10 +9,10 @@ const COLUMNS = [
     heading: "Shop",
     links: [
       { href: "/shop", label: "All products" },
-      { href: "/shop?category=Clicker+keychain", label: "Clicker keychains" },
-      { href: "/builder", label: "Design Your Own" },
-      { href: "/collections", label: "Collections" },
-      { href: "/shop?max=1500", label: "Gifts under $15" },
+      { href: "/shop?category=Clicker+keychain", label: "Keychains" },
+      { href: "/shop?category=Desk+%26+home", label: "Desk & home" },
+      { href: "/bakery", label: "Design a cake box" },
+      { href: "/builder", label: "Design a name charm" },
     ],
   },
   {
@@ -51,8 +51,8 @@ export function Footer() {
               Bam<span className="text-accent">Studio</span>
             </p>
             <p className="mb-4 max-w-[250px] text-[13.5px]">
-              Cute, clicky, 3D-printed keepsakes, designed by our family,
-              printed to order in {SHOP.city}.
+              Cute, clicky keepsakes, designed by our family and printed to
+              order in {SHOP.city}.
             </p>
             <div className="flex flex-wrap gap-2">
               {PAYMENT_BADGES.map((name) => (
@@ -83,23 +83,22 @@ export function Footer() {
 
           <div>
             <h4 className="mb-3.5 font-display text-sm text-[#F6F2EA]">
-              {canForwardSignups ? "Hear about new drops" : "New drops"}
+              New drops
             </h4>
-            {/* No list exists yet, so no frequency and no "you're subscribed"
-                is promised anywhere - this asks the studio to note you down. */}
+            {/* /api/newsletter stores the address (newsletter_signups). No
+                frequency, welcome email or "you're subscribed" is promised. */}
             {canForwardSignups ? (
               <>
                 <p className="mb-3 text-[13.5px]">
-                  There is no mailing list yet. Leave your address and we will
-                  pass it to the studio to keep for when there is one.
+                  Leave your email for new drops and market dates.
                 </p>
                 <NewsletterForm />
               </>
             ) : (
               <p className="mb-3 text-[13.5px]">
                 {hasSocialAccount
-                  ? "New designs go up on our socials first."
-                  : "New designs go up in the shop as they come off the printer."}
+                  ? "New designs land on our socials first."
+                  : "New designs land here first."}
               </p>
             )}
             {/* Both URLs are env-configured and null until they're set, so a

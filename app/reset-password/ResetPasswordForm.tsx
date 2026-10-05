@@ -40,13 +40,13 @@ const CAN_SET_PASSWORD = isSupabaseConfigured();
  * password the customer typed - none of that is theirs to fix.
  */
 const UNAVAILABLE =
-  "Password changes aren't switched on yet, this shop isn't connected to its accounts system, so we can't save a new password. Nothing you type here would reach us. Please try again later.";
+  "Password changes are unavailable right now. Please try again later.";
 
 const OFFLINE =
-  "We couldn't reach the shop just now. Check your connection and try again.";
+  "We couldn't connect just now. Check your connection and try again.";
 
 const SAVE_FAILED =
-  "We couldn't save that new password just now. Please try again in a moment.";
+  "We couldn't save your new password. Please try again in a moment.";
 
 /** Supabase raises this (status 0) when the request never got a response. */
 function isOffline(error: { name?: string; status?: number }): boolean {
@@ -60,8 +60,8 @@ function isOffline(error: { name?: string; status?: number }): boolean {
  */
 const SAFE_UPDATE_ERRORS: Record<string, string> = {
   weak_password: `That password is too weak. Use at least ${MIN_LENGTH} characters, with a number and a symbol.`,
-  same_password: "That's the password you already have. Please pick a different one.",
-  validation_failed: "Please check the passwords you entered and try again.",
+  same_password: "That's your current password. Please pick a new one.",
+  validation_failed: "Please check your passwords and try again.",
   over_request_rate_limit: "Too many attempts. Please wait a minute and try again.",
   reauthentication_needed:
     "This reset link has expired. Request a fresh one and open it on this device.",
@@ -155,7 +155,7 @@ export function ResetPasswordForm({ viaRecovery }: { viaRecovery: boolean }) {
 
         if (!user?.email) {
           setError(
-            "We couldn't confirm who you're signed in as. Please sign in again.",
+            "Your session has ended. Please sign in again.",
           );
           return;
         }
@@ -173,7 +173,7 @@ export function ResetPasswordForm({ viaRecovery }: { viaRecovery: boolean }) {
             setError(OFFLINE);
             return;
           }
-          setCurrentError("That current password isn't right.");
+          setCurrentError("That password isn't right.");
           return;
         }
       }

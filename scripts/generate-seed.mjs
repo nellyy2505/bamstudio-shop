@@ -438,7 +438,7 @@ function describe(row) {
     : `A ${String(row.Product).toLowerCase()}, 3D-printed to order in our Wollongong studio.`;
   const approved = PUBLIC_NOTE_BY_SKU[String(row.SKU ?? "").trim()];
   const note = approved ? ` ${approved}` : "";
-  return `${base} Printed in layered PLA and finished by hand.${note} Theme: ${theme}.`;
+  return `${base} Printed in layered PLA and finished by hand.${note}`;
 }
 
 /* ---------------- build ---------------- */

@@ -66,7 +66,7 @@ export function NewsletterForm() {
         setError(
           typeof body?.error === "string"
             ? body.error
-            : "That did not go through. Please try again in a moment.",
+            : "That didn't go through. Please try again.",
         );
         setState("error");
         return;
@@ -79,7 +79,7 @@ export function NewsletterForm() {
       setStored(body.stored === true);
       setState(body.delivered ? "done" : "undelivered");
     } catch {
-      setError("We could not reach the studio. Check your connection and try again.");
+      setError("We couldn't connect. Check your connection and try again.");
       setState("error");
     }
   }
@@ -90,8 +90,8 @@ export function NewsletterForm() {
         <Icon name="check" size={16} className="mt-0.5 shrink-0" />
         <span>
           {stored
-            ? "Your address is on record and the studio has been told. There is still no newsletter, so nothing goes out to it yet."
-            : "Passed on to the studio, though we could not put your address on record here, so it may not be kept. There is no newsletter yet either way."}
+            ? "Thanks, we've saved your address."
+            : "Thanks, we've passed your address to the studio."}
         </span>
       </p>
     );
@@ -102,19 +102,10 @@ export function NewsletterForm() {
       <p className={noteClass}>
         <Icon name="help" size={16} className="mt-0.5 shrink-0" />
         {stored ? (
-          <span>
-            Your address is on record, but we could not tell the studio, so
-            nobody has seen it yet. There is still no newsletter and nothing
-            goes out to it. If you need an answer to something,{" "}
-            <Link href="/contact" className="underline underline-offset-2">
-              say hello here
-            </Link>
-            .
-          </span>
+          <span>Thanks, we&apos;ve saved your address.</span>
         ) : (
           <span>
-            That did not reach the studio and nothing was saved. Try again in a
-            minute, or{" "}
+            That didn&apos;t go through. Try again in a minute, or{" "}
             <Link href="/contact" className="underline underline-offset-2">
               say hello here
             </Link>
@@ -135,6 +126,7 @@ export function NewsletterForm() {
           id="newsletter-email"
           type="email"
           required
+          maxLength={200}
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder="Email address"
@@ -145,7 +137,7 @@ export function NewsletterForm() {
           disabled={state === "sending"}
           className="h-12 shrink-0 rounded-full bg-[#F6F2EA] px-5 font-display font-semibold text-[#2B2724] disabled:opacity-60"
         >
-          {state === "sending" ? "…" : "Ask"}
+          {state === "sending" ? "…" : "Sign up"}
         </button>
       </div>
       {/* Previously sr-only, so a failed submit looked like nothing happened -

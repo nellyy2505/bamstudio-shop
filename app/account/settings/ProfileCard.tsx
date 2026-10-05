@@ -24,7 +24,7 @@ function emailChangeHint(canSendEmail: boolean) {
   if (hasStudioMailbox) {
     return (
       <>
-        Changing the email on an account needs a hand from us. Write to{" "}
+        To change your email, write to{" "}
         <a href={`mailto:${SHOP.supportEmail}`} className={LINK}>
           {SHOP.supportEmail}
         </a>
@@ -47,7 +47,7 @@ function emailChangeHint(canSendEmail: boolean) {
   if (handles.length > 0) {
     return (
       <>
-        Changing the email on an account needs a hand from us. Message us on{" "}
+        To change your email, message us on{" "}
         {handles.map((handle, index) => (
           <span key={handle.label}>
             {index > 0 ? " or " : ""}
@@ -63,8 +63,7 @@ function emailChangeHint(canSendEmail: boolean) {
 
   return (
     <>
-      Changing the email on an account needs a hand from us, and we have not
-      published a way to reach us yet.
+      Email changes need our help, and we can&apos;t take requests just now.
     </>
   );
 }
@@ -130,7 +129,7 @@ export function ProfileCard({
       setMessage(
         cause instanceof Error
           ? cause.message
-          : "Could not save your details. Please try again.",
+          : "We couldn't save your details. Please try again.",
       );
     }
   }
@@ -198,7 +197,7 @@ export function ProfileCard({
           <Field
             label="Phone"
             htmlFor="profile-phone"
-            hint="Only used if a courier needs to reach you (optional)"
+            hint="Only for the courier, if needed (optional)"
           >
             <input
               id="profile-phone"

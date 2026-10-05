@@ -150,7 +150,7 @@ export default async function ShopPage({
             {filters.category ?? filters.theme ?? "Shop all"}
           </h1>
           <p className="text-sm text-muted">
-            {pluralise(total, "product")} · every one printed to order in Wollongong
+            {pluralise(total, "product")} · Printed to order in Wollongong · Prices in AUD
           </p>
         </div>
         <SortSelect current={filters.sort ?? "popular"} />
@@ -187,8 +187,7 @@ export default async function ShopPage({
               </span>
               <h2 className="mt-5 text-xl">Nothing matches those filters</h2>
               <p className="mt-2 max-w-sm text-sm text-muted">
-                Try widening the price range or clearing a filter. The whole
-                range is only a click away.
+                Try a wider price range or clear a filter.
               </p>
               <Link
                 href="/shop"

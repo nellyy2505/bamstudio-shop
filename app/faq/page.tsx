@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   ...selfCanonical("/faq"),
   title: "Help centre",
   description:
-    "Answers on printing times, shipping, returns, materials, custom requests and market dates for Bam Studio's 3D-printed clickers and charms.",
+    "Printing times, shipping, returns, materials and custom requests for Bam Studio's 3D-printed clickers and charms.",
 };
 
 const standard = SHIPPING.methods.find((m) => m.id === "standard")!;
@@ -60,21 +60,21 @@ const CATEGORIES: {
   {
     icon: "truck",
     title: "Shipping & delivery",
-    body: `Printing takes ${PRINT_LEAD_TIME.label}, then it posts. We pay half your standard postage from ${money(SHIPPING.subsidyThreshold)}, and all of it from ${money(SHIPPING.freeThreshold)}.`,
+    body: `Printed in ${PRINT_LEAD_TIME.label}, then posted. Standard post is half-price from ${money(SHIPPING.subsidyThreshold)} and free from ${money(SHIPPING.freeThreshold)}.`,
     href: "#shipping",
     linkText: "Delivery times",
   },
   {
     icon: "box",
     title: "Returns & exchanges",
-    body: "30 days to change your mind on stock designs. Personalised pieces are the exception.",
+    body: "30 days to change your mind on stock designs. Personalised pieces excluded.",
     href: "#returns",
     linkText: "Return rules",
   },
   {
     icon: "sparkle",
     title: "Custom & personalised",
-    body: "Name charms, colour swaps and one-off design requests: what we can and cannot make.",
+    body: "Name charms, colour swaps and one-off designs.",
     href: "#custom",
     linkText: "Custom requests",
   },
@@ -87,18 +87,16 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
     answer: (
       <>
         <p>
-          Everything is printed to order on one printer, so allow{" "}
+          Everything is printed to order, so allow{" "}
           <strong className="text-ink">{PRINT_LEAD_TIME.label}</strong> for
-          printing, checking and packing before your parcel is dispatched. You
-          can follow it on{" "}
+          printing and packing before dispatch. Follow it on{" "}
           <Link
             href="/track"
             className="font-bold text-accent underline underline-offset-2"
           >
             your order
           </Link>{" "}
-          from the moment it is posted, using the order number and the email you ordered
-          with is all you need.{" "}
+          with your order number and email.{" "}
           {/* This used to say "the tracking number appears on your order as
               soon as it is posted", flat, with no condition on it. Not every
               parcel has one: quoteBasket() returns `tracked: false` for a Large
@@ -107,17 +105,15 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
               writes SQL NULL. /track now words that step off the order's own
               tracking_number, and this page must not promise what that page
               cannot deliver. */}
-          Where a parcel goes with a tracking number, it appears there as soon
-          as it is posted; smaller orders can go as untracked letter post, which
-          has no number to follow, and the page says so rather than leaving you
-          waiting for one.{" "}
+          Tracked parcels show their tracking number there once posted. Small
+          orders may go as untracked letters, and the page will say so.{" "}
           {/* Gated on the secrets the webhook checks. We never email a dispatch
               or tracking notice in any configuration, so that denial is flat;
               the confirmation email is where the order number comes from when
               one is sent, which is worth saying because /track needs it. */}
           {SENDS_CONFIRMATION
-            ? "We email you an order confirmation with that number when you pay, but we do not email dispatch or tracking notices. Anything there is to follow shows up on your order here instead."
-            : "We do not email order confirmations, dispatch notices or tracking numbers, so this page is where to look."}
+            ? "We email your order confirmation and number when you pay. Dispatch and tracking updates appear on your order page, not by email."
+            : "We don't email confirmations, dispatch notices or tracking numbers, so check your order page."}
         </p>
         <p>
           {/* No flat price and no tracking claim here on purpose. Postage is
@@ -128,14 +124,12 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
               the shop's own promotion and is a fact this page does know. */}
           After dispatch: {standard.label.toLowerCase()} post takes{" "}
           {transitRangeLabel(standard.id)} and express takes{" "}
-          {transitRangeLabel(express.id)}. Postage is worked out from the weight
-          of your basket at Australia Post&rsquo;s current rates, and shown in
-          full before you pay. Below {money(SHIPPING.subsidyThreshold)} that postage is yours; from{" "}
-          {money(SHIPPING.subsidyThreshold)} we pay half of it, and from{" "}
-          {money(SHIPPING.freeThreshold)} we pay all of it. The half and the
-          whole apply to {standard.label.toLowerCase()} post only. Express
-          speeds up the post, not the printing, and is charged in full at every
-          basket size.
+          {transitRangeLabel(express.id)}. Postage is based on your basket&rsquo;s
+          weight at Australia Post rates and shown before you pay.{" "}
+          {standard.label} post is half-price from{" "}
+          {money(SHIPPING.subsidyThreshold)} and free from{" "}
+          {money(SHIPPING.freeThreshold)}. Express speeds up the post, not the
+          printing, and is always charged in full.
         </p>
       </>
     ),
@@ -146,20 +140,19 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
     answer: (
       <>
         <p>
-          Stock designs can come back to us within{" "}
+          Return stock designs within{" "}
           <strong className="text-ink">30 days</strong> of delivery, unused and
-          in their original packaging, and we will refund the item price. Return
-          postage is yours unless the item was faulty or not what you ordered.
+          in original packaging, for a refund of the item price. Return postage
+          is yours unless the item is faulty or not what you ordered.
         </p>
         <p>
           <strong className="text-ink">
-            Personalised items, anything with a name or letters you chose, can
-            only be returned if they are faulty.
+            Personalised items (anything with a name or letters you chose) can
+            only be returned if faulty.
           </strong>{" "}
-          They are printed for you specifically and cannot be resold, so please
-          check the spelling and colours before you pay. None of this limits your
-          rights under the Australian Consumer Law: if something arrives faulty,
-          you are covered either way. Full detail is in our{" "}
+          They&rsquo;re made just for you, so please check spelling and colours
+          before you pay. This doesn&rsquo;t limit your rights under the
+          Australian Consumer Law. See our{" "}
           <Link
             href="/legal/refunds"
             className="font-bold text-accent underline underline-offset-2"
@@ -175,11 +168,9 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
     question: "What are your pieces made of?",
     answer: (
       <p>
-        PLA plastic, and only PLA. It is a hard, matte, plant-derived filament,
-        it holds fine detail, takes colour well and does not smell. Clicker
-        mechanisms, charms and stands are all printed from it; keyrings, cords
-        and phone straps are the only metal or fabric parts. We do not print in
-        resin, so nothing here is food-safe or dishwasher-safe.
+        PLA only: a hard, matte, plant-derived plastic that holds fine detail.
+        Ball chains, clasps and the clicker inside are the only metal parts.
+        Nothing here is food-safe or dishwasher-safe.
       </p>
     ),
   },
@@ -209,10 +200,9 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
             Get in touch
           </Link>
         )}{" "}
-        with your order number as soon as you can: colour swaps, address fixes
-        and cancellations are all easy before a piece goes on the bed. Once
-        printing has started we cannot un-print it, and personalised pieces
-        usually start first.
+        with your order number as soon as you can. Colour swaps, address fixes
+        and cancellations are easy before printing starts. After that we
+        can&rsquo;t change it, and personalised pieces usually start first.
       </p>
     ),
   },
@@ -222,16 +212,13 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
     answer: (
       <>
         <p>
-          We do. Send us the idea and roughly how many you want, and we will tell
-          you honestly whether it is printable, what it would cost and how long
-          it would take. Simple colour swaps on an existing design are usually
-          easy; a brand new shape needs modelling time and a test print or two.
+          Yes. Send us your idea and how many you need, and we&rsquo;ll tell you
+          if it&rsquo;s printable, the cost and the timing. Colour swaps are
+          usually easy; a new shape needs modelling and a test print.
         </p>
         <p>
-          The one thing we will always say no to is licensed characters. No
-          cartoon, film, game or brand characters, even as a &quot;close
-          enough&quot; version. Every design we sell is our own, and we would
-          like to keep it that way.
+          We never print licensed characters (cartoon, film, game or brand),
+          even as a &quot;close enough&quot; version. Every design is our own.
         </p>
       </>
     ),
@@ -243,9 +230,8 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
       // there is no newsletter to check, so this promises neither: it says
       // only what can be honoured, and asks people to check before travelling.
       <p>
-        We run a stall at {SHOP.city} weekend markets, with the DIY letter-charm
-        bar so you can spell a name and take it home the same day. Dates move
-        around and we do not have the next one confirmed here yet, so{" "}
+        At {SHOP.city} weekend markets, with our DIY letter-charm bar. Dates
+        change, so{" "}
         {hasSocialAccount ? (
           "check our social accounts"
         ) : (
@@ -265,16 +251,12 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
     answer: (
       <>
         <p>
-          Wipe it with a damp cloth and let it dry. No dishwasher, no boiling
-          water, no soaking. PLA softens in real heat, so the worst place for a
-          clicker or a phone stand is a car dashboard or a sunny windowsill in
-          summer.
+          Wipe with a damp cloth. No dishwasher, boiling water or soaking. PLA
+          softens in heat, so keep it off car dashboards and sunny windowsills.
         </p>
         <p>
-          Clickers are meant to be clicked and will loosen slightly with use;
-          that is the mechanism wearing in, not breaking. If one ever stops
-          clicking properly, tell us. We would rather fix it than have it sit in
-          a drawer.
+          Clickers loosen slightly with use as they wear in. If one stops
+          clicking properly, let us know.
         </p>
       </>
     ),
@@ -302,25 +284,20 @@ const SCOOP_FAQ: { id?: string; question: string; answer: ReactNode } = {
   answer: (
     <>
       <p>
-        A set number of pieces, drawn from a list you can read before you pay.
-        Every bowl on the{" "}
+        A set number of pieces from a list you can see before you pay. Each
+        bowl on the{" "}
         <Link
           href="/scoop"
           className="font-bold text-accent underline underline-offset-2"
         >
           Lucky Scoop page
         </Link>{" "}
-        says how many pieces it holds and shows the whole pool it draws from,
-        all of it, as ordinary product cards you can click into. Your pieces
-        come out of that list and nowhere else.
+        shows how many pieces you get and every piece it draws from.
       </p>
       <p>
-        What you do not get is the choice. One of us picks your pieces out of
-        the bowl by hand when the order is packed; there is no randomiser, there
-        is nothing to select at checkout, and we cannot take requests for
-        particular pieces. If a bag ever arrives short, or with something that
-        was not in that bowl&rsquo;s list, that is not what you ordered. See
-        the{" "}
+        We pick your pieces from the bowl by hand when we pack, so we
+        can&rsquo;t take requests. If a bag arrives short or with something not
+        on that bowl&rsquo;s list, see the{" "}
         <Link
           href="/legal/refunds"
           className="font-bold text-accent underline underline-offset-2"
@@ -367,20 +344,8 @@ export default async function FaqPage() {
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="mb-2.5 text-3xl md:text-4xl">How can we help?</h1>
         <p className="text-muted">
-          Printing times, postage, returns and the questions we get asked at the
-          market stall every single weekend.
+          Printing times, postage, returns and more.
         </p>
-
-        {/* Decorative only. The real search lives in the header. */}
-        <div
-          aria-hidden="true"
-          className="mx-auto mt-7 flex h-[52px] max-w-xl items-center gap-3 rounded-full border-2 border-line2 bg-surface px-5"
-        >
-          <Icon name="search" size={20} className="shrink-0 text-faint" />
-          <span className="truncate text-[15px] text-faint">
-            Search the help centre: coming soon
-          </span>
-        </div>
       </div>
 
       <div className="mt-12 grid gap-5 md:grid-cols-3">
@@ -439,8 +404,8 @@ export default async function FaqPage() {
                 contact form and /order/confirmed on that principle. */}
             <p className="mt-1.5 max-w-[46ch] text-[14.5px] text-muted">
               {hasStudioMailbox
-                ? "If your question is not here, write to us. It is one of us reading it, between print runs and market weekends."
-                : "If your question is not here, the contact page has every way to reach us right now."}
+                ? "Can't find your answer? Send us a note."
+                : "Can't find your answer? Here's how to reach us."}
             </p>
           </div>
           <ButtonLink href="/contact" className="shrink-0">

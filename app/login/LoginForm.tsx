@@ -44,10 +44,10 @@ const CAN_SIGN_IN = isSupabaseConfigured();
  * details the customer typed - none of that is theirs to fix.
  */
 const UNAVAILABLE =
-  "Signing in isn't switched on yet, this shop isn't connected to its accounts system, so we can't sign anyone in. Nothing you type here would reach us. Have a browse in the meantime and try again later.";
+  "Sign-in is unavailable right now. You can still shop and check out as a guest.";
 
 const OFFLINE =
-  "We couldn't reach the shop just now. Check your connection and try again.";
+  "We couldn't connect just now. Check your connection and try again.";
 
 /** Supabase raises this (status 0) when the request never got a response. */
 function isOffline(error: { name?: string; status?: number }): boolean {
@@ -87,9 +87,9 @@ function GoogleMark() {
 const SAFE_SIGNIN_ERRORS: Record<string, string> = {
   over_request_rate_limit: "Too many attempts. Please wait a minute and try again.",
   over_email_send_rate_limit: "Too many attempts. Please wait a minute and try again.",
-  user_banned: "This account is locked. Please contact us to get back in.",
-  validation_failed: "Please enter both your email address and your password.",
-  email_provider_disabled: "Signing in with an email address isn't available right now.",
+  user_banned: "This account is locked. Please contact us.",
+  validation_failed: "Enter your email and password.",
+  email_provider_disabled: "Email sign-in isn't available right now.",
   provider_disabled: "That sign-in method isn't available right now.",
 };
 
@@ -116,9 +116,9 @@ const SAFE_SIGNIN_ERRORS: Record<string, string> = {
  * on there being a project at all, never softened.
  */
 const GENERIC_SIGNIN_ERROR =
-  "We couldn't sign you in. Check your email address and password." +
+  "We couldn't sign you in. Check your email and password." +
   (CAN_SIGN_IN
-    ? " If you've just created an account, open the confirmation email we sent you first."
+    ? " New account? Confirm your email first."
     : "");
 
 function signInMessage(
@@ -184,7 +184,7 @@ export function LoginForm({
           signInMessage(
             oauthError.code,
             oauthError.status,
-            "We couldn't start sign-in with Google. Please try again.",
+            "Google sign-in didn't start. Please try again.",
           ),
         );
         return;

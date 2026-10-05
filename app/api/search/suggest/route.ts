@@ -1,3 +1,4 @@
+import { productPhotos } from "@/lib/photos";
 import { NextResponse } from "next/server";
 import { searchProducts } from "@/lib/queries";
 import { clientKey, rateLimitDurable } from "@/lib/rate-limit";
@@ -90,6 +91,7 @@ export async function GET(request: Request) {
           price: p.price,
           art: p.art,
           tint: p.tint,
+          photo: productPhotos(p)[0]?.thumb ?? null,
           rating: p.rating,
           review_count: p.review_count,
         })),

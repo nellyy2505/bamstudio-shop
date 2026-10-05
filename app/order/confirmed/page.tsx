@@ -360,7 +360,7 @@ export default async function OrderConfirmedPage({
   const orderSeen = view.kind === "number" || view.kind === "pending";
   const confirmed = paid && orderSeen;
 
-  const thanks = firstName ? `Thanks ${firstName}. ` : "Thanks. ";
+  const thanks = firstName ? `Thanks ${firstName}, ` : "Thanks, ";
 
   return (
     <div className="wrap max-w-3xl pt-12">
@@ -384,8 +384,8 @@ export default async function OrderConfirmedPage({
             ? // "Payment received" whenever no order has been seen here. The
               // money is Stripe's fact, the order is ours, and only the second
               // one can confirm anything.
-              `${thanks}${orderSeen ? "order confirmed!" : "payment received"}`
-            : `${thanks}payment is processing`}
+              `${thanks}${orderSeen ? "your order is in." : "payment received."}`
+            : `${thanks}your payment is processing.`}
         </h1>
         <p className="text-muted">
           {/*
@@ -399,26 +399,25 @@ export default async function OrderConfirmedPage({
           {paid ? (
             orderMissing ? (
               <>
-                Stripe has your payment. We can&apos;t see an order for it here
-                yet. The note below says what happens now.
+                Stripe has your payment, but we can&apos;t see the order yet.
+                See the note below.
               </>
             ) : orderNumber ? (
-              <>Your payment went through, and your order number is below.</>
+              <>Payment received. Your order number is below.</>
             ) : numberPending ? (
               <>
-                Your payment went through. Your order number is the next thing
-                to appear on this page.
+                Payment received. Your order number will appear here shortly.
               </>
             ) : (
               <>
-                Your payment went through. We can&apos;t show your order number
-                just now. The note below says what to do.
+                Payment received. We can&apos;t show your order number just now.
+                See the note below.
               </>
             )
           ) : (
             <>
-              Your payment method settles over a day or two. Printing starts the
-              moment it clears. Nothing to do in the meantime.
+              Your payment takes a day or two to clear. We&apos;ll start
+              printing once it does. Nothing else to do.
             </>
           )}
         </p>
@@ -468,10 +467,10 @@ export default async function OrderConfirmedPage({
                 only mail the shop sends, and it says the same thing. So the old
                 "tracking lands in your inbox" promise is gone rather than
                 gated: there is no configuration in which it would be true. */}
-            Your pieces are <b className="text-ink">printed to order</b>,
-            {paid ? " printing" : " once payment clears, printing"} takes{" "}
-            {PRINT_LEAD_TIME.label} before anything is posted. Check where
-            it&apos;s up to any time at{" "}
+            We <b className="text-ink">print to order</b>
+            {paid ? "" : " once payment clears"}. Printing takes{" "}
+            {PRINT_LEAD_TIME.label}, then we post it. Check progress any time
+            at{" "}
             <Link
               href="/track"
               className="font-bold text-accent underline underline-offset-2"
@@ -533,14 +532,13 @@ export default async function OrderConfirmedPage({
 
       <div className="card mb-7 flex flex-col items-center gap-4 bg-lilac p-6 text-center sm:flex-row sm:text-left">
         <div className="flex-1">
-          <b className="text-[15px]">Create an account in one click</b>
+          <b className="text-[15px]">Create an account</b>
           {/* Not "track this order": a guest order is staged with a null
               user_id and nothing links it to an account created afterwards,
               so signing up would not put this order in the account list. The
               order number above is what tracks THIS order. */}
           <p className="mt-1 text-[13px] text-muted">
-            Save your details, reorder favourites and keep future orders in one
-            place.
+            Save your details and keep future orders in one place.
           </p>
         </div>
         <ButtonLink href="/signup" variant="dark" size="sm">
@@ -613,9 +611,8 @@ function OrderNumberCard({
           {orderNumber}
         </p>
         <p className="mx-auto mt-3 max-w-md text-[13.5px] text-muted">
-          This is the number to quote about your order. Save it, because checking
-          where the order is up to needs this number and the email you ordered
-          with
+          Keep this number. To track your order, use it with the email you
+          ordered with
           {email ? (
             <>
               , <b className="text-ink">{email}</b>
@@ -630,8 +627,8 @@ function OrderNumberCard({
               can fail, so the true branch never says the email has arrived and
               never makes it the way to track the order. */}
           {SENDS_CONFIRMATION
-            ? " We also email this to you, along with what you ordered. If it does not turn up, this page and the tracking page are how you check on your order. You do not need the email."
-            : " We don't send order emails, so this page and the tracking page are how you check on it."}
+            ? " We'll also email it to you. You don't need the email to track your order."
+            : " We don't send order emails, so save it from this page."}
         </p>
         <div className="mt-4 flex justify-center">
           <ButtonLink href="/track" variant="dark" size="sm">
@@ -649,18 +646,18 @@ function OrderNumberCard({
     // one.
     return (
       <div className="card mb-6 p-6 text-center">
-        <b className="text-[15px]">Your order number is still being allocated</b>
+        <b className="text-[15px]">Your order number is on its way</b>
         <p className="mx-auto mt-2 max-w-md text-[13.5px] text-muted">
           {paid
-            ? "Your order is here, and the number is issued once Stripe confirms the payment, usually within a few moments. Refresh this page and it should appear above, ready to use at "
-            : "The number is issued when your payment settles, which takes a day or two on this payment method. Come back to this page then and it should appear above, ready to use at "}
+            ? "We've got your order. The number appears once Stripe confirms payment, usually within moments. Refresh this page, then use it at "
+            : "The number appears once your payment clears, usually in a day or two. Come back to this page, then use it at "}
           <Link
             href="/track"
             className="font-bold text-accent underline underline-offset-2"
           >
             Track your order
           </Link>{" "}
-          with the email you ordered with. Still nothing after a few hours?{" "}
+          with your email. Still nothing after a few hours?{" "}
           <Link
             href="/contact"
             className="font-bold text-accent underline underline-offset-2"
@@ -680,9 +677,8 @@ function OrderNumberCard({
       <div className="card mb-6 p-6 text-center">
         <b className="text-[15px]">We can&apos;t see an order for this payment</b>
         <p className="mx-auto mt-2 max-w-md text-[13.5px] text-muted">
-          Your payment is recorded with Stripe, but no order for it has reached
-          us yet, so there is no order number to show and nothing has gone to
-          print. Refresh this page in a minute; if it still says this, please
+          Stripe has your payment, but the order hasn&apos;t reached us yet, so
+          nothing has gone to print. Refresh in a minute. If this stays, please
           don&apos;t pay again:{" "}
           {/* The remedy is only real if there is a channel to ask through, so
               it is gated the same way /track gates "message us". With none, the
@@ -710,9 +706,8 @@ function OrderNumberCard({
     <div className="card mb-6 p-6 text-center">
       <b className="text-[15px]">Your order number isn&apos;t showing yet</b>
       <p className="mx-auto mt-2 max-w-md text-[13.5px] text-muted">
-        We can&apos;t reach our order records from this page just now, so we
-        can&apos;t show you the number. Your payment is recorded with Stripe.
-        Try this page again shortly
+        We can&apos;t reach our order records just now. Your payment is safe
+        with Stripe. Try this page again shortly
         {canReachStudio ? ", or " : "."}
         {canReachStudio ? (
           <>
@@ -734,7 +729,7 @@ function OrderNumberCard({
             >
               contact page
             </Link>{" "}
-            lists any way to reach us as soon as we have one.
+            has ways to reach us.
           </>
         )}
       </p>
@@ -796,11 +791,9 @@ function NotPaid({
             // Says only what is true: we did not ask, so we do not know. It
             // never denies a payment and never suggests paying again.
             <>
-              This page has been checked a lot in the last minute, so we&apos;ve
-              paused looking your order up. Nothing is wrong and nothing is
-              lost. If you were charged, Stripe has the payment. Wait about a
-              minute, then reload this page and your order details will be
-              here. Your basket is exactly as you left it in the meantime.
+              We&apos;ve paused lookups for a moment. Nothing is lost: if you
+              were charged, Stripe has the payment. Reload this page in about a
+              minute. Your basket is just as you left it.
             </>
           ) : !hasSession ? (
             // No "check your email for the receipt": the confirmation email is
@@ -808,23 +801,21 @@ function NotPaid({
             // no session here to say one was. The contact line below is the
             // real route.
             <>
-              We couldn&apos;t find a checkout to confirm. This page only works
-              from the link Stripe returns you to after paying.
+              We couldn&apos;t find a checkout to confirm. This page opens after
+              you pay.
             </>
           ) : unconfirmable ? (
             // Deliberately says nothing about whether money moved, because we
             // do not know. It also does not tell them to pay again.
             <>
-              We couldn&apos;t reach Stripe to check this checkout, so we
-              can&apos;t tell you whether a payment went through. If you were
-              charged, Stripe has the payment and nothing is lost. Please
-              don&apos;t pay again. Try this page again in a few minutes. Your
-              basket is exactly as you left it in the meantime.
+              We couldn&apos;t reach Stripe to check whether a payment went
+              through. If you were charged, Stripe has it and nothing is lost.
+              Please don&apos;t pay again. Try this page again in a few minutes.
+              Your basket is just as you left it.
             </>
           ) : (
             <>
-              No payment was taken, so there&apos;s nothing to confirm yet. Your
-              basket is exactly as you left it.
+              No payment was taken. Your basket is just as you left it.
             </>
           )}
         </p>

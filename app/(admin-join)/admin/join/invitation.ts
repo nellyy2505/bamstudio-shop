@@ -129,7 +129,11 @@ export async function resolveJoin(rawToken: string): Promise<JoinState> {
    * address on the way in, so both sides are compared lower-cased; an account
    * with no email at all can never match.
    */
-  if (!signedInAs || signedInAs !== invitedEmail) {
+  // An unconfirmed address proves nothing about who holds the inbox, so it
+  // cannot claim an invitation even if it spells the invited address. This is
+  // what keeps the check safe if "Confirm email" is ever switched off.
+  const confirmed = Boolean((user as { email_confirmed_at?: string | null }).email_confirmed_at);
+  if (!signedInAs || !confirmed || signedInAs !== invitedEmail) {
     return { kind: "wrong_person", signedInAs: user.email ?? "" };
   }
 

@@ -22,13 +22,11 @@ const FREE_RATE_METHOD = SHIPPING.methods.find(
 );
 
 const NAV = [
-  { href: "/shop", label: "All categories" },
-  { href: "/shop?category=Clicker+keychain", label: "Clicker keychains" },
-  { href: "/shop?theme=Plants+%26+flowers", label: "Plants & flowers" },
-  { href: "/shop?theme=Letters+%26+names", label: "Letters & names" },
-  { href: "/builder", label: "Design Your Own", accent: true },
-  { href: "/shop?category=Phone+%26+bag", label: "Phone & bag" },
-  { href: "/shop?max=1500", label: "Gifts under $15" },
+  { href: "/shop", label: "Shop all" },
+  { href: "/shop?category=Clicker+keychain", label: "Keychains" },
+  { href: "/shop?category=Desk+%26+home", label: "Desk & home" },
+  { href: "/bakery", label: "Cake box", accent: true },
+  { href: "/builder", label: "Name charms", accent: true },
   { href: "/about", label: "Our story" },
 ];
 

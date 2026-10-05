@@ -143,6 +143,10 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
 
     const price = dollarsToCents(text(form, "price"));
     if (price === null) return fail("The price has to be a number, like 12.50.");
+    if (price <= 0) return fail("The price has to be more than $0.");
+    if (price > MAX_PRICE_CENTS) {
+      return fail("That price looks too high. Type dollars and cents, like 12.50.");
+    }
 
     const printTime = optionalNumber(form, "print_time_hours");
     if (printTime === undefined) return fail("Print time has to be a number of hours, or blank.");
@@ -207,7 +211,15 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
     let productId = id;
 
     if (id) {
-      const { error } = await admin.from("products").update(fields).eq("id", id);
+      // Only write the shelf count when it was actually edited. A web sale can
+      // take stock (decrement_stock) while this form is open, and saving a
+      // description must not put the sold unit back on the shelf.
+      const loadedStock = text(form, "stock_on_hand_loaded");
+      const update: Partial<typeof fields> = { ...fields };
+      if (loadedStock !== "" && String(fields.stock_on_hand) === loadedStock) {
+        delete update.stock_on_hand;
+      }
+      const { error } = await admin.from("products").update(update).eq("id", id);
       if (error) return fail(friendly(error.message));
     } else {
       // A new product needs the columns 0001 made non-null with no default.
@@ -252,6 +264,7 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
     revalidatePath(`/admin/products/${productId}`);
     revalidatePath("/admin/inventory");
     // The shop reads these too.
+    revalidatePath("/");
     revalidatePath("/shop");
     revalidatePath(`/product/${slug}`);
 
@@ -682,9 +695,47 @@ export async function uploadPhotos(_prev: FormState, form: FormData): Promise<Fo
 
     if (error) return fail(friendly(error.message));
 
-    revalidatePath(`/admin/products/${productId}`);
-    revalidatePath(`/product/${product.slug}`);
+    revalidatePhotoPages(productId, product.slug as string);
     return ok(added.length === 1 ? "Photo added." : `${added.length} photos added.`);
+  });
+}
+
+/** Every page that shows a product's cover photo: cards appear site-wide. */
+function revalidatePhotoPages(productId: string, slug: string) {
+  revalidatePath(`/admin/products/${productId}`);
+  revalidatePath(`/product/${slug}`);
+  revalidatePath("/");
+  revalidatePath("/shop");
+}
+
+/** Move one photo to the front, so it becomes the cover on cards and links. */
+export async function makeCoverPhoto(_prev: FormState, form: FormData): Promise<FormState> {
+  return guard("catalogue", async () => {
+    const productId = text(form, "id");
+    const path = text(form, "path");
+    if (!productId || !path) return fail("No photo given.");
+
+    const admin = createAdminClient();
+    const { data: product } = await admin
+      .from("products")
+      .select("photos, slug")
+      .eq("id", productId)
+      .maybeSingle();
+    if (!product) return fail("That product no longer exists.");
+
+    const existing = (Array.isArray(product.photos) ? product.photos : []) as {
+      path?: string;
+      alt?: string;
+    }[];
+    const chosen = existing.find((p) => p.path === path);
+    if (!chosen) return fail("That photo is not on this product.");
+    const reordered = [chosen, ...existing.filter((p) => p.path !== path)];
+
+    const { error } = await admin.from("products").update({ photos: reordered }).eq("id", productId);
+    if (error) return fail(friendly(error.message));
+
+    revalidatePhotoPages(productId, product.slug as string);
+    return ok("Cover photo set.");
   });
 }
 
@@ -740,8 +791,7 @@ export async function removePhoto(_prev: FormState, form: FormData): Promise<For
 
     await admin.storage.from(PHOTO_BUCKET).remove([path]);
 
-    revalidatePath(`/admin/products/${productId}`);
-    revalidatePath(`/product/${product.slug}`);
+    revalidatePhotoPages(productId, product.slug as string);
     return ok("Photo removed.");
   });
 }

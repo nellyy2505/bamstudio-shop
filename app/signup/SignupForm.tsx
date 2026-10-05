@@ -43,10 +43,10 @@ const CAN_SIGN_UP = isSupabaseConfigured();
  * details the customer typed - none of that is theirs to fix.
  */
 const UNAVAILABLE =
-  "Accounts aren't switched on yet, this shop isn't connected to its accounts system, so we can't create one for you. Nothing you type here would reach us. Have a browse in the meantime and try again later.";
+  "Accounts are unavailable right now. You can still shop and check out as a guest.";
 
 const OFFLINE =
-  "We couldn't reach the shop just now. Check your connection and try again.";
+  "We couldn't connect just now. Check your connection and try again.";
 
 /** Supabase raises this (status 0) when the request never got a response. */
 function isOffline(error: { name?: string; status?: number }): boolean {
@@ -94,13 +94,13 @@ const METER_LABEL = ["", "Weak", "Fair", "Good", "Strong"] as const;
  * already registered here.
  */
 const SAFE_SIGNUP_ERRORS: Record<string, string> = {
-  weak_password: "That password is too weak. Use at least 8 characters, with a number and a symbol.",
-  email_address_invalid: "That email address doesn't look right. Please check it.",
-  validation_failed: "Please check the details you entered and try again.",
+  weak_password: "Try a stronger password: 8+ characters, with a number and a symbol.",
+  email_address_invalid: "That email doesn't look right. Please check it.",
+  validation_failed: "Please check your details and try again.",
   over_request_rate_limit: "Too many attempts. Please wait a minute and try again.",
   over_email_send_rate_limit: "Too many attempts. Please wait a minute and try again.",
-  signup_disabled: "New accounts are temporarily closed. Please try again later.",
-  email_provider_disabled: "Signing up with an email address isn't available right now.",
+  signup_disabled: "New accounts are paused. Please try again later.",
+  email_provider_disabled: "Email sign-up isn't available right now.",
 };
 
 /**
@@ -202,7 +202,7 @@ export function SignupForm({
         setError(
           isOffline(oauthError)
             ? OFFLINE
-            : "We couldn't start sign-up with Google. Please try again.",
+            : "Google sign-up didn't start. Please try again.",
         );
         return;
       }
@@ -277,7 +277,7 @@ export function SignupForm({
           : undefined;
         setError(
           safe ??
-            "We couldn't create that account. Please check your details and try again.",
+            "We couldn't create your account. Please check your details and try again.",
         );
         return;
       }
@@ -314,15 +314,15 @@ export function SignupForm({
           <Icon name="mail" size={26} />
         </span>
         <div>
-          <h2 className="text-xl">Check your email to confirm</h2>
+          <h2 className="text-xl">Check your email</h2>
           {/* Where they are going is described, never printed. `next` is a
               path out of the URL, and the sign-in page's rule holds here too:
               text that arrived in a query string does not get rendered, or a
               crafted link turns this card into a message from us. */}
           <p className="mt-1.5 text-sm text-muted">
-            We&apos;ve sent a confirmation link to <b>{email}</b>. Open it and
-            you&apos;ll be signed straight in
-            {carried ? ", then brought back to where you left off" : ""}.
+            We&apos;ve sent a link to <b>{email}</b>. Open it to confirm and
+            sign in
+            {carried ? ", then you'll be back where you left off" : ""}.
           </p>
           {/* Said plainly rather than hidden: the destination rides in the
               confirmation link, so it depends on Supabase honouring the
@@ -332,8 +332,8 @@ export function SignupForm({
               and it costs nothing when the link works. */}
           {carried ? (
             <p className="mt-2 text-sm text-muted">
-              If it signs you in but leaves you somewhere else, open the link
-              that sent you here again, it will pick up from there.
+              Landed somewhere else? Open your original link again to pick up
+              from there.
             </p>
           ) : null}
         </div>
@@ -484,9 +484,8 @@ export function SignupForm({
           {/* Nothing sends marketing email, so this records a preference rather
               than starting a subscription. Saying otherwise would promise mail
               that no code writes. */}
-          Count me in for news about new drops and restocks. There is no mailing
-          list yet, so nothing will be sent for now, you can change this any
-          time in your account settings.
+          Note my interest in news about new drops. You can change this any
+          time in settings.
         </label>
 
         <Button

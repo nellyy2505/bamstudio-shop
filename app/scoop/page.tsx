@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ScoopArt } from "@/components/scoop/ScoopArt";
-import { Breadcrumbs, ButtonLink, EmptyState, Icon, Pill } from "@/components/ui";
-import { hasSocialAccount, socialLinks } from "@/lib/contact";
+import { Breadcrumbs, ButtonLink, Icon, Pill } from "@/components/ui";
 import { money, pluralise } from "@/lib/format";
 import { getScoopTiers } from "@/lib/queries";
 import { SCOOP_THEMES } from "@/lib/types";
@@ -21,7 +20,7 @@ export const metadata: Metadata = {
    * result on a shop that currently sells no scoops at all.
    */
   description:
-    "A bowl of small 3D-printed pieces. You choose the bowl and how many pieces; we draw them by hand from the list shown on each bowl's page.",
+    "A bowl of small 3D-printed surprises. You choose the bowl; we hand-pick your pieces from the list on its page.",
 };
 
 /** `theme` is a checked enum in the database; this is the label for it. */
@@ -32,18 +31,18 @@ function themeLabel(theme: ScoopTierListing["theme"]): string {
 const STEPS = [
   {
     n: "1",
-    title: "Pick a bowl",
-    body: "Each bowl has a theme and a piece count. Everything it can draw from is listed on its page: all of it, not a sample.",
+    title: "Choose a bowl",
+    body: "Pick a theme and a piece count. Every piece the bowl can hold is listed on its page.",
   },
   {
     n: "2",
-    title: "We draw it by hand",
-    body: "One of us tips the bowl out and picks your pieces when your order comes through. No randomiser, no algorithm, just a person at a table.",
+    title: "We pick by hand",
+    body: "When your order comes in, we hand-pick your pieces from that list.",
   },
   {
     n: "3",
-    title: "Bagged and posted",
-    body: "Your pieces go out with the day's orders. Postage is worked out from the weight of your basket and shown before you pay.",
+    title: "Packed and posted",
+    body: "Postage is worked out by weight and shown before you pay.",
   },
 ];
 
@@ -122,9 +121,7 @@ export default async function ScoopPage() {
             The Lucky Scoop
           </h1>
           <p className="mx-auto max-w-2xl text-[#4F5A63] md:text-base">
-            A bowl of small printed pieces: clickers, keyrings, magnets. You
-            choose the bowl and how many pieces come out of it. We choose which
-            ones, by hand, when your order is packed.
+            Small printed surprises, hand-picked from the bowl you choose.
           </p>
         </div>
       </div>
@@ -156,23 +153,21 @@ export default async function ScoopPage() {
          * the promise below still render: the page explains a real thing that
          * is not on sale yet, which is a page, not a 404.
          */
-        <section className="wrap pt-4">
-          <EmptyState
-            icon={<ScoopArt size={110} />}
-            title="The scoops aren’t open yet"
-            body="There is no bowl to buy today. A bowl only goes up once it has a price, a piece count and a full list of the pieces it draws from, so there is nothing here until all three are true."
-          >
-            <ButtonLink href="/shop">Shop everything</ButtonLink>
+        <section className="wrap flex flex-col items-center pt-8 text-center">
+          <ScoopArt size={88} />
+          <p className="mt-5 text-lg font-bold">No bowls are open right now.</p>
+          <div className="mt-5 flex flex-wrap justify-center gap-3.5">
+            <ButtonLink href="/shop">Shop all</ButtonLink>
             <ButtonLink href="/builder" variant="ghost">
               <Icon name="sparkle" size={18} />
               Design your own
             </ButtonLink>
-          </EmptyState>
+          </div>
         </section>
       )}
 
       <section className="wrap pt-16">
-        <h2 className="mb-6 text-2xl md:text-[27px]">How a scoop works</h2>
+        <h2 className="mb-6 text-2xl md:text-[27px]">How it works</h2>
         <div className="grid gap-5 md:grid-cols-3">
           {STEPS.map((step) => (
             <div key={step.n} className="card p-6">
@@ -187,95 +182,40 @@ export default async function ScoopPage() {
       </section>
 
       {/*
-        The reason the pool is on every bowl's page.
-
-        Goods have to match their description. "Five pieces drawn from these
-        twelve" is a description this shop can keep; "a scoop" is not one at
-        all. So the list is the product copy, not decoration, and this panel
-        says out loud which part is fixed and which part is left open.
-
-        Note what is NOT claimed anywhere on this page: whether the same piece
-        can come out twice. That is an unsettled decision, and a shopfront
-        sentence either way would settle it on the owner's behalf.
+        The reason the pool is on every bowl's page: goods have to match their
+        description, and "five pieces drawn from these twelve" is one this shop
+        can keep. Deliberately NOT said here, because each is the owner's
+        unsettled decision (0007_lucky_scoop.sql): whether a piece can come out
+        twice, whether scoops are filmed, and whether a change of mind on a
+        scoop is accepted. Silence favours the customer.
       */}
-      <section className="wrap pt-16">
-        <div className="card grid gap-8 bg-cream p-8 md:grid-cols-2 md:p-10">
-          <div>
-            <h2 className="mb-3 text-xl">What a bowl tells you</h2>
-            <ul className="flex flex-col gap-2.5 text-[14.5px] text-muted">
-              <li className="flex items-start gap-2.5">
-                <Icon name="check" size={17} className="mt-0.5 shrink-0 text-good" />
-                <span>
-                  <b className="text-ink">How many pieces you get.</b> That
-                  number is the bowl. It is not a range and it does not vary.
-                </span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <Icon name="check" size={17} className="mt-0.5 shrink-0 text-good" />
-                <span>
-                  <b className="text-ink">Every piece it can draw.</b> The full
-                  pool is listed on the bowl&rsquo;s page as ordinary products
-                  you can click into. Nothing outside that list goes in the bag.
-                </span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <Icon name="check" size={17} className="mt-0.5 shrink-0 text-good" />
-                <span>
-                  <b className="text-ink">Who picks.</b> We do, by hand. You
-                  cannot choose your pieces and we cannot take requests for
-                  particular ones. That is what makes it a scoop.
-                </span>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h2 className="mb-3 text-xl">What it leaves open</h2>
-            <p className="text-[14.5px] text-muted">
-              Which of those pieces end up in your bag. That is the only part
-              nobody knows in advance, and it is the whole idea of a bowl.
-            </p>
-            <p className="mt-3 text-[14.5px] text-muted">
-              {/*
-                The filming is a THING SHE DOES, worded as one. "We film every
-                order" on a shopfront is a term of sale: a week she cannot film
-                becomes a failure to deliver as described, over a video nobody
-                was charged for. So this promises no video, no platform and no
-                timing - and the social links are only named when an account
-                actually exists (lib/contact.ts).
-              */}
-              Most scoops get filmed while they are drawn and packed
-              {hasSocialAccount ? (
-                <>
-                  , and that is what ends up on{" "}
-                  {socialLinks.map((link, index) => (
-                    <span key={link.label}>
-                      {index > 0 ? " and " : ""}
-                      <a
-                        href={link.href}
-                        className="font-bold text-accent underline underline-offset-2"
-                      >
-                        {link.label}
-                      </a>
-                    </span>
-                  ))}
-                </>
-              ) : null}
-              . It is something we do because it is the best part of the day,
-              not part of what you are buying, so we cannot promise your scoop
-              will be filmed or that a video of it will be shared.
-            </p>
-            <p className="mt-3 text-[13px] text-muted">
-              A scoop is a real sale of real goods, so your{" "}
-              <Link
-                href="/legal/refunds"
-                className="font-bold text-accent underline underline-offset-2"
-              >
-                Australian Consumer Law rights
-              </Link>{" "}
-              apply to it exactly as they do to anything else here.
-            </p>
-          </div>
+      <section className="wrap pt-12">
+        <div className="card bg-cream p-7 md:p-8">
+          <h2 className="mb-3 text-xl">Good to know</h2>
+          <ul className="flex flex-col gap-2.5 text-[14.5px] text-muted">
+            <li className="flex items-start gap-2.5">
+              <Icon name="check" size={17} className="mt-0.5 shrink-0 text-good" />
+              <span>The piece count is fixed. You always get that many.</span>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <Icon name="check" size={17} className="mt-0.5 shrink-0 text-good" />
+              <span>Only pieces from the bowl&rsquo;s list go in your bag.</span>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <Icon name="check" size={17} className="mt-0.5 shrink-0 text-good" />
+              <span>We choose the pieces, so we can&rsquo;t take requests.</span>
+            </li>
+          </ul>
+          <p className="mt-4 text-[13px] text-muted">
+            Your{" "}
+            <Link
+              href="/legal/refunds"
+              className="font-bold text-accent underline underline-offset-2"
+            >
+              Australian Consumer Law rights
+            </Link>{" "}
+            apply to every scoop.
+          </p>
         </div>
       </section>
     </>

@@ -15,6 +15,7 @@ type Suggestion = {
   price: number;
   art: ArtKey;
   tint: Tint;
+  photo?: string | null;
   rating: number;
   review_count: number;
 };
@@ -145,13 +146,18 @@ export function SearchBar({ initialQuery = "" }: { initialQuery?: string }) {
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-3.5 rounded-xl px-3.5 py-2.5 hover:bg-cream"
                 >
-                  <ProductImage
-                    art={item.art}
-                    tint={item.tint}
-                    alt=""
-                    size={48}
-                    rounded="rounded-lg"
-                  />
+                  {item.photo ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- product photo
+                    <img src={item.photo} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+                  ) : (
+                    <ProductImage
+                      art={item.art}
+                      tint={item.tint}
+                      alt=""
+                      size={48}
+                      rounded="rounded-lg"
+                    />
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14.5px] font-semibold">
                       {item.short_name}

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ProductArt } from "@/components/ProductArt";
+import { photoUrl, productPhotos, thumbFor } from "@/lib/photos";
 import { Button, Icon, Pill, cx } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
 import { fillingQuantities } from "@/lib/bakery";
@@ -96,6 +97,7 @@ export function BakeryClient({
       slug: selected.box.slug,
       name: selected.box.short_name || selected.box.name,
       art: selected.box.art as ArtKey,
+      photo: productPhotos(selected.box)[0]?.thumb ?? null,
       tint: selected.box.tint as Tint,
       colour: colour.name,
       attachment_id: null,
@@ -206,11 +208,11 @@ export function BakeryClient({
         </Section>
 
         <Section
-          title="What goes in it"
+          title="Fill your box"
           note={
             full
-              ? "The box is full. Take one out to swap it."
-              : `${remaining} ${remaining === 1 ? "space" : "spaces"} left. Pick the same thing twice if you like.`
+              ? "Your box is full. Take one out to swap it."
+              : `${remaining} ${remaining === 1 ? "space" : "spaces"} left. Doubles are fine.`
           }
         >
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -227,7 +229,7 @@ export function BakeryClient({
                     : "hover:border-accent hover:shadow-sm",
                 )}
               >
-                <ProductArt art={filling.art as ArtKey} className="h-16 w-16" />
+                <FillingImage filling={filling} className="h-24 w-24" />
                 <span className="text-[13px] font-semibold">
                   {filling.short_name || filling.name}
                 </span>
@@ -275,7 +277,7 @@ export function BakeryClient({
                     aria-label={`Take out ${filling.short_name || filling.name}`}
                     className="group flex h-full w-full flex-col items-center justify-center gap-1"
                   >
-                    <ProductArt art={filling.art as ArtKey} className="h-12 w-12" />
+                    <FillingImage filling={filling} className="h-[70%] w-[70%]" />
                     <span className="flex items-center gap-1 text-[11.5px] text-muted group-hover:text-accent">
                       <Icon name="minus" size={12} />
                       take out
@@ -302,7 +304,7 @@ export function BakeryClient({
 
         {added ? (
           <p className="text-center text-[13.5px] font-semibold text-accent">
-            Added. Your box is in the basket.
+            Added to your basket.
           </p>
         ) : null}
 
@@ -334,4 +336,22 @@ function Section({
       {children}
     </section>
   );
+}
+
+/** A filling's photo when it has one, its drawing otherwise. */
+function FillingImage({ filling, className }: { filling: BakeryFilling; className?: string }) {
+  const path = filling.photos?.[0]?.path;
+  const src = path ? photoUrl(path) : null;
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- static site photo or storage, not a next/image loader
+      <img
+        src={thumbFor(src)}
+        alt=""
+        loading="lazy"
+        className={cx("rounded-full object-cover", className)}
+      />
+    );
+  }
+  return <ProductArt art={filling.art as ArtKey} className={className} />;
 }

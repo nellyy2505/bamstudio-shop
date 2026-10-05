@@ -73,6 +73,10 @@ export default async function ProductsPage({
         subtitle="Everything you sell, what it costs to make, and how many are on the shelf."
         actions={
           <>
+            <ButtonLink href="/admin/products/import" size="md" variant="soft">
+              <Icon name="camera" size={18} />
+              Bulk listings
+            </ButtonLink>
             <ButtonLink href="/admin/products/pricing" size="md" variant="soft">
               <Icon name="trend" size={18} />
               Reprice in bulk

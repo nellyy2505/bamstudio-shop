@@ -154,8 +154,7 @@ export default function PrivacyPage() {
         As a small business we may fall below the turnover threshold at which the
         Privacy Act 1988 (Cth) applies automatically. We have chosen to handle
         personal information in line with the Australian Privacy Principles
-        regardless, because you should not have to check our revenue to know how
-        your address is treated.
+        regardless.
       </p>
 
       <h2>What we collect</h2>
@@ -214,8 +213,8 @@ export default function PrivacyPage() {
         To print, pack and post your order; to answer your questions; to process
         returns and refunds; to keep the business records the Australian Taxation
         Office requires; and, if you have asked us to, to note that you would
-        like to hear about new designs and market dates if we ever set up a way
-        to send them.
+        like to hear about new designs and market dates should we start sending
+        them.
       </p>
       <p>
         We do not sell personal information, and we do not share it for anyone
@@ -279,9 +278,9 @@ export default function PrivacyPage() {
         United States and the European Union. Two of our designers are based in
         Vietnam; they work on artwork and product files and do not need access to
         customer records. By ordering, or by sending us a message or your email
-        address through this site, both of which are now saved with the same
-        providers, you consent to your information being stored and processed
-        overseas by the providers listed above.
+        address through this site (both are saved with the same providers), you
+        consent to your information being stored and processed overseas by the
+        providers listed above.
       </p>
 
       <h2>Email we send, and marketing</h2>
@@ -301,9 +300,8 @@ export default function PrivacyPage() {
       <p>
         We do not send marketing email. There is no newsletter: we keep the
         addresses that have asked to hear about new drops, and nothing is sent
-        to them. If you have ticked a preference in your account, it records
-        what you would like for the day we can send it, and nothing goes out in
-        the meantime. We never send dispatch, tracking, restock or
+        to them. A preference ticked in your account only records your choice,
+        and nothing is sent. We never send dispatch, tracking, restock or
         review-reminder emails.
       </p>
       <p>
@@ -312,10 +310,10 @@ export default function PrivacyPage() {
           : "The only email this site sends by itself is about your account: confirming your email address when you sign up, and the link that resets your password when you ask for one. Those are part of signing in, not marketing. No order confirmation is sent. Your order number is shown on screen after you pay instead."}
       </p>
       <p>
-        There is no unsubscribe link on this site, because there is nothing yet
-        to unsubscribe from. If you would rather we did not keep your address in
-        the meantime, ask us using the details under &quot;Accessing and
-        correcting your information&quot; below. If we ever do start a
+        There is no unsubscribe link on this site because there is nothing to
+        unsubscribe from. If you would rather we did not keep your address, ask
+        us using the details under &quot;Accessing and correcting your
+        information&quot; below. If we ever do start a
         newsletter, it will only go to people who asked for it, every message
         will carry an unsubscribe link, and this page will be updated before the
         first one is sent.
@@ -368,8 +366,8 @@ export default function PrivacyPage() {
         {FORM_DELIVERS
           ? "Messages sent through the contact form, and addresses given to hear about new drops, are stored"
           : "Addresses given to hear about new drops are stored"}{" "}
-        where only the studio&apos;s own administrative key can reach them, the
-        key this website runs on cannot read them at all. No system is perfectly
+        where only the studio&apos;s own administrative key can reach them; the
+        key this website runs on cannot read them. No system is perfectly
         secure, but if a data breach ever occurs that is likely to cause you
         serious harm, we will notify you and the Office of the Australian
         Information Commissioner.
@@ -384,14 +382,13 @@ export default function PrivacyPage() {
           wording back in the same change. */}
       {FORM_DELIVERS ? (
         <p>
-          Being plain about who reads a message and when: messages sent through
-          this form are listed on a screen inside our studio that only accounts
-          we have given access to can open, such as someone helping us pack parcels
-          cannot see them. An email tells us a message has arrived, and if that
-          email does not go out your message is still saved and still on that
-          screen, so it is seen the next time we look. Nobody is watching it
-          around the clock, because this is a very small shop, so a reply can take a
-          few days.
+          Messages sent through the contact form are listed on a screen in our
+          studio that only accounts we have given access to can open (for
+          example, someone helping us pack parcels cannot see them). An email
+          tells us a message has arrived. If that email does not go out, your
+          message is still saved on that screen and is seen the next time we
+          look. We are a very small shop and nobody watches it around the
+          clock, so a reply can take a few days.
         </p>
       ) : null}
 
@@ -413,7 +410,7 @@ export default function PrivacyPage() {
       <h2>Complaints</h2>
       <p>
         If you think we have mishandled your personal information, tell us first
-        We would rather fix it.{" "}
+        so we can fix it.{" "}
         <Reach
           detail="with what went wrong"
           unavailable={NO_CHANNEL}

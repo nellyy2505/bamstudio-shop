@@ -23,7 +23,7 @@ import { STATUS_LABEL, STATUS_TONE, requireAccount } from "../../data";
 
 export const metadata: Metadata = {
   title: "Order details",
-  description: "The items, delivery details and printing progress for your order.",
+  description: "Items, delivery details and progress for your order.",
   robots: { index: false, follow: false },
 };
 
@@ -154,12 +154,11 @@ function Reach({ detail }: { detail: string }) {
 
   return (
     <>
-      We have not published a contact address yet. Any channel we open will be
-      listed on our{" "}
+      Our{" "}
       <Link href="/contact" className={LINK}>
         contact page
-      </Link>
-      .
+      </Link>{" "}
+      will list ways to reach us.
     </>
   );
 }
@@ -416,7 +415,7 @@ export default async function OrderDetailPage({
             </b>
             <p className="mt-2.5 text-[14px] text-muted">
               {money(order.total)} AUD paid at checkout. Card details go
-              straight to Stripe, so we never see or store them.
+              straight to Stripe. We never see or store them.
             </p>
             {/* Says where order email GOES, never that any arrived.
                 `SENDS_CONFIRMATION` describes the shop as it is configured
@@ -429,7 +428,7 @@ export default async function OrderDetailPage({
             <p className="mt-2 text-[13px] text-faint">
               Order contact: {order.email}
               {SENDS_CONFIRMATION
-                ? ". Any order email we send goes to this address."
+                ? ". Order emails go to this address."
                 : ""}
             </p>
           </section>
@@ -451,14 +450,13 @@ export default async function OrderDetailPage({
           <Alert tone="info">
             {printingStarted ? (
               <>
-                Printing has already started on this order, so it can no longer
-                be changed here.{" "}
+                Printing has started, so this order can&apos;t be changed here.{" "}
                 <Reach detail="and we'll see what's possible" />
               </>
             ) : (
               <>
-                Need to change something? Orders can be edited or cancelled right
-                up until printing starts.{" "}
+                Need a change? Orders can be edited or cancelled until printing
+                starts.{" "}
                 <Reach detail="with your order number" />
               </>
             )}

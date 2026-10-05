@@ -15,7 +15,7 @@ import { STATUS_LABEL, STATUS_TONE, firstOf, requireAccount } from "../data";
 
 export const metadata: Metadata = {
   title: "Your orders",
-  description: "Every Bam Studio order you've placed, and where each one is up to.",
+  description: "Your Bam Studio orders and where each one is up to.",
   robots: { index: false, follow: false },
 };
 
@@ -166,7 +166,7 @@ export default async function OrdersPage({
           </span>
         }
         title="No orders yet"
-        body="Once you've ordered, every parcel and its printing progress shows up here."
+        body="Your orders and their progress will show here."
       >
         <ButtonLink href="/shop">Shop the range</ButtonLink>
         <ButtonLink href="/builder" variant="ghost">
@@ -187,7 +187,7 @@ export default async function OrdersPage({
     <div>
       <h1 className="mb-1.5 text-3xl md:text-4xl">Your orders</h1>
       <p className="text-sm text-muted">
-        {pluralise(orders.length, "order")} placed with us so far.
+        {pluralise(orders.length, "order")} so far
       </p>
 
       <div className="mt-6 mb-7 flex flex-wrap gap-2">
@@ -219,7 +219,7 @@ export default async function OrdersPage({
         <div className="card px-6 py-14 text-center">
           <h2 className="text-xl">Nothing in this view</h2>
           <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
-            No orders match that filter right now.
+            No orders match that filter.
           </p>
           <Link
             href="/account/orders"

@@ -130,7 +130,7 @@ export default function RefundsPage() {
   return (
     <LegalShell
       title="Refund policy"
-      intro={`When you can send something back to ${SHOP.name}, when you cannot, and how we put it right when we get it wrong.`}
+      intro={`Returns, refunds and replacements at ${SHOP.name}, and how we put things right.`}
       updated="25 August 2026"
     >
       <h2>Your rights come first</h2>
@@ -246,8 +246,8 @@ export default function RefundsPage() {
         </Link>{" "}
         is a set number of pieces drawn from a pool we publish in full. The
         bowl&rsquo;s page says how many pieces it holds and lists every design it
-        can draw from, and that list is the description of what you are buying,
-        your pieces come out of it and out of nothing else.
+        can draw from. That list describes what you are buying: your pieces come
+        out of it and out of nothing else.
       </p>
       <p>
         So a scoop that arrives with fewer pieces than the bowl says, or with a
@@ -269,7 +269,7 @@ export default function RefundsPage() {
         Tell us within 14 days of delivery, or as soon as a fault appears if it
         is not immediately obvious.{" "}
         <Reach
-          detail="with your order number and a photo of the problem. A photo usually saves you having to post anything at all"
+          detail="with your order number and a photo of the problem. A photo usually means you don't need to post anything"
           unavailable={NO_CHANNEL}
         />
       </p>
@@ -292,7 +292,7 @@ export default function RefundsPage() {
       <h2>Cancelling or changing an order</h2>
       <p>
         Because printing starts soon after you order, tell us quickly. If your
-        order has not gone on the printer we will happily change the colour,
+        order has not gone on the printer we will change the colour,
         correct the address or cancel and refund it in full. Once printing has
         started we cannot cancel a personalised item, and other items can only be
         cancelled before dispatch. Printing runs {PRINT_LEAD_TIME.label}, so
@@ -347,7 +347,7 @@ export default function RefundsPage() {
       <ul>
         <li>
           Normal wear from use. Clicker mechanisms loosen a little as they wear
-          in, which is how they are meant to behave.
+          in. This is how they are meant to behave.
         </li>
         <li>
           Heat damage. PLA softens in a hot car, in direct summer sun or in a

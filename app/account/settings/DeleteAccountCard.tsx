@@ -55,19 +55,18 @@ function HowToAsk({ canSendEmail }: { canSendEmail: boolean }) {
             </a>
           </span>
         ))}{" "}
-        and ask us to close the account, telling us the email address it uses.
+        with your account email and ask us to close it.
       </>
     );
   }
 
   return (
     <>
-      We have not published a way to reach us yet, so we cannot take deletion
-      requests at the moment. Any channel we open will be listed on our{" "}
+      We can&apos;t take deletion requests just now. Our{" "}
       <Link href="/contact" className={LINK}>
         contact page
-      </Link>
-      .
+      </Link>{" "}
+      will list ways to reach us.
     </>
   );
 }
@@ -103,12 +102,10 @@ export function DeleteAccountCard({
         Delete account
       </h2>
       <p className="mt-1 text-[13.5px] text-muted">
-        There is no self-service delete yet. Closing an account is done by hand
-        so we can check nothing is mid-print, and it removes your sign-in,
-        profile details, saved addresses and favourites. Past orders are kept:
-        Australian
-        tax law requires us to hold order and payment records for at least five
-        years.
+        We close accounts by hand so we can check nothing is mid-print. This
+        removes your sign-in, profile details, saved addresses and favourites.
+        Past orders are kept: Australian tax law requires us to hold order and
+        payment records for at least five years.
       </p>
 
       <div className="mt-5">
@@ -130,15 +127,14 @@ export function DeleteAccountCard({
               form on that principle. What is left is what actually happens: a
               person does it, and writes back. */}
           <Alert tone="info">
-            <HowToAsk canSendEmail={canSendEmail} /> We do it by hand, and one of
-            us writes back to confirm once it is done. Nothing is deleted until
-            then.
+            <HowToAsk canSendEmail={canSendEmail} /> We&apos;ll write back to
+            confirm once it&apos;s done. Nothing is deleted until then.
           </Alert>
         </div>
       ) : null}
 
       <p className="mt-4 text-[12.5px] text-faint">
-        What we hold and how long we keep it is set out in our{" "}
+        What we hold and for how long is in our{" "}
         <Link href="/legal/privacy" className={LINK}>
           privacy policy
         </Link>

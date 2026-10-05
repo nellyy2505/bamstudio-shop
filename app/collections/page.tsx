@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ProductArt } from "@/components/ProductArt";
 import { Keycap } from "@/components/builder/Keycap";
 import { Breadcrumbs, ButtonLink, Icon, Pill, cx } from "@/components/ui";
 import { getCollections } from "@/lib/queries";
 import { fromPrice, getLadder } from "@/lib/pricing/builder";
 import { money } from "@/lib/format";
-import type { ArtKey, Tint } from "@/lib/types";
+import type { Tint } from "@/lib/types";
 import { selfCanonical } from "../seo";
 
 export const revalidate = 300;
@@ -15,7 +14,7 @@ export const metadata: Metadata = {
   ...selfCanonical("/collections"),
   title: "Colourway collections",
   description:
-    "Six colourways for the DIY name charm, cap, letter and cord colours with a matching food charm.",
+    "Colourway collections for the DIY name charm, each with matching caps, letters and a charm.",
 };
 
 const TINT_BG: Record<Tint, string> = {
@@ -43,9 +42,8 @@ export default async function CollectionsPage() {
 
       <h1 className="mb-2 text-3xl md:text-4xl">The colourway collections</h1>
       <p className="mb-8 max-w-2xl text-muted">
-        Every collection pairs a cap colour, a letter colour and a holder cord
-        with a matching food charm. Same price in every colourway, just pick
-        the one that feels like them.
+        Matching caps and letters, plus a charm to match. Same price
+        in every colourway.
       </p>
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -72,12 +70,6 @@ export default async function CollectionsPage() {
                     size={50}
                   />
                 ))}
-                <span className="flex h-[50px] w-[50px] items-center justify-center rounded-xl bg-surface">
-                  <ProductArt
-                    art={collection.charm_art as ArtKey}
-                    size={34}
-                  />
-                </span>
               </div>
 
               <div className="p-5">
@@ -102,16 +94,16 @@ export default async function CollectionsPage() {
                       ["Cord", collection.holder_colour],
                     ] as const
                   ).map(([label, hex]) => (
+                    // Swatch only: the hex is internal data and is never shown
+                    // to customers, as text, tooltip or screen-reader label.
                     <span
                       key={label}
-                      title={`${label}: ${hex}`}
+                      role="img"
+                      aria-label={`${label} colour`}
+                      title={`${label} colour`}
                       className="h-[22px] w-[22px] rounded-full border border-line2"
                       style={{ background: hex }}
-                    >
-                      <span className="sr-only">
-                        {label} colour {hex}
-                      </span>
-                    </span>
+                    />
                   ))}
                   <Link
                     href="/builder"
@@ -131,8 +123,7 @@ export default async function CollectionsPage() {
         <div className="flex-1">
           <b className="text-base">Two more colourways are brewing</b>
           <p className="mt-1 text-[13.5px] text-muted">
-            Caramel and Charcoal are in testing. Join the list and vote for
-            which lands first.
+            Caramel and Charcoal are in testing.
           </p>
         </div>
         <ButtonLink href="/builder" variant="ghost" size="sm">

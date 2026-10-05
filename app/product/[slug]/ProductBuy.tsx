@@ -12,6 +12,7 @@ import {
   PERSONALISATION_TEXT_PATTERN,
 } from "@/lib/config";
 import type { Product } from "@/lib/types";
+import { productPhotos } from "@/lib/photos";
 
 /** Colour + attachment pickers, quantity and the two buy buttons. */
 export function ProductBuy({ product }: { product: Product }) {
@@ -41,13 +42,33 @@ export function ProductBuy({ product }: { product: Product }) {
 
   // Builder charms are configured letter by letter, priced by length, so the
   // buy box hands off rather than guessing. Text personalisation stays here.
+  // A cake box is filled piece by piece on /bakery, so the buy box hands off.
+  if (product.personalisation_mode === "bakery") {
+    return (
+      <div className="rounded-2xl bg-blush p-5">
+        <b className="text-[15px]">Fill it your way</b>
+        <p className="mt-1.5 mb-4 text-sm text-muted">
+          Choose the box colour, then pick a pastry for each spot. {money(product.price)} whatever
+          you choose.
+        </p>
+        <Link
+          href="/bakery"
+          className="inline-flex h-12 items-center gap-2 rounded-full bg-accent px-6 font-display font-semibold text-white hover:bg-accent-dark"
+        >
+          <Icon name="sparkle" size={18} />
+          Build your box
+        </Link>
+      </div>
+    );
+  }
+
   if (product.personalisation_mode === "builder") {
     return (
       <div className="rounded-2xl bg-lilac p-5">
-        <b className="text-[15px]">This one is made to your spec</b>
+        <b className="text-[15px]">Made to your design</b>
         <p className="mt-1.5 mb-4 text-sm text-muted">
-          Pick the letters, colourway and cord in the builder. Flat price by
-          name length, from {money(product.price)}.
+          Choose your letters and colourway in the builder. From{" "}
+          {money(product.price)}, priced by name length.
         </p>
         <Link
           href={`/builder?product=${product.slug}`}
@@ -79,6 +100,7 @@ export function ProductBuy({ product }: { product: Product }) {
       slug: product.slug,
       name: product.short_name,
       art: product.art,
+      photo: productPhotos(product)[0]?.thumb ?? null,
       tint: product.tint,
       colour,
       attachment_id: attachment?.id ?? null,
@@ -99,16 +121,14 @@ export function ProductBuy({ product }: { product: Product }) {
      */
     if (result === "full") {
       setBasketError(
-        `Your basket already holds ${BASKET_LIMITS.maxLines} different items, which is ` +
-          "the most one order can carry. Check out what you have, or remove " +
-          "something to make room.",
+        `Your basket is full (${BASKET_LIMITS.maxLines} different items per order). ` +
+          "Check out or remove something to make room.",
       );
       return false;
     }
     setBasketError(
       result === "clamped"
-        ? `Your basket now holds ${BASKET_LIMITS.maxLineQuantity} of this, the most we ` +
-            "can print of one item in a single order."
+        ? `Your basket now holds ${BASKET_LIMITS.maxLineQuantity} of this, the most per order.`
         : null,
     );
 
@@ -207,7 +227,7 @@ export function ProductBuy({ product }: { product: Product }) {
             )}
           >
             {textError ??
-              `Up to ${PERSONALISATION_TEXT_MAX} characters, printed exactly as you type it. Personalised items can only be returned if faulty.`}
+              `Up to ${PERSONALISATION_TEXT_MAX} characters, printed exactly as typed. Returnable only if faulty.`}
           </p>
         </div>
       ) : null}
@@ -276,8 +296,7 @@ export function ProductBuy({ product }: { product: Product }) {
       {/* Only rendered at the cap, so nothing moves until it is reached. */}
       {atMax ? (
         <p id={capNoteId} role="status" className="mt-3 text-xs text-muted">
-          {BASKET_LIMITS.maxLineQuantity} is the most we can print of one item in a
-          single order. Need more? Get in touch and we&apos;ll sort it out.
+          Up to {BASKET_LIMITS.maxLineQuantity} per order. Need more? Get in touch.
         </p>
       ) : null}
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ProductArt } from "@/components/ProductArt";
 import { Pill, Stars, cx } from "@/components/ui";
 import { money } from "@/lib/format";
+import { productPhotos } from "@/lib/photos";
 import type { Product } from "@/lib/types";
 import { FavouriteButton } from "./FavouriteButton";
 import { QuickAddButton } from "./QuickAddButton";
@@ -30,8 +31,14 @@ export function ProductCard({
         ? "Personalised"
         : null;
 
+  // A second view to cross-fade to on hover, when the gallery has one. Cards
+  // with a single view keep the gentle zoom and nothing else.
+  const hoverView = product.gallery?.length > 1 ? product.gallery[1] : null;
+  // Real photographs win over the drawing whenever the studio has uploaded any.
+  const photos = productPhotos(product);
+
   return (
-    <div className="group flex flex-col gap-2.5">
+    <div className="group flex h-full flex-col gap-2.5">
       <div
         className={cx(
           "relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl",
@@ -43,11 +50,56 @@ export function ProductCard({
           className="flex h-full w-full items-center justify-center"
           aria-label={product.short_name}
         >
-          <ProductArt
-            art={product.art}
-            size={160}
-            className="transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
-          />
+          {photos.length > 0 ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element -- Storage is not a next/image loader (see PhotoDrop). */}
+              <img
+                src={photos[0].thumb}
+                alt={photos[0].alt}
+                loading="lazy"
+                decoding="async"
+                className={cx(
+                  "absolute inset-0 h-full w-full object-cover transition duration-300 motion-reduce:transition-none",
+                  photos[1] ? "group-hover:opacity-0" : "group-hover:scale-105 motion-reduce:group-hover:scale-100",
+                )}
+              />
+              {photos[1] ? (
+                /* eslint-disable-next-line @next/next/no-img-element -- as above */
+                <img
+                  src={photos[1].thumb}
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                  decoding="async"
+                  className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-300 group-hover:opacity-100 motion-reduce:transition-none"
+                />
+              ) : null}
+            </>
+          ) : (
+            <>
+            <ProductArt
+              art={product.art}
+              size={160}
+              className={cx(
+                "transition duration-300 motion-reduce:transition-none",
+                hoverView
+                  ? "group-hover:opacity-0"
+                  : "group-hover:scale-105 motion-reduce:group-hover:scale-100",
+              )}
+            />
+            {hoverView ? (
+              <span
+                aria-hidden="true"
+                className={cx(
+                  "absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100 motion-reduce:transition-none",
+                  TINT_CLASS[hoverView.tint] ?? "bg-cream",
+                )}
+              >
+                <ProductArt art={hoverView.art} size={160} />
+              </span>
+            ) : null}
+            </>
+          )}
         </Link>
 
         {badge ? (
@@ -63,30 +115,28 @@ export function ProductCard({
         ) : null}
       </div>
 
-      <div>
+      {/* Name (two lines at most), then price pinned to the bottom so the
+          price row lines up across a grid row whatever the name length. */}
+      <div className="flex flex-1 flex-col gap-1">
         <Link
           href={`/product/${product.slug}`}
-          className="text-[14.5px] font-bold hover:text-accent-dark"
+          className="line-clamp-2 text-[14.5px] leading-snug font-bold hover:text-accent-dark"
         >
           {product.short_name}
         </Link>
         {product.review_count > 0 ? (
-          <div className="my-0.5 flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5">
             <Stars rating={product.rating} size={13} />
             <span className="text-xs text-muted">({product.review_count})</span>
           </div>
-        ) : (
-          /* No reviews yet, so no stars and no "(0)" - but hold the row's
-             height so the price line stays put across a mixed grid. */
-          <div className="my-0.5 h-4" aria-hidden="true" />
-        )}
-        <div className="flex items-baseline justify-between gap-2">
+        ) : null}
+        <div className="mt-auto flex items-baseline justify-between gap-2">
           <b className="text-[15px]">
             {/* Only builder charms are priced by length; text personalisation
-                costs exactly what the card says. */}
+                costs exactly what the card says. Currency is stated once in
+                the shop header and again at the basket total. */}
             {product.personalisation_mode === "builder" ? "From " : ""}
-            {money(product.price)}{" "}
-            <span className="text-[11.5px] font-semibold text-faint">AUD</span>
+            {money(product.price)}
           </b>
           {product.stock_on_hand > 0 && product.stock_on_hand <= 4 ? (
             <span className="text-[11.5px] font-bold text-accent-dark">
@@ -105,15 +155,19 @@ export function ProductGrid({
   quickAdd = true,
 }: {
   products: Product[];
-  columns?: 3 | 4;
+  columns?: 3 | 4 | 5;
   quickAdd?: boolean;
 }) {
   return (
     <div
       className={cx(
-        "grid gap-5 sm:gap-6",
+        "grid gap-x-5 gap-y-8 sm:gap-x-6 sm:gap-y-10",
         "grid-cols-2",
-        columns === 3 ? "lg:grid-cols-3" : "md:grid-cols-3 lg:grid-cols-4",
+        columns === 3
+          ? "lg:grid-cols-3"
+          : columns === 5
+            ? "md:grid-cols-3 lg:grid-cols-5"
+            : "md:grid-cols-3 lg:grid-cols-4",
       )}
     >
       {products.map((product) => (

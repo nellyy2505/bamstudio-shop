@@ -164,6 +164,15 @@ function contentSecurityPolicy(): string {
 
 const nextConfig: NextConfig = {
   /**
+   * Product photos go up through a server action, and actions are capped at
+   * 1 MB by default, which a single phone photo exceeds. PhotoDrop resizes in
+   * the browser first; this is headroom for a few photos at once, or a browser
+   * that could not resize. uploadPhotos still enforces 5 MB per file.
+   */
+  experimental: {
+    serverActions: { bodySizeLimit: "25mb" },
+  },
+  /**
    * Emit a self-contained server at `.next/standalone`.
    *
    * The app runs on a 512 MB Fly machine (shared-cpu-1x). Shipping the real

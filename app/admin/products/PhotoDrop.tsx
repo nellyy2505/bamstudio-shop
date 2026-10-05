@@ -3,7 +3,8 @@
 import { useActionState, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Alert, Icon, cx } from "@/components/ui";
-import { removePhoto, uploadPhotos } from "../actions";
+import { makeCoverPhoto, removePhoto, uploadPhotos } from "../actions";
+import { shrinkPhoto } from "@/lib/shrink-photo";
 
 /**
  * The drop zone, and the photos already on the product.
@@ -36,9 +37,20 @@ export function PhotoDrop({
   // Dropping and picking do the same thing, so both end up here: put the files
   // on the real input and submit. Assigning a DataTransfer's file list is the
   // only way to hand dropped files to a plain form post.
-  const accept = (files: FileList | null) => {
+  const [preparing, setPreparing] = useState(false);
+  const accept = async (files: FileList | null) => {
     if (!files || files.length === 0 || !input.current) return;
-    input.current.files = files;
+    // Phone photos are 3 to 8 MB. Shrink each one in the browser to a web-sized
+    // JPEG first, so uploads are quick, stay under the request limit, and the
+    // shop never serves a 6 MB picture to a phone on mobile data.
+    setPreparing(true);
+    try {
+      const shrunk = new DataTransfer();
+      for (const file of Array.from(files)) shrunk.items.add(await shrinkPhoto(file));
+      input.current.files = shrunk.files;
+    } finally {
+      setPreparing(false);
+    }
     form.current?.requestSubmit();
   };
 
@@ -46,7 +58,7 @@ export function PhotoDrop({
     <div className="flex flex-col gap-4">
       {photos.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {photos.map((photo) => (
+          {photos.map((photo, index) => (
             <figure key={photo.path} className="group relative">
               {/* eslint-disable-next-line @next/next/no-img-element -- Supabase
                   Storage is not configured as a next/image loader, and adding a
@@ -58,6 +70,13 @@ export function PhotoDrop({
                 className="aspect-square w-full rounded-xl border border-line2 object-cover"
               />
               <RemovePhoto productId={productId} path={photo.path} />
+              {index === 0 ? (
+                <span className="absolute bottom-2 left-2 rounded-full bg-ink/80 px-2 py-0.5 text-[11px] font-bold text-white">
+                  Cover
+                </span>
+              ) : (
+                <MakeCover productId={productId} path={photo.path} />
+              )}
             </figure>
           ))}
         </div>
@@ -100,10 +119,17 @@ export function PhotoDrop({
             Drop a photo here, or choose one
           </span>
           <span className="text-[13px] text-muted">
-            JPEG, PNG, WebP or AVIF, up to 5&nbsp;MB each. Square photographs sit best on the
-            shop.
+            JPEG, PNG or WebP. Big phone photos are resized for the web automatically. Square
+            photos look best. The first photo is the cover.
           </span>
-          <Pending />
+          {preparing ? (
+            <span className="mt-1 flex items-center gap-2 text-[13px] font-semibold text-accent">
+              <Icon name="spinner" size={16} className="animate-spin" />
+              Preparing…
+            </span>
+          ) : (
+            <Pending />
+          )}
         </button>
       </form>
 
@@ -157,6 +183,30 @@ function RemoveButton() {
       className="flex h-8 w-8 items-center justify-center rounded-full bg-ink/80 text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
     >
       <Icon name={pending ? "spinner" : "trash"} size={15} className={pending ? "animate-spin" : ""} />
+    </button>
+  );
+}
+
+function MakeCover({ productId, path }: { productId: string; path: string }) {
+  const [, formAction] = useActionState(makeCoverPhoto, null);
+  return (
+    <form action={formAction} className="absolute bottom-2 left-2">
+      <input type="hidden" name="id" value={productId} />
+      <input type="hidden" name="path" value={path} />
+      <CoverButton />
+    </form>
+  );
+}
+
+function CoverButton() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-bold text-ink opacity-0 shadow transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+    >
+      {pending ? "Saving…" : "Make cover"}
     </button>
   );
 }

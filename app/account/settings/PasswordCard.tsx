@@ -42,7 +42,7 @@ export function PasswordCard({ email }: { email: string }) {
       });
       if (signIn) {
         setState("idle");
-        setErrors({ current: "That current password isn't right" });
+        setErrors({ current: "That password isn't right" });
         return;
       }
 
@@ -59,7 +59,7 @@ export function PasswordCard({ email }: { email: string }) {
       setMessage(
         cause instanceof Error
           ? cause.message
-          : "Could not change your password. Please try again.",
+          : "We couldn't change your password. Please try again.",
       );
     }
   }

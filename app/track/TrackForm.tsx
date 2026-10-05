@@ -42,15 +42,15 @@ const STEP_COPY: Record<OrderStatus, { label: string; body: string }> = {
   },
   confirmed: {
     label: "Confirmed",
-    body: "Payment received and your order joined the print queue.",
+    body: "Payment received. Your order is in the print queue.",
   },
   printing: {
     label: "Printing",
-    body: `On the printer now. Printing runs ${PRINT_LEAD_TIME.label} before anything is dispatched.`,
+    body: `On the printer now. Printing takes ${PRINT_LEAD_TIME.label}.`,
   },
   packed: {
     label: "Packed",
-    body: "Trimmed, checked by hand and bagged with its backing card.",
+    body: "Checked by hand and packed with its backing card.",
   },
   /*
    * This used to read "Handed to Australia Post. Tracking is live once they
@@ -177,8 +177,7 @@ export function TrackForm() {
             page - this must never send anyone to an email that is not sent,
             because the number is what makes this page usable at all. */}
         <p className="mt-1.5 text-[14.5px] text-muted">
-          Use the order number from your confirmation page, plus the email
-          address you ordered with. No account needed.
+          Use the email you ordered with. No account needed.
         </p>
 
         <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
@@ -222,8 +221,8 @@ export function TrackForm() {
 
           {status === "error" ? (
             <Alert tone="error">
-              We could not reach the studio just now. Check your connection and
-              try again.
+              We couldn&apos;t connect just now. Check your connection and try
+              again.
             </Alert>
           ) : null}
         </form>
@@ -245,21 +244,19 @@ function NotFoundCard() {
       </span>
       <h2 className="mt-4 text-xl">No order matched those details</h2>
       <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">
-        Nothing to worry about yet. It is almost always a typo in the order
-        number, or a different email address than the one used at checkout (a
-        partner&apos;s, or the one attached to your payment account). Check both
-        against your confirmation page and try again.
+        Check the order number and use the email you ordered with, then try
+        again.
       </p>
       <p className="mt-3 max-w-[56ch] text-[14.5px] text-muted">
         {canReachStudio
-          ? "Still nothing? Send us the order number and we will find it from our side."
-          : "Still nothing? The contact page has the ways to reach us."}
+          ? "Still stuck? Send us your order number and we'll look it up."
+          : "Still stuck? Here's how to reach us."}
       </p>
       <Link
         href="/contact"
         className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-accent underline underline-offset-2 hover:text-accent-dark"
       >
-        Contact the studio
+        Contact us
         <Icon name="arrow" size={14} />
       </Link>
     </div>
@@ -281,22 +278,20 @@ function ThrottledCard({ seconds }: { seconds: number | null }) {
       </span>
       <h2 className="mt-4 text-xl">Too many lookups just now</h2>
       <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">
-        We did not check your order. This page limits how often it will look
-        one up, and that limit counts everyone sharing your internet connection,
-        which on a mobile network can be a lot of people. Nothing is wrong with
-        your order or the details you typed.
+        We limit how often orders can be looked up from one connection. Your
+        order and details are fine.
       </p>
       <p className="mt-3 max-w-[56ch] text-[14.5px] text-muted">
         {seconds
-          ? `Wait about ${pluralise(seconds, "second")} and try the same details again.`
-          : "Wait about a minute and try the same details again."}
+          ? `Try again in about ${pluralise(seconds, "second")}.`
+          : "Try again in about a minute."}
       </p>
       {canReachStudio ? (
         <Link
           href="/contact"
           className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-accent underline underline-offset-2 hover:text-accent-dark"
         >
-          Or contact the studio
+          Or contact us
           <Icon name="arrow" size={14} />
         </Link>
       ) : null}
@@ -318,9 +313,8 @@ function InvalidCard() {
       </span>
       <h2 className="mt-4 text-xl">We could not read those details</h2>
       <p className="mt-2 max-w-[56ch] text-[14.5px] text-muted">
-        Nothing was looked up. The order number should look like BS-1042-9F3A,
-        and the email address needs to be the full address you ordered with.
-        Check both and try again.
+        Order numbers look like BS-1042-9F3A. Use the full email address you
+        ordered with.
       </p>
     </div>
   );
@@ -371,7 +365,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
           <Alert tone="error">
             This order was cancelled and nothing was printed.
             {canReachStudio
-              ? " If you did not ask for that, message us and we will sort it out."
+              ? " Didn't ask for that? Message us and we'll sort it out."
               : ""}
           </Alert>
         </div>
@@ -444,9 +438,8 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                       </p>
                     ) : (
                       <p className="mt-1.5 max-w-[52ch] text-[13.5px] text-muted">
-                        No tracking number was recorded for this parcel. Some
-                        orders go by untracked letter post, so there is nothing
-                        to follow.
+                        No tracking number was recorded. Some orders go by
+                        untracked letter post.
                       </p>
                     )
                   ) : null}
@@ -467,16 +460,15 @@ function OrderResult({ order }: { order: TrackedOrder }) {
           <span>
             {delivered ? (
               <>
-                Marked delivered. If it has not turned up, check with your local
-                post office first, then tell us.
+                Marked delivered. Not there? Check with your local post office,
+                then let us know.
               </>
             ) : (
               <>
                 Estimated arrival <b className="text-ink">{eta}</b>, printing
                 ({PRINT_LEAD_TIME.label}) plus{" "}
                 {transitRangeLabel(order.shipping_method) || "carrier transit"}.
-                Estimates are not guarantees; Australia Post has its own
-                opinions.
+                Estimates only.
               </>
             )}
           </span>
@@ -570,7 +562,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
         >
           {canReachStudio ? "Message us" : "See how to reach us"}
         </Link>
-        {canReachStudio ? " with the order number and we will take a look." : "."}
+        {canReachStudio ? " with your order number." : "."}
       </p>
     </div>
   );

@@ -40,8 +40,8 @@ export const metadata: Metadata = {
    */
   robots: { index: false },
   description: CAN_SIGN_UP
-    ? "Create a Bam Studio account to save baskets, track orders and reorder favourites."
-    : "Bam Studio accounts aren't open yet, so there's nothing to create just now.",
+    ? "Create a Bam Studio account to keep your orders and favourites in one place."
+    : "Accounts are unavailable right now. You can still shop as a guest.",
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -101,8 +101,8 @@ export default async function SignupPage({
           <h1 className="text-[28px]">Create your account</h1>
           <p className="mt-1.5 mb-6 text-sm text-muted">
             {CAN_SIGN_UP
-              ? "Save baskets, track orders, reorder favourites."
-              : "Accounts aren't open yet, so there's nothing to set up just now. Pop back once we've switched them on."}
+              ? "Keep your orders and favourites in one place."
+              : "Accounts are unavailable right now. You can still shop as a guest."}
           </p>
           <SignupForm next={next} carried={carried} />
         </div>
@@ -122,14 +122,12 @@ export default async function SignupPage({
             </>
           ) : (
             <>
-              Signing in isn&apos;t open yet either, but you can{" "}
               <Link
                 href="/shop"
                 className="font-bold text-accent underline underline-offset-2 hover:text-accent-dark"
               >
-                have a look around the shop
-              </Link>{" "}
-              in the meantime.
+                Browse the shop
+              </Link>
             </>
           )}
         </p>

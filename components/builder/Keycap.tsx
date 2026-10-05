@@ -85,7 +85,17 @@ export function KeycapWord({
             }}
             aria-hidden="true"
           >
-            <ProductArt art={collection.charm_art as ArtKey} size={Math.round(size * 0.7)} />
+            {collection.charm_photo ? (
+              // eslint-disable-next-line @next/next/no-img-element -- product photo
+              <img
+                src={collection.charm_photo}
+                alt=""
+                className="h-full w-full object-cover"
+                style={{ borderRadius: Math.round(size * 0.24) }}
+              />
+            ) : (
+              <ProductArt art={collection.charm_art as ArtKey} size={Math.round(size * 0.7)} />
+            )}
           </span>
         ) : null}
       </div>

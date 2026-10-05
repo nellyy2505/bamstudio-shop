@@ -169,7 +169,7 @@ export function AddressManager({
       setError(
         cause instanceof Error
           ? cause.message
-          : "Could not save that address. Please try again.",
+          : "We couldn't save that address. Please try again.",
       );
     } finally {
       setBusy(false);
@@ -193,7 +193,7 @@ export function AddressManager({
       setError(
         cause instanceof Error
           ? cause.message
-          : "Could not remove that address. Please try again.",
+          : "We couldn't remove that address. Please try again.",
       );
     } finally {
       setBusy(false);
@@ -217,7 +217,7 @@ export function AddressManager({
       setError(
         cause instanceof Error
           ? cause.message
-          : "Could not update your default address.",
+          : "We couldn't update your default address. Please try again.",
       );
     } finally {
       setBusy(false);
@@ -233,7 +233,7 @@ export function AddressManager({
         aria-label={editing === "new" ? "Add an address" : "Edit address"}
       >
         <b className="font-display text-[16px]">
-          {editing === "new" ? "Add a new address" : "Edit address"}
+          {editing === "new" ? "Add an address" : "Edit address"}
         </b>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -363,7 +363,7 @@ export function AddressManager({
             checked={form.is_default}
             onChange={(event) => set("is_default", event.target.checked)}
           />
-          Make this my default delivery address
+          Make this my default address
         </label>
 
         {error ? (

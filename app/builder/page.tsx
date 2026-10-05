@@ -1,22 +1,34 @@
+import { productPhotos } from "@/lib/photos";
 import type { Metadata } from "next";
 import { BuilderClient } from "./BuilderClient";
 import { Icon, Pill } from "@/components/ui";
 import { getCollections, getProducts } from "@/lib/queries";
 import { PRINT_LEAD_TIME } from "@/lib/config";
+import { money } from "@/lib/format";
 import {
   charmPrice,
+  fromPrice,
   getCharmDiscountCents,
   getLadder,
-  ladderSentence,
   maxUnits,
+  type Ladder,
 } from "@/lib/pricing/builder";
 import { selfCanonical } from "../seo";
 
 export const revalidate = 300;
 
-/** The ladder sentence starts a sentence here and continues one below. */
-function capitalise(sentence: string): string {
-  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+/**
+ * The intro's price line, built from the ladder and never typed out.
+ *
+ * It used to splice in `ladderSentence()`, which reads every step of the ladder
+ * aloud ("$3.50 for the first letter, $1 for each one after, and just $0.50 for
+ * the last one"). The price table beside the builder already shows each rung,
+ * so the intro only needs the honest "from" figure: the cheapest rung, via
+ * `fromPrice()`. An empty ladder prints no price at all rather than "$0.00".
+ */
+function fromLine(ladder: Ladder): string | null {
+  const cents = fromPrice(ladder);
+  return cents === null ? null : `From ${money(cents)} for one letter.`;
 }
 
 export const metadata: Metadata = {
@@ -33,26 +45,25 @@ export const metadata: Metadata = {
    * nobody looks. The heading below states it, from the database, per request.
    */
   description:
-    "Pick a colourway and spell a name in printed letter caps, and add a " +
-    "matching charm for less than it costs on its own. Made to order in " +
-    "Wollongong.",
+    "Spell a name in 3D-printed letter caps, in the colourway you like. Add " +
+    "a matching charm if you want one. Printed to order in Wollongong.",
 };
 
 const STEPS = [
   {
     n: "1",
     title: "Printed for you",
-    body: "Your letters are printed fresh in your colourway, and the charm too if you add one. Nothing pre-made.",
+    body: "Every letter is printed in your colourway, plus the charm if you add one.",
   },
   {
     n: "2",
     title: "Assembled by hand",
-    body: "Caps are threaded on the holder cord, any charm clipped on, every click tested.",
+    body: "Threaded on the holder, charm clipped on, every click tested.",
   },
   {
     n: "3",
     title: "Gift-ready",
-    body: "Bagged with a backing card. Add a free gift note at checkout.",
+    body: "Bagged with a backing card. Add a free gift note in your basket.",
   },
 ];
 
@@ -110,13 +121,17 @@ export default async function BuilderPage({
     if (charm) charmPrices[c.slug] = charmPrice(charm.price, charmDiscount);
   }
 
+  // Each colourway's charm as a photo, so the preview shows the real piece.
+  const withPhotos = collections.map((c) => {
+    const charm = c.charm_slug ? bySlug.get(c.charm_slug) : undefined;
+    return { ...c, charm_photo: charm ? (productPhotos(charm)[0]?.thumb ?? null) : null };
+  });
+
   if (!anchor || collections.length === 0) {
     return (
       <div className="wrap py-20 text-center">
-        <h1 className="text-2xl">The builder is warming up</h1>
-        <p className="mt-2 text-muted">
-          Our catalogue is still loading. Please refresh in a moment.
-        </p>
+        <h1 className="text-2xl">The builder isn&rsquo;t available right now</h1>
+        <p className="mt-2 text-muted">Please refresh in a moment.</p>
       </div>
     );
   }
@@ -133,18 +148,16 @@ export default async function BuilderPage({
             Design your own {anchor.short_name.toLowerCase()}
           </h1>
           <p className="mx-auto max-w-2xl text-[#5F5769] md:text-base">
-            {/* One sentence, one source, and that source is now the database.
-                It used to compute the step from the first two rungs, which said
-                "for each one after" and was true of every step but the last. */}
-            Pick a collection and spell it out. {capitalise(ladderSentence(ladder))},
-            and every colourway costs the same. Add the matching charm if you
-            want one.
+            {/* The price comes from the ladder in the database (fromLine
+                above); the table in the builder shows every rung. */}
+            Pick a collection and spell it out. {fromLine(ladder)} Same price in
+            every colourway.
           </p>
         </div>
       </div>
 
       <BuilderClient
-        collections={collections}
+        collections={withPhotos}
         anchor={anchor}
         alternatives={builderProducts}
         charmPrices={charmPrices}
@@ -154,7 +167,7 @@ export default async function BuilderPage({
       />
 
       <section className="wrap pt-16">
-        <h2 className="mb-6 text-2xl">How it arrives</h2>
+        <h2 className="mb-6 text-2xl">How it&rsquo;s made</h2>
         <div className="grid gap-5 md:grid-cols-3">
           {STEPS.map((step) => (
             <div key={step.n} className="card p-6">
@@ -167,8 +180,8 @@ export default async function BuilderPage({
           ))}
         </div>
         <p className="mt-6 text-[13px] text-muted">
-          Personalised charms are printed to order in {PRINT_LEAD_TIME.label} and
-          can only be returned if faulty.
+          Printed to order in {PRINT_LEAD_TIME.label}. Personalised items are
+          returnable only if faulty.
         </p>
       </section>
     </>

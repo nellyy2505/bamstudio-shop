@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Icon } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
 import type { Product } from "@/lib/types";
+import { productPhotos } from "@/lib/photos";
 
 /**
  * One-tap add from a grid card. Products with choices to make (colours or a
@@ -30,6 +31,7 @@ export function QuickAddButton({ product }: { product: Product }) {
       slug: product.slug,
       name: product.short_name,
       art: product.art,
+      photo: productPhotos(product)[0]?.thumb ?? null,
       tint: product.tint,
       colour: product.colours?.[0]?.name ?? null,
       attachment_id: attachment?.id ?? null,

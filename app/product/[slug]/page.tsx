@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { productPhotos } from "@/lib/photos";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ProductGrid } from "@/components/product/ProductCard";
@@ -59,6 +60,7 @@ export async function generateMetadata({
    * `locale` on every product page in the shop.
    */
   const path = `/product/${product.slug}`;
+  const firstPhoto = productPhotos(product)[0];
 
   return {
     title: product.short_name,
@@ -69,6 +71,7 @@ export async function generateMetadata({
       url: path,
       title: `${product.short_name} · ${SHOP.name}`,
       description: product.description.slice(0, 155),
+      ...(firstPhoto ? { images: [{ url: firstPhoto.src, alt: firstPhoto.alt }] } : {}),
     },
   };
 }
@@ -155,6 +158,7 @@ export default async function ProductPage({ params }: { params: Params }) {
     name: product.name,
     description: product.description,
     sku: product.sku,
+    image: productPhotos(product).map((p) => p.src),
     brand: { "@type": "Brand", name: SHOP.name },
     /*
      * No reviews have ever been written, so `review_count` is 0 everywhere
@@ -211,11 +215,11 @@ export default async function ProductPage({ params }: { params: Params }) {
                 Bestseller
               </Pill>
             ) : null}
-            {product.is_new ? <Pill tone="good">New this month</Pill> : null}
+            {product.is_new ? <Pill tone="good">New</Pill> : null}
             {product.is_personalised ? (
               <Pill tone="accent">
                 <Icon name="sparkle" size={13} />
-                Made just for you
+                Personalised
               </Pill>
             ) : null}
           </div>
@@ -257,8 +261,8 @@ export default async function ProductPage({ params }: { params: Params }) {
           >
             {readyToShip ? (
               <>
-                <Icon name="check" size={14} className="inline" /> Only{" "}
-                {product.stock_on_hand} ready to ship, then printed to order
+                <Icon name="check" size={14} className="inline" />{" "}
+                {product.stock_on_hand} ready to ship, more printed to order
               </>
             ) : (
               <>
@@ -274,22 +278,24 @@ export default async function ProductPage({ params }: { params: Params }) {
             <p className="flex items-start gap-2.5">
               <Icon name="truck" size={18} className="mt-0.5 shrink-0" />
               <span>
-                <b>Estimated delivery {deliveryWindow(...transitDays("standard"))}</b> ·{" "}
+                <b>Estimated delivery {deliveryWindow(...transitDays("standard"))}</b>
+                <br />
                 {/* Postage is priced per basket by weight, so no per-product
                     figure can be right. The two thresholds are the shop's own
                     promotion and are true on every product page - but they are
                     read off the basket subtotal, not off this product, so the
                     sentence names the amounts and never claims this item
                     reaches them. */}
-                Standard post by weight. We pay half from{" "}
-                {money(SHIPPING.subsidyThreshold)}, all of it from{" "}
-                {money(SHIPPING.freeThreshold)}
+                {Math.round((1 - SHIPPING.subsidisedShare) * 100)}% off standard
+                post from{" "}
+                {money(SHIPPING.subsidyThreshold)}, free from{" "}
+                {money(SHIPPING.freeThreshold)}.
               </span>
             </p>
             <p className="flex items-start gap-2.5">
               <Icon name="box" size={18} className="mt-0.5 shrink-0" />
               <span>
-                Printed fresh for your order, dispatched in{" "}
+                Printed in {SHOP.city}, ready to post in{" "}
                 {PRINT_LEAD_TIME.label}
               </span>
             </p>
@@ -297,7 +303,7 @@ export default async function ProductPage({ params }: { params: Params }) {
               <Icon name="shield" size={18} className="mt-0.5 shrink-0" />
               <span>
                 {product.is_personalised
-                  ? "Personalised items can only be returned if faulty · "
+                  ? "Personalised, so returnable only if faulty · "
                   : "30-day returns on unused items · "}
                 <Link
                   href="/legal/refunds"

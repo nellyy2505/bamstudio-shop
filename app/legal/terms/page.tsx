@@ -187,7 +187,7 @@ export default function TermsPage() {
         All prices are in Australian dollars.{" "}
         {SHOP.gstRegistered
           ? "Prices include GST, and your receipt shows the GST component."
-          : `${SHOP.name} is not currently registered for GST, so no GST is charged on your order.`}
+          : `${SHOP.name} is not currently registered for GST, so no GST is charged on your order.`}{" "}
         Prices exclude delivery, which is shown at checkout before you pay.
       </p>
       <p>
@@ -200,8 +200,8 @@ export default function TermsPage() {
       <p>
         Everything here is printed after you order it, on a single printer, in
         PLA plastic. Allow {PRINT_LEAD_TIME.label} for printing, checking and
-        packing before dispatch. That lead time is in addition to delivery time,
-        and it can stretch during market weekends or a busy gift season, and we will
+        packing before dispatch. That lead time is in addition to delivery time.
+        It can stretch during market weekends or a busy gift season, and we will
         tell you if it does.
       </p>
 
@@ -297,7 +297,7 @@ export default function TermsPage() {
         photography, illustrations, text and the model files behind them remain
         our intellectual property. Buying a product does not give you a licence
         to copy it, scan it, reproduce it, or make and sell versions of it. You
-        are of course free to resell the individual item you bought.
+        are free to resell the individual item you bought.
       </p>
 
       <h2>Using this website</h2>

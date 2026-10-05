@@ -36,6 +36,24 @@ export function isDatabaseConfigured(): boolean {
  * `active` is filtered here, not by the caller, because forgetting it is silent:
  * a retired product would still be weighed and still be priced.
  */
+/**
+ * Load bakery filling rows by slug, active or not.
+ *
+ * Fillings are deliberately `active = false` (sold inside a box, never on
+ * their own), so `loadProductsBySlug` would drop every one of them and a box
+ * would be costed and stock-moved as if it were empty. Only slugs that are in
+ * the live filling pool are asked for, and 0017's RLS policy is what lets the
+ * shop read those rows at all.
+ */
+export async function loadFillingProductsBySlug(
+  slugs: string[],
+): Promise<Map<string, Product>> {
+  if (slugs.length === 0 || !isDatabaseConfigured()) return new Map();
+  const supabase = await createClient();
+  const { data } = await supabase.from("products").select("*").in("slug", slugs);
+  return new Map(((data ?? []) as Product[]).map((p) => [p.slug, p]));
+}
+
 export async function loadProductsBySlug(
   slugs: string[],
 ): Promise<Map<string, Product>> {
@@ -378,6 +396,7 @@ export type BakeryFilling = {
   short_name: string;
   art: string;
   tint: string;
+  photos?: { path: string; alt?: string | null }[];
 };
 
 /**
@@ -478,7 +497,7 @@ export async function getBakeryFillings(): Promise<BakeryFilling[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("bakery_fillings")
-    .select("sort_order, products!inner(slug, name, short_name, art, tint)")
+    .select("sort_order, products!inner(slug, name, short_name, art, tint, photos)")
     .eq("active", true)
     .order("sort_order", { ascending: true });
 

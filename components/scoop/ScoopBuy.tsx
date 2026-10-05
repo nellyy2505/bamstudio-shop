@@ -85,17 +85,15 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
 
     if (result === "full") {
       setBasketError(
-        `Your basket already holds ${BASKET_LIMITS.maxLines} different items, which is ` +
-          "the most one order can carry. Check out what you have, or remove " +
-          "something to make room.",
+        `Your basket is full (${BASKET_LIMITS.maxLines} different items per order). ` +
+          "Check out or remove something to make room.",
       );
       return false;
     }
 
     setBasketError(
       result === "clamped"
-        ? `Your basket now holds ${BASKET_LIMITS.maxLineQuantity} of these, the most ` +
-            "we can send in a single order."
+        ? `Your basket now holds ${BASKET_LIMITS.maxLineQuantity} of these, the most per order.`
         : null,
     );
 
@@ -116,11 +114,7 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
   if (price === null) {
     return (
       <div className="rounded-2xl border border-line2 bg-surface p-5">
-        <b className="text-[15px]">Not on sale just now</b>
-        <p className="mt-1.5 text-sm text-muted">
-          This scoop isn&rsquo;t available to buy at the moment. Have a look at
-          the rest of the range in the meantime.
-        </p>
+        <b className="text-[15px]">Not on sale right now</b>
       </div>
     );
   }
@@ -130,7 +124,7 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <b className="font-display text-2xl">{money(price)}</b>
         <span className="text-[13.5px] text-muted">
-          {scoopVariantLabel(tier.piece_count)}, drawn at random
+          {scoopVariantLabel(tier.piece_count)}, hand-picked
         </span>
       </div>
 
@@ -138,9 +132,7 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
         {/* The pool is what makes "random" a describable promise rather than an
             unknown, and it is why the pool is public (0007). Stated as a count
             here; the tier page shows the pieces themselves. */}
-        Every piece comes out of this scoop&apos;s own pool of{" "}
-        {pluralise(tier.pool.length, "piece")}. You choose the theme, the draw
-        chooses the pieces, after you order.
+        Picked from {pluralise(tier.pool.length, "design")} after you order.
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -203,8 +195,7 @@ export default function ScoopBuy({ tier }: { tier: ScoopTierListing }) {
           can carry, never about what is on a shelf. */}
       {atMax ? (
         <p id={capNoteId} role="status" className="mt-3 text-xs text-muted">
-          {BASKET_LIMITS.maxLineQuantity} is the most we can send of one item in
-          a single order. Need more? Get in touch and we&rsquo;ll sort it out.
+          Up to {BASKET_LIMITS.maxLineQuantity} per order. Need more? Get in touch.
         </p>
       ) : null}
 
