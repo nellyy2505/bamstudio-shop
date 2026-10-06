@@ -30,8 +30,8 @@ const BY_SLUG: Record<string, Cutout> = {
   "heart-waffle": C("heart-waffle", "#F3EADF"),
   "moon-book-box": C("moon-book-box", "#E3ECF5"),
   "love-cactus-planters": C("love-cactus-planters", "#F6E9EC"),
-  "perpetual-desk-calendar": C("perpetual-desk-calendar", "#EEF0EC"),
-  "skull-bone-hair-pin": C("skull-bone-hair-pin", "#ECEAE6"),
+  "perpetual-desk-calendar": C("perpetual-desk-calendar", "#E6EDDB"),
+  "skull-bone-hair-pin": C("skull-bone-hair-pin", "#E9E2F1"),
 };
 
 /** The cut-out for a product or filling slug, or null when there is none. */
