@@ -196,6 +196,32 @@ jobs:
             exit 1
           fi
 
+          # The public key is baked into JavaScript every visitor downloads.
+          # In October 2026 this secret held the SERVICE ROLE key, which
+          # bypasses every RLS policy, and it shipped to the browser. Refuse to
+          # build with a secret key in the public slot: a legacy JWT whose role
+          # is service_role, or a new-style sb_secret_ key. The value itself is
+          # never printed.
+          key="$NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          case "$key" in
+            sb_secret_*) leaked=1 ;;
+            *) leaked=0 ;;
+          esac
+          if [ "$leaked" = 0 ] && [ "$(printf '%s' "$key" | cut -d. -f1)" != "$key" ]; then
+            payload=$(printf '%s' "$key" | cut -d. -f2 | tr '_-' '/+')
+            while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="$payload="; done
+            if printf '%s' "$payload" | base64 -d 2>/dev/null | grep -q '"role":"service_role"'; then
+              leaked=1
+            fi
+          fi
+          if [ "$leaked" = 1 ]; then
+            echo "STOPPED: NEXT_PUBLIC_SUPABASE_ANON_KEY holds a SECRET key (service role)."
+            echo "It would be published to every visitor. Put the anon / publishable key"
+            echo "there instead (Supabase → Project Settings → API Keys), and rotate the"
+            echo "secret key, because any build that shipped it has already exposed it."
+            exit 1
+          fi
+
           # Optional - blank is a valid choice, just say so out loud.
           for name in NEXT_PUBLIC_SUPPORT_EMAIL NEXT_PUBLIC_ABN \
                       NEXT_PUBLIC_GST_REGISTERED NEXT_PUBLIC_INSTAGRAM_URL \

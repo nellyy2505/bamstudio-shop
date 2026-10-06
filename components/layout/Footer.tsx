@@ -47,9 +47,12 @@ export function Footer() {
       <div className="wrap pt-14 pb-7">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1.4fr]">
           <div>
-            <p className="mb-3 font-display text-[27px] font-bold text-[#F6F2EA]">
-              Bam<span className="text-accent">Studio</span>
-            </p>
+            {/* The logo artwork, on a cream badge: its dark "Studio" lettering
+                disappears against the footer's ink. */}
+            <span className="mb-4 inline-block rounded-2xl bg-[#FBF6EF] px-3.5 py-2.5">
+              {/* eslint-disable-next-line @next/next/no-img-element -- small static logo */}
+              <img src="/bam-studio-logo.png" alt={SHOP.name} width={90} height={44} className="h-11 w-auto" loading="lazy" />
+            </span>
             <p className="mb-4 max-w-[250px] text-[13.5px]">
               Cute, clicky keepsakes, designed by our family and printed to
               order in {SHOP.city}.

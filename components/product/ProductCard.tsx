@@ -3,6 +3,7 @@ import { ProductArt } from "@/components/ProductArt";
 import { Pill, Stars, cx } from "@/components/ui";
 import { money } from "@/lib/format";
 import { productPhotos } from "@/lib/photos";
+import { cutoutFor } from "@/lib/cutouts";
 import type { Product } from "@/lib/types";
 import { FavouriteButton } from "./FavouriteButton";
 import { QuickAddButton } from "./QuickAddButton";
@@ -36,21 +37,47 @@ export function ProductCard({
   const hoverView = product.gallery?.length > 1 ? product.gallery[1] : null;
   // Real photographs win over the drawing whenever the studio has uploaded any.
   const photos = productPhotos(product);
+  // The cut-out leads when there is one, so every card in a grid sits the same
+  // way on its own tile; the first real photo fades in on hover.
+  const cutout = cutoutFor(product.slug);
 
   return (
     <div className="group flex h-full flex-col gap-2.5">
       <div
         className={cx(
-          "relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl",
-          TINT_CLASS[product.tint] ?? "bg-cream",
+          "relative flex aspect-square items-center justify-center overflow-hidden rounded-3xl",
+          cutout ? null : (TINT_CLASS[product.tint] ?? "bg-cream"),
         )}
+        style={cutout ? { background: cutout.tile } : undefined}
       >
         <Link
           href={`/product/${product.slug}`}
           className="flex h-full w-full items-center justify-center"
           aria-label={product.short_name}
         >
-          {photos.length > 0 ? (
+          {cutout ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element -- static site artwork */}
+              <img
+                src={cutout.src}
+                alt={product.short_name}
+                loading="lazy"
+                decoding="async"
+                className="bam-cutout absolute inset-[14%] h-[72%] w-[72%] object-contain transition duration-300 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+              />
+              {photos[0] ? (
+                /* eslint-disable-next-line @next/next/no-img-element -- as above */
+                <img
+                  src={photos[0].thumb}
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                  decoding="async"
+                  className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-300 group-hover:opacity-100 motion-reduce:transition-none"
+                />
+              ) : null}
+            </>
+          ) : photos.length > 0 ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element -- Storage is not a next/image loader (see PhotoDrop). */}
               <img

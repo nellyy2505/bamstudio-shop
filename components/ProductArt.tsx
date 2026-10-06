@@ -185,7 +185,7 @@ const ART: Record<ArtKey, React.ReactNode> = {
       <text
         x="28"
         y="58"
-        fontFamily="Poppins, sans-serif"
+        fontFamily="Fredoka, sans-serif"
         fontSize="19"
         fontWeight="700"
         fill="#6B4A32"
@@ -197,7 +197,7 @@ const ART: Record<ArtKey, React.ReactNode> = {
       <text
         x="46"
         y="50"
-        fontFamily="Poppins, sans-serif"
+        fontFamily="Fredoka, sans-serif"
         fontSize="19"
         fontWeight="700"
         fill="#fff"
@@ -216,7 +216,7 @@ const ART: Record<ArtKey, React.ReactNode> = {
       <text
         x="62"
         y="63"
-        fontFamily="Poppins, sans-serif"
+        fontFamily="Fredoka, sans-serif"
         fontSize="19"
         fontWeight="700"
         fill="#fff"

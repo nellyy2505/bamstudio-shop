@@ -34,7 +34,7 @@
 
   /* Supplied by next/font in app/layout.tsx (self-hosted, no external call). */
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-face), ui-sans-serif, system-ui, sans-serif;
 
   --radius-card: 1rem;
 }
@@ -88,6 +88,41 @@
     border: 1px solid var(--color-line);
     border-radius: 1rem;
   }
+}
+
+/* ------------------------------------------------------------ shopfront motion
+ * The home page's cut-outs drift gently. Motion lives on the landing page only:
+ * product pages and the cake box page stay still, at the owner's request.
+ * The reduced-motion block below stops all of it.
+ */
+@keyframes bam-float {
+  0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+  50% { transform: translateY(-12px) rotate(var(--tilt, 0deg)); }
+}
+@keyframes bam-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes bam-marquee {
+  to { transform: translateX(-50%); }
+}
+@keyframes bam-pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.bam-float { animation: bam-float 5.5s ease-in-out infinite; }
+.bam-spin { animation: bam-spin 22s linear infinite; }
+.bam-marquee { animation: bam-marquee 38s linear infinite; }
+.bam-pop { animation: bam-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+.bam-cutout { filter: drop-shadow(0 14px 14px rgb(91 58 38 / 0.2)); }
+.bam-gingham {
+  background-image:
+    linear-gradient(90deg, rgb(232 163 148 / 0.2) 50%, transparent 50%),
+    linear-gradient(rgb(232 163 148 / 0.2) 50%, transparent 50%);
+  background-size: 30px 30px;
+}
+.bam-dots {
+  background-image: radial-gradient(#efcfc4 1.6px, transparent 1.6px);
+  background-size: 26px 26px;
 }
 
 /* Respect reduced-motion preferences */

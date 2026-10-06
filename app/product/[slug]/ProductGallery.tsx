@@ -6,6 +6,7 @@ import { FavouriteButton } from "@/components/product/FavouriteButton";
 import { Icon, Pill, cx } from "@/components/ui";
 import type { Product, Tint } from "@/lib/types";
 import { productPhotos } from "@/lib/photos";
+import { cutoutFor } from "@/lib/cutouts";
 
 const TINT_BG: Record<Tint, string> = {
   blush: "bg-blush",
@@ -16,12 +17,20 @@ const TINT_BG: Record<Tint, string> = {
   cream: "bg-cream",
 };
 
+type GalleryPhoto = { src: string; thumb: string; alt: string; tile?: string };
+
 function isIllustration(view: object): boolean {
   return !("src" in view);
 }
 
 export function ProductGallery({ product }: { product: Product }) {
-  const photos = productPhotos(product);
+  const photos: GalleryPhoto[] = productPhotos(product);
+  // The cut-out leads, on its tile, then the real photos. It stays still here:
+  // floating is for the home page only.
+  const cutout = cutoutFor(product.slug);
+  if (cutout) {
+    photos.unshift({ src: cutout.src, thumb: cutout.src, alt: product.short_name, tile: cutout.tile });
+  }
   if (photos.length > 0) return <PhotoGallery product={product} photos={photos} />;
   return <ArtGallery product={product} />;
 }
@@ -32,7 +41,7 @@ function PhotoGallery({
   photos,
 }: {
   product: Product;
-  photos: { src: string; thumb: string; alt: string }[];
+  photos: GalleryPhoto[];
 }) {
   const [index, setIndex] = useState(0);
   const active = photos[Math.min(index, photos.length - 1)];
@@ -55,20 +64,39 @@ function PhotoGallery({
                 "h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl bg-cream",
                 i === index ? "outline-2 outline-offset-2 outline-ink" : "opacity-70 hover:opacity-100",
               )}
+              style={photo.tile ? { background: photo.tile } : undefined}
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- Storage is not a next/image loader. */}
-              <img src={photo.thumb} alt="" loading="lazy" className="h-full w-full object-cover" />
+              <img
+                src={photo.thumb}
+                alt=""
+                loading="lazy"
+                className={photo.tile ? "h-full w-full object-contain p-2" : "h-full w-full object-cover"}
+              />
             </button>
           ))}
         </div>
       ) : null}
-      <div className="relative aspect-square w-full overflow-hidden rounded-[22px] bg-cream">
+      <div
+        className="relative aspect-square w-full overflow-hidden rounded-[28px] bg-cream"
+        style={active.tile ? { background: active.tile } : undefined}
+      >
+        {active.tile ? (
+          <span
+            aria-hidden="true"
+            className="absolute top-[54%] left-1/2 h-[62%] w-[62%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/55"
+          />
+        ) : null}
         {/* eslint-disable-next-line @next/next/no-img-element -- Storage is not a next/image loader. */}
         <img
           src={active.src}
           alt={active.alt}
           fetchPriority={index === 0 ? "high" : undefined}
-          className="h-full w-full object-cover"
+          className={
+            active.tile
+              ? "bam-cutout absolute inset-[12%] h-[76%] w-[76%] object-contain"
+              : "h-full w-full object-cover"
+          }
         />
         <FavouriteButton
           productId={product.id}

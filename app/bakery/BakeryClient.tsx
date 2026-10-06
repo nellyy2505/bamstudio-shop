@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ProductArt } from "@/components/ProductArt";
 import { photoUrl, productPhotos, thumbFor } from "@/lib/photos";
+import { cutoutFor } from "@/lib/cutouts";
 import { Button, Icon, Pill, cx } from "@/components/ui";
 import { useCart } from "@/components/cart/CartProvider";
 import { fillingQuantities } from "@/lib/bakery";
@@ -37,11 +38,14 @@ export function BakeryClient({
   designs,
   colours,
   fillings,
+  initialChosen = [],
 }: {
   boxes: SellableBox[];
   designs: BakeryDesign[];
   colours: BakeryColour[];
   fillings: BakeryFilling[];
+  /** Pieces picked in the home page's mini box, already checked by the page. */
+  initialChosen?: string[];
 }) {
   const { add } = useCart();
 
@@ -49,7 +53,9 @@ export function BakeryClient({
   const [designSlug, setDesignSlug] = useState(designs[0].slug);
   const [colourId, setColourId] = useState(colours[0].id);
   /** Chosen pieces, in the order they were placed. Duplicates are allowed. */
-  const [chosen, setChosen] = useState<string[]>([]);
+  const [chosen, setChosen] = useState<string[]>(() =>
+    initialChosen.slice(0, boxes[0].box.bakery_piece_count ?? 0),
+  );
   const [added, setAdded] = useState(false);
 
   const selected = boxes.find((b) => b.box.slug === boxSlug) ?? boxes[0];
@@ -338,8 +344,15 @@ function Section({
   );
 }
 
-/** A filling's photo when it has one, its drawing otherwise. */
+/** A filling's cut-out, else its photo, else its drawing. */
 function FillingImage({ filling, className }: { filling: BakeryFilling; className?: string }) {
+  const cutout = cutoutFor(filling.slug);
+  if (cutout) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- static site artwork
+      <img src={cutout.src} alt="" loading="lazy" className={cx("object-contain", className)} />
+    );
+  }
   const path = filling.photos?.[0]?.path;
   const src = path ? photoUrl(path) : null;
   if (src) {

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Poppins, Nunito_Sans } from "next/font/google";
+import { Fredoka, Nunito_Sans } from "next/font/google";
 import "./globals.css";
 import { headers } from "next/headers";
 import { getStaffRole } from "@/lib/auth/staff";
@@ -27,10 +27,14 @@ const FREE_SHIPPING_SENTENCE = FREE_RATE_METHOD
   ? ` Free ${FREE_RATE_METHOD.label.toLowerCase()} post across Australia from ${money(SHIPPING.freeThreshold)}, half-price from ${money(SHIPPING.subsidyThreshold)}.`
   : "";
 
-const poppins = Poppins({
+/*
+ * Fredoka for headings: rounder than the Poppins it replaced, which suits a
+ * shop of soft, clicky things. The owner chose it in the October redesign.
+ */
+const fredoka = Fredoka({
   subsets: ["latin"],
   weight: ["500", "600", "700"],
-  variable: "--font-poppins",
+  variable: "--font-display-face",
   display: "swap",
 });
 
@@ -109,14 +113,14 @@ export default async function RootLayout({
 
   if (isStaffArea) {
     return (
-      <html lang="en-AU" className={`${poppins.variable} ${nunito.variable}`}>
+      <html lang="en-AU" className={`${fredoka.variable} ${nunito.variable}`}>
         <body className="min-h-screen">{children}</body>
       </html>
     );
   }
 
   return (
-    <html lang="en-AU" className={`${poppins.variable} ${nunito.variable}`}>
+    <html lang="en-AU" className={`${fredoka.variable} ${nunito.variable}`}>
       <body className="flex min-h-screen flex-col">
         <a
           href="#main"

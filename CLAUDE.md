@@ -1160,3 +1160,10 @@ None of these is about the app. All of them have cost time.
   needs to know the constraint, not the syntax.
 - Product artwork is illustrated (`components/ProductArt.tsx`), not photos.
   New products need an `ART_BY_SKU` entry or they fall back to a theme default.
+- **The shopfront leads with cut-out photos** (`public/cutouts/`, mapped by slug
+  in `lib/cutouts.ts`): the real piece with its background removed, on a pastel
+  tile, with the product's first photo fading in on hover. A product with no
+  cutout falls back to its photos, then to its drawing. The owner chose every
+  cutout in the October 2026 redesign; never retouch a piece to change how it
+  looks, and never use IMG_1243 (deleted at her request). Floating motion is
+  for the home page only; product pages and `/bakery` stay still.

@@ -101,7 +101,7 @@ const isProduction = process.env.NODE_ENV === "production";
  *      favicons and any client-side preview.
  *
  *  font-src 'self'
- *      next/font/google downloads Poppins and Nunito Sans AT BUILD TIME and
+ *      next/font/google downloads Fredoka and Nunito Sans AT BUILD TIME and
  *      self-hosts what it gets back under /_next/static/media (the Dockerfile
  *      says so, and it is why the build stage needs egress). The browser never
  *      contacts fonts.gstatic.com, so it must not be allowed to.
