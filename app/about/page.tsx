@@ -39,8 +39,8 @@ const CARDS: {
 }[] = [
   {
     icon: "heart",
-    title: "Designed as a family",
-    body: "One of us runs the printer and market stall in Wollongong. Two sisters in Vietnam draw the designs. A piece is only printed once all three of us love it.",
+    title: "Run as a family",
+    body: "One of us runs the printer and the market stall in Wollongong. A piece only goes on sale once all of us love it.",
     art: "macaron",
     tint: "blush",
   },
@@ -114,26 +114,24 @@ export default function AboutPage() {
 
           <div>
             <h2 className="mb-4 text-[28px] leading-tight lg:text-[32px]">
-              It started with saved videos
+              It started with tiny things
             </h2>
             <div className="flex flex-col gap-4 text-[15.5px] text-muted">
               <p>
-                We spent hours saving videos of tiny printed things. Our first
-                range was our favourites, redrawn in our own style.
+                We fell for tiny printed things that click, squish and sit on a
+                shelf, so we started printing them.
               </p>
               <p>
                 Every plant sits in the same little pot, so they line up on a
                 shelf like a set.
               </p>
               <p>
-                Every design is our own. We never print licensed characters, not
-                even for custom orders.
+                We never print licensed characters, not even for custom orders.
               </p>
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
               <Pill tone="line">PLA plastic only</Pill>
-              <Pill tone="line">Original designs</Pill>
               <Pill tone="line">Printed in {SHOP.city}</Pill>
             </div>
           </div>

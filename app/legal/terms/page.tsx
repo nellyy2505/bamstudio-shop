@@ -291,13 +291,12 @@ export default function TermsPage() {
         returns. We may ask for a deposit before starting a large run.
       </p>
 
-      <h2>Our designs</h2>
+      <h2>Our content</h2>
       <p>
-        Every design we sell is our own original work. The designs, product
-        photography, illustrations, text and the model files behind them remain
-        our intellectual property. Buying a product does not give you a licence
-        to copy it, scan it, reproduce it, or make and sell versions of it. You
-        are free to resell the individual item you bought.
+        The product photography, illustrations and text on this website are
+        ours. Buying a product does not give you a licence to copy it, scan it,
+        reproduce it, or make and sell versions of it. You are free to resell
+        the individual item you bought.
       </p>
 
       <h2>Using this website</h2>

@@ -197,7 +197,6 @@ export default async function HomePage() {
             <ul className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-[14px] font-bold text-[#5C4E45]">
               {cheapest !== null ? <li>From {money(cheapest)}</li> : null}
               <li>Printed to order in {PRINT_LEAD_TIME.label}</li>
-              <li>Original designs only</li>
             </ul>
           </div>
 
@@ -395,8 +394,8 @@ export default async function HomePage() {
               Made by a family, one print at a time.
             </h2>
             <p className="mb-4 max-w-[520px] text-[16px] text-[#4F5A46]">
-              Our family draws every design and prints it here in {SHOP.city}.
-              Every piece is checked and packed by hand.
+              Every piece is printed to order here in {SHOP.city}, then checked
+              and packed by hand.
             </p>
             <Link href="/about" className="font-extrabold text-[#3F5D3A] underline underline-offset-4">
               Our story

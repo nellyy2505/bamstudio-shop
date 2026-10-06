@@ -54,8 +54,7 @@ export function Footer() {
               <img src="/bam-studio-logo.png" alt={SHOP.name} width={90} height={44} className="h-11 w-auto" loading="lazy" />
             </span>
             <p className="mb-4 max-w-[250px] text-[13.5px]">
-              Cute, clicky keepsakes, designed by our family and printed to
-              order in {SHOP.city}.
+              Cute, clicky keepsakes, printed to order in {SHOP.city}.
             </p>
             <div className="flex flex-wrap gap-2">
               {PAYMENT_BADGES.map((name) => (

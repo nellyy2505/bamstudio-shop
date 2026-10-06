@@ -275,9 +275,7 @@ export default function PrivacyPage() {
       <h2>Overseas disclosure</h2>
       <p>
         Some of these providers store data outside Australia, including in the
-        United States and the European Union. Two of our designers are based in
-        Vietnam; they work on artwork and product files and do not need access to
-        customer records. By ordering, or by sending us a message or your email
+        United States and the European Union. By ordering, or by sending us a message or your email
         address through this site (both are saved with the same providers), you
         consent to your information being stored and processed overseas by the
         providers listed above.

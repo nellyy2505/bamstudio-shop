@@ -218,7 +218,7 @@ const FAQS: { id?: string; question: string; answer: ReactNode }[] = [
         </p>
         <p>
           We never print licensed characters (cartoon, film, game or brand),
-          even as a &quot;close enough&quot; version. Every design is our own.
+          even as a &quot;close enough&quot; version.
         </p>
       </>
     ),
